@@ -5,3 +5,5 @@ A 2D chess game built with Pygame. Includes piece dragging, AI, powerups, music,
 ## How to Run
 ```bash
 python main.py
+
+#this is a test
