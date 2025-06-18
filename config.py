@@ -1,0 +1,192 @@
+"""
+Chess Game Configuration
+All game constants and settings in one place
+"""
+
+import pygame
+
+# Window settings
+BOARD_SIZE = 640
+UI_WIDTH = 200
+UI_HEIGHT = 100
+POWERUP_MENU_WIDTH = 250  # Width of powerup menu
+BASE_WIDTH = BOARD_SIZE + UI_WIDTH * 2 + POWERUP_MENU_WIDTH
+BASE_HEIGHT = BOARD_SIZE + UI_HEIGHT * 2
+
+# These will be updated when going fullscreen
+WIDTH = BASE_WIDTH
+HEIGHT = BASE_HEIGHT
+SCALE = 1.0
+
+# Board settings
+ROWS = 8
+COLS = 8
+
+# These will be dynamically calculated
+BOARD_OFFSET_X = UI_WIDTH
+BOARD_OFFSET_Y = UI_HEIGHT
+GAME_OFFSET_X = 0
+GAME_OFFSET_Y = 0
+
+# Board borders
+BOARD_BORDER_LEFT = 36
+BOARD_BORDER_TOP = 36
+BOARD_BORDER_RIGHT = 36
+BOARD_BORDER_BOTTOM = 36
+
+# Calculate square size
+PLAYING_AREA_WIDTH = BOARD_SIZE - BOARD_BORDER_LEFT - BOARD_BORDER_RIGHT
+PLAYING_AREA_HEIGHT = BOARD_SIZE - BOARD_BORDER_TOP - BOARD_BORDER_BOTTOM
+SQUARE_SIZE = PLAYING_AREA_WIDTH // 8
+
+# Colors
+WHITE = (255, 255, 255)
+BLACK = (0, 0, 0)
+GOLD = (212, 175, 55)
+HIGHLIGHT = (186, 202, 43, 150)
+BUTTON_COLOR = (70, 130, 180)
+BUTTON_HOVER = (100, 160, 210)
+RED = (200, 50, 50)
+GREEN = (50, 200, 50)
+LIGHT_SQUARE = (240, 217, 181)
+DARK_SQUARE = (181, 136, 99)
+
+# Powerup colors
+POWERUP_MENU_BG = (40, 40, 50, 230)
+POWERUP_BUTTON_BG = (60, 60, 70)
+POWERUP_BUTTON_HOVER = (80, 80, 90)
+POWERUP_BUTTON_ACTIVE = (100, 100, 120)
+POWERUP_DISABLED = (40, 40, 40)
+
+# Animation settings
+MOVE_ANIMATION_DURATION = 300
+SCUFFLE_DURATION = 800
+FADE_DURATION = 1000
+
+# Game settings
+STARTING_PLAYER = "white"
+FPS = 60
+
+# Screen states
+SCREEN_START = "start"
+SCREEN_DIFFICULTY = "difficulty"
+SCREEN_GAME = "game"
+SCREEN_CREDITS = "credits"
+
+# AI Difficulty levels
+AI_DIFFICULTIES = ["easy", "medium", "hard", "very_hard", "grandmaster"]
+AI_DIFFICULTY_NAMES = {
+    "easy": "EASY",
+    "medium": "MEDIUM", 
+    "hard": "HARD",
+    "very_hard": "VERY HARD",
+    "grandmaster": "GRANDMASTER"
+}
+AI_DIFFICULTY_COLORS = {
+    "easy": (100, 200, 100),
+    "medium": (200, 200, 100),
+    "hard": (200, 150, 100),
+    "very_hard": (200, 100, 100),
+    "grandmaster": (150, 100, 200)
+}
+
+# Asset paths
+ASSETS_DIR = "assets"
+PIECE_IMAGES = {
+    "bR": "B_Rook.png",
+    "bN": "B_Knight.png", 
+    "bB": "B_Bishop.png",
+    "bQ": "B_Queen.png",
+    "bK": "B_King.png",
+    "bP": "B_Pawn.png",
+    "wR": "W_Rook.png",
+    "wN": "W_Knight.png",
+    "wB": "W_Bishop.png", 
+    "wQ": "W_Queen.png",
+    "wK": "W_King.png",
+    "wP": "W_Pawn.png",
+}
+
+# Board textures
+BOARD_TEXTURES = ["board.png", "board_plain_05.png"]
+
+# Sound files
+MUSIC_FILE = "music.mp3"
+CAPTURE_SOUND = "slash.mp3"
+
+# Parallax layers - UPDATED TO MATCH YOUR FILES
+PARALLAX_LAYERS = [
+    {"file": "Layer_0011_0.png", "speed": 0.05},
+    {"file": "Layer_0010_1.png", "speed": 0.1},
+    {"file": "Layer_0009_2.png", "speed": 0.15},
+    {"file": "Layer_0008_3.png", "speed": 0.2},
+    {"file": "Layer_0007_Lights.png", "speed": 0.25},
+    {"file": "Layer_0006_4.png", "speed": 0.3},
+    {"file": "Layer_0005_5.png", "speed": 0.35},
+    {"file": "Layer_0004_Lights.png", "speed": 0.4},
+    {"file": "Layer_0003_6.png", "speed": 0.45},
+    {"file": "Layer_0002_7.png", "speed": 0.5},
+    {"file": "Layer_0001_8.png", "speed": 0.55},
+    {"file": "Layer_0000_9.png", "speed": 0.6},
+]
+
+# Initial board setup
+INITIAL_BOARD = [
+    ["bR", "bN", "bB", "bQ", "bK", "bB", "bN", "bR"],
+    ["bP"] * 8,
+    [""] * 8,
+    [""] * 8,
+    [""] * 8,
+    [""] * 8,
+    ["wP"] * 8,
+    ["wR", "wN", "wB", "wQ", "wK", "wB", "wN", "wR"],
+]
+
+def update_screen_dimensions(fullscreen, screen_info):
+    """Update dimensions for fullscreen mode."""
+    global WIDTH, HEIGHT, SCALE, BOARD_OFFSET_X, BOARD_OFFSET_Y, GAME_OFFSET_X, GAME_OFFSET_Y
+    
+    if fullscreen:
+        # Get monitor size
+        WIDTH = screen_info.current_w
+        HEIGHT = screen_info.current_h
+        
+        # Calculate scale to fit the game while maintaining aspect ratio
+        scale_x = WIDTH / BASE_WIDTH
+        scale_y = HEIGHT / BASE_HEIGHT
+        SCALE = min(scale_x, scale_y)
+        
+        # Calculate the scaled game dimensions
+        scaled_game_width = BASE_WIDTH * SCALE
+        scaled_game_height = BASE_HEIGHT * SCALE
+        
+        # Calculate centering offsets
+        GAME_OFFSET_X = (WIDTH - scaled_game_width) / 2
+        GAME_OFFSET_Y = (HEIGHT - scaled_game_height) / 2
+        
+        # Calculate board position within the centered game area
+        # The board should be positioned relative to the centered game area, not the screen
+        BOARD_OFFSET_X = GAME_OFFSET_X + (UI_WIDTH * SCALE)
+        BOARD_OFFSET_Y = GAME_OFFSET_Y + (UI_HEIGHT * SCALE)
+    else:
+        WIDTH = BASE_WIDTH
+        HEIGHT = BASE_HEIGHT
+        SCALE = 1.0
+        BOARD_OFFSET_X = UI_WIDTH
+        BOARD_OFFSET_Y = UI_HEIGHT
+        GAME_OFFSET_X = 0
+        GAME_OFFSET_Y = 0
+    
+    # Debug print statements
+    print("\n=== SCREEN DIMENSION UPDATE ===")
+    print(f"Fullscreen: {fullscreen}")
+    print(f"Screen size: {WIDTH}x{HEIGHT}")
+    print(f"Base size: {BASE_WIDTH}x{BASE_HEIGHT}")
+    print(f"Scale: {SCALE}")
+    print(f"Board offset X: {BOARD_OFFSET_X}")
+    print(f"Board offset Y: {BOARD_OFFSET_Y}")
+    if fullscreen:
+        print(f"Scaled game size: {BASE_WIDTH * SCALE}x{BASE_HEIGHT * SCALE}")
+        print(f"Centering offset X: {(WIDTH - BASE_WIDTH * SCALE) / 2}")
+        print(f"Centering offset Y: {(HEIGHT - BASE_HEIGHT * SCALE) / 2}")
+    print("==============================\n")
