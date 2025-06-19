@@ -502,6 +502,19 @@ class Renderer:
         rect = text.get_rect(center=(config.WIDTH // 2, config.HEIGHT // 2 - 50 * self.scale))
         self.screen.blit(text, rect)
         
+        # Check if player won and if there's a new difficulty to unlock
+        if board.winner == "white" and hasattr(board, 'selected_difficulty'):
+            progress = config.load_progress()
+            current_index = config.AI_DIFFICULTIES.index(board.selected_difficulty) if hasattr(board, 'selected_difficulty') and board.selected_difficulty in config.AI_DIFFICULTIES else -1
+            
+            if current_index >= 0 and current_index < len(config.AI_DIFFICULTIES) - 1:
+                next_diff = config.AI_DIFFICULTIES[current_index + 1]
+                if next_diff not in progress.get("unlocked_difficulties", []):
+                    unlock_text = f"🎉 {config.AI_DIFFICULTY_NAMES[next_diff]} DIFFICULTY UNLOCKED! 🎉"
+                    text = self.pixel_fonts['medium'].render(unlock_text, True, (255, 215, 0))
+                    rect = text.get_rect(center=(config.WIDTH // 2, config.HEIGHT // 2))
+                    self.screen.blit(text, rect)
+        
         restart_text = "PRESS R TO RESTART OR ESC TO MAIN MENU"
         text = self.pixel_fonts['medium'].render(restart_text, True, (200, 200, 200))
         rect = text.get_rect(center=(config.WIDTH // 2, config.HEIGHT // 2 + 20 * self.scale))
@@ -529,18 +542,32 @@ class Renderer:
         rect = text.get_rect(center=(game_center_x, game_center_y - 250 * config.SCALE))
         self.screen.blit(text, rect)
         
+        # Load progress to check unlocked difficulties
+        progress = config.load_progress()
+        unlocked = progress.get("unlocked_difficulties", ["easy"])
+        
         # Difficulty buttons
-        for difficulty, button in difficulty_buttons.items():
-            is_hover = button.collidepoint(mouse_pos)
-            color = config.AI_DIFFICULTY_COLORS[difficulty]
-            hover_color = tuple(min(255, c + 50) for c in color)
+        for i, (difficulty, button) in enumerate(difficulty_buttons.items()):
+            is_unlocked = difficulty in unlocked
+            is_hover = button.collidepoint(mouse_pos) and is_unlocked
+            
+            if is_unlocked:
+                color = config.AI_DIFFICULTY_COLORS[difficulty]
+                hover_color = tuple(min(255, c + 50) for c in color)
+                border_color = config.WHITE
+            else:
+                color = config.LOCKED_COLOR
+                hover_color = config.LOCKED_COLOR
+                border_color = (120, 120, 120)
             
             # Button background
             pygame.draw.rect(self.screen, hover_color if is_hover else color, button, border_radius=10)
-            pygame.draw.rect(self.screen, config.WHITE, button, 3, border_radius=10)
+            pygame.draw.rect(self.screen, border_color, button, 3, border_radius=10)
             
             # Button text
             text = config.AI_DIFFICULTY_NAMES[difficulty]
+            if not is_unlocked:
+                text = f"🔒 {text}"
             text_surface = self.pixel_fonts['large'].render(text, True, config.WHITE)
             text_rect = text_surface.get_rect(center=button.center)
             self.screen.blit(text_surface, text_rect)
@@ -550,11 +577,26 @@ class Renderer:
                 "easy": "Beginner friendly",
                 "medium": "Casual player",
                 "hard": "Experienced player",
-                "very_hard": "Expert level",
-                "grandmaster": "Ultimate challenge"
+                "very_hard": "Expert level"
             }
             
-            desc = self.pixel_fonts['small'].render(descriptions[difficulty], True, (200, 200, 200))
+            if is_unlocked:
+                # Check if this is the next level to beat
+                difficulty_index = config.AI_DIFFICULTIES.index(difficulty)
+                if difficulty_index > 0 and difficulty_index == len(unlocked) - 1:
+                    desc_text = "★ BEAT THIS TO UNLOCK NEXT ★"
+                    desc_color = (255, 215, 0)  # Gold
+                else:
+                    desc_text = descriptions[difficulty]
+                    desc_color = (200, 200, 200)
+            else:
+                # Show what needs to be beaten to unlock
+                difficulty_index = config.AI_DIFFICULTIES.index(difficulty)
+                prev_difficulty = config.AI_DIFFICULTIES[difficulty_index - 1]
+                desc_text = f"Beat {config.AI_DIFFICULTY_NAMES[prev_difficulty]} to unlock"
+                desc_color = (150, 150, 150)
+            
+            desc = self.pixel_fonts['small'].render(desc_text, True, desc_color)
             desc_rect = desc.get_rect(center=(button.centerx, button.bottom + 10 * config.SCALE))
             self.screen.blit(desc, desc_rect)
             

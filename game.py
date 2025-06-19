@@ -287,9 +287,13 @@ class ChessGame:
                 self.start_fade(config.SCREEN_START, config.SCREEN_CREDITS)
                 
         elif self.current_screen == config.SCREEN_DIFFICULTY:
+            # Load progress to check unlocked difficulties
+            progress = config.load_progress()
+            unlocked = progress.get("unlocked_difficulties", ["easy"])
+            
             # Check difficulty buttons
             for difficulty, button in self.difficulty_buttons.items():
-                if button.collidepoint(pos):
+                if button.collidepoint(pos) and difficulty in unlocked:
                     self.selected_difficulty = difficulty
                     self.ai = ChessAI(difficulty)
                     self.start_fade(config.SCREEN_DIFFICULTY, config.SCREEN_GAME)
@@ -398,6 +402,8 @@ class ChessGame:
                 self.powerup_system.assets = self.assets  # Pass assets reference
                 self.board.set_powerup_system(self.powerup_system)
                 self.powerup_renderer.powerup_system = self.powerup_system
+                if hasattr(self, 'victory_processed'):
+                    delattr(self, 'victory_processed')  # Reset victory flag
         elif self.current_screen == config.SCREEN_DIFFICULTY:
             if key == pygame.K_ESCAPE:
                 self.start_fade(config.SCREEN_DIFFICULTY, config.SCREEN_START)
@@ -458,6 +464,14 @@ class ChessGame:
                             from_pos, to_pos = ai_move
                             self.board.start_move(from_pos[0], from_pos[1], to_pos[0], to_pos[1])
                         self.ai.start_thinking = None
+                        
+            # Check for player victory and unlock next difficulty
+            if self.board.game_over and self.board.winner == "white" and self.selected_difficulty:
+                if not hasattr(self, 'victory_processed'):
+                    self.victory_processed = True
+                    next_difficulty = config.unlock_next_difficulty(self.selected_difficulty)
+                    if next_difficulty:
+                        print(f"Congratulations! You've unlocked {config.AI_DIFFICULTY_NAMES[next_difficulty]} difficulty!")
                     
     def draw(self):
         """Draw everything."""
@@ -556,6 +570,11 @@ class ChessGame:
             # Overlays
             if self.board.promoting:
                 self.promotion_rects = self.renderer.draw_promotion_menu(self.board, self.mouse_pos)
+            
+            # Pass selected difficulty to renderer for unlock message
+            if self.board.game_over and self.selected_difficulty:
+                if not hasattr(self.board, 'selected_difficulty'):
+                    self.board.selected_difficulty = self.selected_difficulty
             self.renderer.draw_game_over(self.board)
             
         # Draw fullscreen indicator (small 'F' in corner)

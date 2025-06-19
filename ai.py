@@ -1,6 +1,6 @@
 """
 Chess AI Bot System
-Different difficulty levels from Easy to Grandmaster
+Different difficulty levels from Easy to Very Hard
 """
 
 import random
@@ -15,8 +15,7 @@ class ChessAI:
             "easy": 500,      # 0.5 seconds
             "medium": 1000,   # 1 second
             "hard": 1500,     # 1.5 seconds
-            "very_hard": 2000, # 2 seconds
-            "grandmaster": 2500 # 2.5 seconds
+            "very_hard": 2000 # 2 seconds
         }
         self.start_thinking = None
         
@@ -128,10 +127,8 @@ class ChessAI:
             return self._get_medium_move(board)
         elif self.difficulty == "hard":
             return self._get_hard_move(board)
-        elif self.difficulty == "very_hard":
+        else:  # very_hard
             return self._get_very_hard_move(board)
-        else:  # grandmaster
-            return self._get_grandmaster_move(board)
             
     def _get_easy_move(self, board):
         """Easy AI - Makes random legal moves, sometimes blunders."""
@@ -235,48 +232,6 @@ class ChessAI:
             if score > best_score:
                 best_score = score
                 best_move = move
-                
-        return best_move
-        
-    def _get_grandmaster_move(self, board):
-        """Grandmaster AI - Best possible moves with deep calculation."""
-        moves = self._get_all_legal_moves(board)
-        if not moves:
-            return None
-            
-        # Always check for immediate checkmate
-        for move in moves:
-            if self._move_gives_checkmate(board, move):
-                return move
-                
-        # Order moves for better alpha-beta pruning
-        moves = self._order_moves(board, moves)
-        
-        # Use iterative deepening for better time management
-        best_move = moves[0]  # Default to first legal move
-        
-        # Try depths 2, 3, 4 based on position complexity
-        max_depth = 4
-        if len(moves) > 30:  # Many moves available
-            max_depth = 3
-        elif len(moves) < 10:  # Few moves (likely endgame)
-            max_depth = 5
-            
-        for depth in range(2, max_depth + 1):
-            current_best = None
-            current_best_score = -999999
-            alpha = -999999
-            beta = 999999
-            
-            for move in moves:
-                score = self._minimax(board, depth, alpha, beta, False, move)
-                if score > current_best_score:
-                    current_best_score = score
-                    current_best = move
-                alpha = max(alpha, current_best_score)
-                
-            if current_best:
-                best_move = current_best
                 
         return best_move
         

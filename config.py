@@ -4,6 +4,8 @@ All game constants and settings in one place
 """
 
 import pygame
+import json
+import os
 
 # Window settings
 BOARD_SIZE = 640
@@ -50,6 +52,7 @@ RED = (200, 50, 50)
 GREEN = (50, 200, 50)
 LIGHT_SQUARE = (240, 217, 181)
 DARK_SQUARE = (181, 136, 99)
+LOCKED_COLOR = (80, 80, 80)  # Gray for locked difficulties
 
 # Powerup colors
 POWERUP_MENU_BG = (40, 40, 50, 230)
@@ -73,22 +76,23 @@ SCREEN_DIFFICULTY = "difficulty"
 SCREEN_GAME = "game"
 SCREEN_CREDITS = "credits"
 
-# AI Difficulty levels
-AI_DIFFICULTIES = ["easy", "medium", "hard", "very_hard", "grandmaster"]
+# AI Difficulty levels - REMOVED GRANDMASTER
+AI_DIFFICULTIES = ["easy", "medium", "hard", "very_hard"]
 AI_DIFFICULTY_NAMES = {
     "easy": "EASY",
     "medium": "MEDIUM", 
     "hard": "HARD",
-    "very_hard": "VERY HARD",
-    "grandmaster": "GRANDMASTER"
+    "very_hard": "VERY HARD"
 }
 AI_DIFFICULTY_COLORS = {
     "easy": (100, 200, 100),
     "medium": (200, 200, 100),
     "hard": (200, 150, 100),
-    "very_hard": (200, 100, 100),
-    "grandmaster": (150, 100, 200)
+    "very_hard": (200, 100, 100)
 }
+
+# Save file for progress
+SAVE_FILE = "chess_progress.json"
 
 # Asset paths
 ASSETS_DIR = "assets"
@@ -176,17 +180,33 @@ def update_screen_dimensions(fullscreen, screen_info):
         BOARD_OFFSET_Y = UI_HEIGHT
         GAME_OFFSET_X = 0
         GAME_OFFSET_Y = 0
+
+# Progress tracking functions
+def load_progress():
+    """Load player progress from save file."""
+    if os.path.exists(SAVE_FILE):
+        try:
+            with open(SAVE_FILE, 'r') as f:
+                return json.load(f)
+        except:
+            return {"unlocked_difficulties": ["easy"]}
+    return {"unlocked_difficulties": ["easy"]}
+
+def save_progress(progress):
+    """Save player progress to file."""
+    with open(SAVE_FILE, 'w') as f:
+        json.dump(progress, f)
+
+def unlock_next_difficulty(current_difficulty):
+    """Unlock the next difficulty level."""
+    progress = load_progress()
     
-    # Debug print statements
-    print("\n=== SCREEN DIMENSION UPDATE ===")
-    print(f"Fullscreen: {fullscreen}")
-    print(f"Screen size: {WIDTH}x{HEIGHT}")
-    print(f"Base size: {BASE_WIDTH}x{BASE_HEIGHT}")
-    print(f"Scale: {SCALE}")
-    print(f"Board offset X: {BOARD_OFFSET_X}")
-    print(f"Board offset Y: {BOARD_OFFSET_Y}")
-    if fullscreen:
-        print(f"Scaled game size: {BASE_WIDTH * SCALE}x{BASE_HEIGHT * SCALE}")
-        print(f"Centering offset X: {(WIDTH - BASE_WIDTH * SCALE) / 2}")
-        print(f"Centering offset Y: {(HEIGHT - BASE_HEIGHT * SCALE) / 2}")
-    print("==============================\n")
+    # Find the next difficulty
+    current_index = AI_DIFFICULTIES.index(current_difficulty)
+    if current_index < len(AI_DIFFICULTIES) - 1:
+        next_difficulty = AI_DIFFICULTIES[current_index + 1]
+        if next_difficulty not in progress["unlocked_difficulties"]:
+            progress["unlocked_difficulties"].append(next_difficulty)
+            save_progress(progress)
+            return next_difficulty
+    return None
