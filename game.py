@@ -1,5 +1,5 @@
 """
-Main Game Class - Enhanced with Powerup System
+Main Game Class - Enhanced with Powerup System and Arms Dealer
 """
 
 import pygame
@@ -50,12 +50,15 @@ class ChessGame:
         self.mouse_pos = (0, 0)
         self.selected_difficulty = None
         
+        # Arms dealer
+        self.shop_buttons = {}
+        
         # UI elements - will be updated for scaling
         self.update_ui_positions()
         
         # Volume control - NOW WITH SEPARATE MUSIC AND SFX
-        self.music_volume = 0.7  # Default music volume at 70%
-        self.sfx_volume = 0.7    # Default sound effects volume at 70%
+        self.music_volume = 0.25  # Default music volume at 25%
+        self.sfx_volume = 0.7     # Default sound effects volume at 70%
         self.dragging_music_slider = False
         self.dragging_sfx_slider = False
         pygame.mixer.music.set_volume(self.music_volume)
@@ -71,6 +74,9 @@ class ChessGame:
         
         # Promotion menu
         self.promotion_rects = []
+        
+        # Victory reward tracking
+        self.victory_reward = 0
         
         # Start music
         pygame.mixer.music.play(-1)
@@ -147,9 +153,15 @@ class ChessGame:
             int(200 * config.SCALE), 
             int(60 * config.SCALE)
         )
-        self.credits_button = pygame.Rect(
+        self.arms_dealer_button = pygame.Rect(
             center_x - int(100 * config.SCALE), 
             center_y + int(50 * config.SCALE), 
+            int(200 * config.SCALE), 
+            int(60 * config.SCALE)
+        )
+        self.credits_button = pygame.Rect(
+            center_x - int(100 * config.SCALE), 
+            center_y + int(130 * config.SCALE), 
             int(200 * config.SCALE), 
             int(60 * config.SCALE)
         )
@@ -283,8 +295,29 @@ class ChessGame:
         if self.current_screen == config.SCREEN_START:
             if self.play_button.collidepoint(pos):
                 self.start_fade(config.SCREEN_START, config.SCREEN_DIFFICULTY)
+            elif self.arms_dealer_button.collidepoint(pos):
+                self.start_fade(config.SCREEN_START, config.SCREEN_ARMS_DEALER)
             elif self.credits_button.collidepoint(pos):
                 self.start_fade(config.SCREEN_START, config.SCREEN_CREDITS)
+                
+        elif self.current_screen == config.SCREEN_ARMS_DEALER:
+            # Check purchase buttons
+            for powerup_key, button_rect in self.shop_buttons.items():
+                if button_rect.collidepoint(pos):
+                    progress = config.load_progress()
+                    unlocked = progress.get("unlocked_powerups", ["shield"])
+                    
+                    if powerup_key not in unlocked:
+                        price = self.powerup_system.powerup_prices[powerup_key]
+                        if config.spend_money(price):
+                            config.unlock_powerup(powerup_key)
+                            print(f"Purchased {powerup_key}!")
+                        else:
+                            print("Not enough money!")
+            
+            # Back button
+            if self.back_button.collidepoint(pos):
+                self.start_fade(config.SCREEN_ARMS_DEALER, config.SCREEN_START)
                 
         elif self.current_screen == config.SCREEN_DIFFICULTY:
             # Load progress to check unlocked difficulties
@@ -404,10 +437,11 @@ class ChessGame:
                 self.powerup_renderer.powerup_system = self.powerup_system
                 if hasattr(self, 'victory_processed'):
                     delattr(self, 'victory_processed')  # Reset victory flag
+                self.victory_reward = 0  # Reset reward display
         elif self.current_screen == config.SCREEN_DIFFICULTY:
             if key == pygame.K_ESCAPE:
                 self.start_fade(config.SCREEN_DIFFICULTY, config.SCREEN_START)
-        elif self.current_screen in [config.SCREEN_START, config.SCREEN_CREDITS]:
+        elif self.current_screen in [config.SCREEN_START, config.SCREEN_CREDITS, config.SCREEN_ARMS_DEALER]:
             if key == pygame.K_ESCAPE and self.fullscreen:
                 self.toggle_fullscreen()
                 
@@ -469,6 +503,14 @@ class ChessGame:
             if self.board.game_over and self.board.winner == "white" and self.selected_difficulty:
                 if not hasattr(self, 'victory_processed'):
                     self.victory_processed = True
+                    
+                    # Award money for victory
+                    reward = config.VICTORY_REWARDS[self.selected_difficulty]
+                    new_total = config.add_money(reward)
+                    self.victory_reward = reward  # Store for display
+                    print(f"Victory! Earned ${reward}. Total: ${new_total}")
+                    
+                    # Unlock next difficulty
                     next_difficulty = config.unlock_next_difficulty(self.selected_difficulty)
                     if next_difficulty:
                         print(f"Congratulations! You've unlocked {config.AI_DIFFICULTY_NAMES[next_difficulty]} difficulty!")
@@ -527,8 +569,17 @@ class ChessGame:
     def draw_screen(self, screen_type):
         """Draw specific screen."""
         if screen_type == config.SCREEN_START:
-            buttons = {'play': self.play_button, 'credits': self.credits_button}
+            buttons = {
+                'play': self.play_button, 
+                'arms_dealer': self.arms_dealer_button,
+                'credits': self.credits_button
+            }
             self.renderer.draw_menu(config.SCREEN_START, buttons, self.mouse_pos)
+            self.draw_volume_sliders()
+            
+        elif screen_type == config.SCREEN_ARMS_DEALER:
+            self.renderer.draw_arms_dealer(self.powerup_system, self.shop_buttons, 
+                                          self.back_button, self.mouse_pos)
             self.draw_volume_sliders()
             
         elif screen_type == config.SCREEN_DIFFICULTY:
@@ -571,10 +622,12 @@ class ChessGame:
             if self.board.promoting:
                 self.promotion_rects = self.renderer.draw_promotion_menu(self.board, self.mouse_pos)
             
-            # Pass selected difficulty to renderer for unlock message
+            # Pass selected difficulty and victory reward to renderer
             if self.board.game_over and self.selected_difficulty:
                 if not hasattr(self.board, 'selected_difficulty'):
                     self.board.selected_difficulty = self.selected_difficulty
+                if not hasattr(self.board, 'victory_reward'):
+                    self.board.victory_reward = self.victory_reward
             self.renderer.draw_game_over(self.board)
             
         # Draw fullscreen indicator (small 'F' in corner)

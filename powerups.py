@@ -15,13 +15,6 @@ class PowerupSystem:
         
         # Powerup definitions - Easy to add more!
         self.powerups = {
-            "airstrike": {
-                "name": "AIRSTRIKE",
-                "cost": 10,
-                "description": "Bombard 3x3 area",
-                "color": (255, 100, 100),
-                "icon": "💥"
-            },
             "shield": {
                 "name": "SHIELD",
                 "cost": 5,
@@ -36,12 +29,12 @@ class PowerupSystem:
                 "color": (255, 200, 100),
                 "icon": "🔫"
             },
-            "nuke": {
-                "name": "NUKE",
-                "cost": 25,
-                "description": "Destroy everything!",
-                "color": (255, 50, 50),
-                "icon": "☢️"
+            "airstrike": {
+                "name": "AIRSTRIKE",
+                "cost": 10,
+                "description": "Bombard 3x3 area",
+                "color": (255, 100, 100),
+                "icon": "💥"
             },
             "paratroopers": {
                 "name": "PARATROOPERS",
@@ -49,7 +42,23 @@ class PowerupSystem:
                 "description": "Drop 3 pawns",
                 "color": (100, 150, 100),
                 "icon": "🪂"
+            },
+            "nuke": {
+                "name": "NUKE",
+                "cost": 25,
+                "description": "Destroy everything!",
+                "color": (255, 50, 50),
+                "icon": "☢️"
             }
+        }
+        
+        # Add powerup prices (for the arms dealer)
+        self.powerup_prices = {
+            "shield": 0,      # Free starter powerup
+            "gun": 500,       # Mid-tier
+            "airstrike": 1000,  # Expensive
+            "paratroopers": 1500,  # Very expensive
+            "nuke": 3000      # Ultimate powerup
         }
         
         # Piece point values
@@ -105,8 +114,18 @@ class PowerupSystem:
             return self.points[player] >= self.powerups[powerup_key]["cost"]
         return False
         
+    def can_use_powerup(self, powerup_key):
+        """Check if a powerup is unlocked."""
+        progress = load_progress()
+        unlocked = progress.get("unlocked_powerups", ["shield"])
+        return powerup_key in unlocked
+        
     def activate_powerup(self, player, powerup_key):
         """Start the activation process for a powerup."""
+        # Check if unlocked first
+        if not self.can_use_powerup(powerup_key):
+            return False
+            
         if not self.can_afford_powerup(player, powerup_key):
             return False
             

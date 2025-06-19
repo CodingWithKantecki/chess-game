@@ -75,6 +75,7 @@ SCREEN_START = "start"
 SCREEN_DIFFICULTY = "difficulty"
 SCREEN_GAME = "game"
 SCREEN_CREDITS = "credits"
+SCREEN_ARMS_DEALER = "arms_dealer"
 
 # AI Difficulty levels - REMOVED GRANDMASTER
 AI_DIFFICULTIES = ["easy", "medium", "hard", "very_hard"]
@@ -89,6 +90,14 @@ AI_DIFFICULTY_COLORS = {
     "medium": (200, 200, 100),
     "hard": (200, 150, 100),
     "very_hard": (200, 100, 100)
+}
+
+# Currency rewards for winning
+VICTORY_REWARDS = {
+    "easy": 100,
+    "medium": 200,
+    "hard": 400,
+    "very_hard": 800
 }
 
 # Save file for progress
@@ -187,10 +196,26 @@ def load_progress():
     if os.path.exists(SAVE_FILE):
         try:
             with open(SAVE_FILE, 'r') as f:
-                return json.load(f)
+                data = json.load(f)
+                # Ensure all fields exist
+                if "money" not in data:
+                    data["money"] = 0
+                if "unlocked_powerups" not in data:
+                    data["unlocked_powerups"] = ["shield"]  # Start with shield only
+                if "unlocked_difficulties" not in data:
+                    data["unlocked_difficulties"] = ["easy"]
+                return data
         except:
-            return {"unlocked_difficulties": ["easy"]}
-    return {"unlocked_difficulties": ["easy"]}
+            return {
+                "unlocked_difficulties": ["easy"],
+                "money": 0,
+                "unlocked_powerups": ["shield"]
+            }
+    return {
+        "unlocked_difficulties": ["easy"],
+        "money": 0,
+        "unlocked_powerups": ["shield"]
+    }
 
 def save_progress(progress):
     """Save player progress to file."""
@@ -210,3 +235,29 @@ def unlock_next_difficulty(current_difficulty):
             save_progress(progress)
             return next_difficulty
     return None
+
+def add_money(amount):
+    """Add money to player's account."""
+    progress = load_progress()
+    progress["money"] = progress.get("money", 0) + amount
+    save_progress(progress)
+    return progress["money"]
+
+def spend_money(amount):
+    """Spend money if player has enough."""
+    progress = load_progress()
+    current_money = progress.get("money", 0)
+    if current_money >= amount:
+        progress["money"] = current_money - amount
+        save_progress(progress)
+        return True
+    return False
+
+def unlock_powerup(powerup_key):
+    """Unlock a powerup."""
+    progress = load_progress()
+    if powerup_key not in progress.get("unlocked_powerups", []):
+        progress["unlocked_powerups"].append(powerup_key)
+        save_progress(progress)
+        return True
+    return False

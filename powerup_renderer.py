@@ -84,6 +84,14 @@ class PowerupRenderer:
                                          y=menu_y + int(85 * self.scale))
         self.screen.blit(turn_surface, turn_rect)
         
+        # Get unlocked powerups
+        progress = load_progress()
+        unlocked_powerups = progress.get("unlocked_powerups", ["shield"])
+        
+        # Filter powerups to only show unlocked ones
+        available_powerups = {k: v for k, v in self.powerup_system.powerups.items() 
+                             if k in unlocked_powerups}
+        
         # Clear button rects
         self.powerup_system.button_rects = {}
         
@@ -94,7 +102,22 @@ class PowerupRenderer:
         button_margin = int(20 * self.scale)
         button_width = menu_width - 2 * button_margin
         
-        for key, powerup in self.powerup_system.powerups.items():
+        # If no powerups unlocked, show message
+        if not available_powerups:
+            no_powerups_text = "No powerups unlocked!"
+            no_powerups_surface = self.renderer.pixel_fonts['small'].render(no_powerups_text, True, (200, 200, 200))
+            no_powerups_rect = no_powerups_surface.get_rect(centerx=menu_x + menu_width // 2, 
+                                                           centery=menu_y + menu_height // 2)
+            self.screen.blit(no_powerups_surface, no_powerups_rect)
+            
+            hint_text = "Visit Arms Dealer"
+            hint_surface = self.renderer.pixel_fonts['tiny'].render(hint_text, True, (150, 150, 150))
+            hint_rect = hint_surface.get_rect(centerx=menu_x + menu_width // 2, 
+                                             y=no_powerups_rect.bottom + 10)
+            self.screen.blit(hint_surface, hint_rect)
+            return
+        
+        for key, powerup in available_powerups.items():
             # Create button rect
             button_rect = pygame.Rect(menu_x + button_margin, button_y, 
                                      button_width, button_height)
@@ -210,6 +233,179 @@ class PowerupRenderer:
             cancel_rect = cancel_surface.get_rect(centerx=menu_x + menu_width // 2, 
                                                 bottom=menu_y + menu_height - int(40 * self.scale))
             self.screen.blit(cancel_surface, cancel_rect)
+            
+    def _draw_missile_icon(self, surface, size, enabled):
+        """Draw a horizontal missile icon for airstrike."""
+        color = (255, 100, 100) if enabled else (80, 80, 80)
+        darker_color = tuple(c // 2 for c in color)
+        
+        # Horizontal missile - smaller and cleaner
+        missile_length = int(size * 0.7)  # Reduced size
+        missile_height = int(size * 0.25)  # Thinner profile
+        
+        # Center the missile
+        missile_x = (size - missile_length) // 2
+        missile_y = (size - missile_height) // 2
+        
+        # Draw main body
+        body_x = missile_x + missile_length // 4
+        body_width = missile_length // 2
+        pygame.draw.rect(surface, color, 
+                        (body_x, missile_y, body_width, missile_height))
+        
+        # Add highlight for 3D effect
+        pygame.draw.line(surface, tuple(min(255, c + 50) for c in color),
+                        (body_x, missile_y + 1), 
+                        (body_x + body_width, missile_y + 1), 1)
+        
+        # Draw nose cone (pointed front)
+        nose_points = [
+            (missile_x, missile_y + missile_height // 2),  # Tip
+            (body_x, missile_y),  # Top
+            (body_x, missile_y + missile_height)  # Bottom
+        ]
+        pygame.draw.polygon(surface, color, nose_points)
+        
+        # Draw tail fins
+        fin_x = body_x + body_width
+        fin_width = missile_length // 4
+        
+        # Top fin
+        pygame.draw.polygon(surface, darker_color, [
+            (fin_x, missile_y),
+            (fin_x + fin_width, missile_y - missile_height // 3),
+            (fin_x + fin_width, missile_y + missile_height // 3),
+            (fin_x, missile_y + missile_height // 3)
+        ])
+        
+        # Bottom fin
+        pygame.draw.polygon(surface, darker_color, [
+            (fin_x, missile_y + missile_height),
+            (fin_x + fin_width, missile_y + missile_height + missile_height // 3),
+            (fin_x + fin_width, missile_y + missile_height * 2 // 3),
+            (fin_x, missile_y + missile_height * 2 // 3)
+        ])
+        
+        # Small center fin
+        pygame.draw.rect(surface, darker_color,
+                        (fin_x, missile_y + missile_height // 3, 
+                         fin_width // 2, missile_height // 3))
+                                   
+    def _draw_shield_icon(self, surface, size, enabled):
+        """Draw a shield icon."""
+        color = (100, 200, 255) if enabled else (80, 80, 80)
+        darker_color = tuple(int(c * 0.7) for c in color)
+        lighter_color = tuple(min(255, int(c * 1.3)) for c in color)
+        
+        # Shield shape - cleaner, more geometric
+        width = int(size * 0.6)
+        height = int(size * 0.7)
+        x = (size - width) // 2
+        y = size // 6
+        
+        # Main shield body
+        shield_rect = pygame.Rect(x, y, width, height)
+        pygame.draw.rect(surface, color, shield_rect)
+        
+        # Top curved part
+        pygame.draw.ellipse(surface, color, (x - 2, y - height // 4, width + 4, height // 2))
+        
+        # Inner border for depth
+        inner_rect = pygame.Rect(x + 3, y + 3, width - 6, height - 6)
+        pygame.draw.rect(surface, darker_color, inner_rect, 2)
+        
+        # Simple cross design
+        cross_thickness = 4
+        # Vertical line
+        pygame.draw.rect(surface, lighter_color, 
+                        (size // 2 - cross_thickness // 2, y + height // 5, 
+                         cross_thickness, height * 3 // 5))
+        # Horizontal line
+        pygame.draw.rect(surface, lighter_color, 
+                        (x + width // 5, y + height // 2 - cross_thickness // 2, 
+                         width * 3 // 5, cross_thickness))
+                        
+    def _draw_nuke_icon(self, surface, size, enabled):
+        """Draw a radiation symbol icon."""
+        color = (255, 255, 0) if enabled else (80, 80, 80)
+        darker_color = tuple(int(c * 0.7) for c in color)
+        center = size // 2
+        radius = int(size * 0.35)
+        
+        # Draw cleaner radiation symbol
+        for i in range(3):
+            angle = i * (2 * math.pi / 3) - math.pi / 2
+            
+            # More defined triangular segments
+            inner_radius = radius * 0.25
+            outer_radius = radius * 0.9
+            segment_width = 0.35  # Width of each segment
+            
+            x1 = center + int(inner_radius * math.cos(angle))
+            y1 = center + int(inner_radius * math.sin(angle))
+            x2 = center + int(outer_radius * math.cos(angle - segment_width))
+            y2 = center + int(outer_radius * math.sin(angle - segment_width))
+            x3 = center + int(outer_radius * math.cos(angle + segment_width))
+            y3 = center + int(outer_radius * math.sin(angle + segment_width))
+            
+            # Draw filled triangle
+            pygame.draw.polygon(surface, color, [(x1, y1), (x2, y2), (x3, y3)])
+            # Add outline for definition
+            pygame.draw.polygon(surface, darker_color, [(x1, y1), (x2, y2), (x3, y3)], 1)
+            
+        # Draw center dot
+        pygame.draw.circle(surface, color, (center, center), radius // 5)
+        pygame.draw.circle(surface, darker_color, (center, center), radius // 5, 1)
+            
+    def _draw_parachute_icon(self, surface, size, enabled):
+        """Draw a parachute icon."""
+        color = (100, 200, 100) if enabled else (80, 80, 80)
+        darker_color = tuple(int(c * 0.7) for c in color)
+        
+        # Cleaner parachute design
+        canopy_width = int(size * 0.7)
+        canopy_height = int(size * 0.35)
+        canopy_x = (size - canopy_width) // 2
+        canopy_y = size // 5
+        
+        # Draw canopy as filled semi-circle
+        # First draw a filled circle
+        canopy_center_x = size // 2
+        canopy_center_y = canopy_y + canopy_height // 2
+        
+        # Draw the canopy segments
+        segment_count = 5
+        for i in range(segment_count):
+            angle_start = math.pi + (math.pi * i / segment_count)
+            angle_end = math.pi + (math.pi * (i + 1) / segment_count)
+            
+            # Calculate points for the segment
+            points = [(canopy_center_x, canopy_center_y)]
+            for angle in [angle_start, angle_end]:
+                x = canopy_center_x + int(canopy_width // 2 * math.cos(angle))
+                y = canopy_center_y + int(canopy_height * math.sin(angle))
+                points.append((x, y))
+            
+            # Alternate colors for segments
+            segment_color = color if i % 2 == 0 else darker_color
+            pygame.draw.polygon(surface, segment_color, points)
+        
+        # Draw strings (cleaner lines)
+        string_end_y = size - size // 3
+        string_end_x = size // 2
+        
+        # Draw 3 main strings
+        string_positions = [canopy_x + canopy_width // 4, size // 2, canopy_x + 3 * canopy_width // 4]
+        for string_x in string_positions:
+            pygame.draw.line(surface, darker_color, 
+                           (string_x, canopy_y + canopy_height), 
+                           (string_end_x, string_end_y), 1)
+        
+        # Draw simplified person/cargo as a small rectangle
+        cargo_size = size // 8
+        pygame.draw.rect(surface, color, 
+                        (string_end_x - cargo_size // 2, string_end_y, 
+                         cargo_size, cargo_size))
             
     def draw_powerup_targeting(self, board, mouse_pos):
         """Draw targeting indicators for active powerups."""
@@ -871,207 +1067,3 @@ class PowerupRenderer:
                 particle_surface.blit(glow_surface, (-i * 2, -i * 2))
             
             self.screen.blit(particle_surface, (x - size, y - size))
-            
-    def _draw_missile_icon(self, surface, size, enabled):
-        """Draw a horizontal missile icon for airstrike."""
-        color = (255, 100, 100) if enabled else (80, 80, 80)
-        darker_color = tuple(c // 2 for c in color)
-        
-        # Horizontal missile - smaller and cleaner
-        missile_length = int(size * 0.7)  # Reduced size
-        missile_height = int(size * 0.25)  # Thinner profile
-        
-        # Center the missile
-        missile_x = (size - missile_length) // 2
-        missile_y = (size - missile_height) // 2
-        
-        # Draw main body
-        body_x = missile_x + missile_length // 4
-        body_width = missile_length // 2
-        pygame.draw.rect(surface, color, 
-                        (body_x, missile_y, body_width, missile_height))
-        
-        # Add highlight for 3D effect
-        pygame.draw.line(surface, tuple(min(255, c + 50) for c in color),
-                        (body_x, missile_y + 1), 
-                        (body_x + body_width, missile_y + 1), 1)
-        
-        # Draw nose cone (pointed front)
-        nose_points = [
-            (missile_x, missile_y + missile_height // 2),  # Tip
-            (body_x, missile_y),  # Top
-            (body_x, missile_y + missile_height)  # Bottom
-        ]
-        pygame.draw.polygon(surface, color, nose_points)
-        
-        # Draw tail fins
-        fin_x = body_x + body_width
-        fin_width = missile_length // 4
-        
-        # Top fin
-        pygame.draw.polygon(surface, darker_color, [
-            (fin_x, missile_y),
-            (fin_x + fin_width, missile_y - missile_height // 3),
-            (fin_x + fin_width, missile_y + missile_height // 3),
-            (fin_x, missile_y + missile_height // 3)
-        ])
-        
-        # Bottom fin
-        pygame.draw.polygon(surface, darker_color, [
-            (fin_x, missile_y + missile_height),
-            (fin_x + fin_width, missile_y + missile_height + missile_height // 3),
-            (fin_x + fin_width, missile_y + missile_height * 2 // 3),
-            (fin_x, missile_y + missile_height * 2 // 3)
-        ])
-        
-        # Small center fin
-        pygame.draw.rect(surface, darker_color,
-                        (fin_x, missile_y + missile_height // 3, 
-                         fin_width // 2, missile_height // 3))
-                                   
-    def _draw_shield_icon(self, surface, size, enabled):
-        """Draw a shield icon."""
-        color = (100, 200, 255) if enabled else (80, 80, 80)
-        darker_color = tuple(int(c * 0.7) for c in color)
-        lighter_color = tuple(min(255, int(c * 1.3)) for c in color)
-        
-        # Shield shape - cleaner, more geometric
-        width = int(size * 0.6)
-        height = int(size * 0.7)
-        x = (size - width) // 2
-        y = size // 6
-        
-        # Main shield body
-        shield_rect = pygame.Rect(x, y, width, height)
-        pygame.draw.rect(surface, color, shield_rect)
-        
-        # Top curved part
-        pygame.draw.ellipse(surface, color, (x - 2, y - height // 4, width + 4, height // 2))
-        
-        # Inner border for depth
-        inner_rect = pygame.Rect(x + 3, y + 3, width - 6, height - 6)
-        pygame.draw.rect(surface, darker_color, inner_rect, 2)
-        
-        # Simple cross design
-        cross_thickness = 4
-        # Vertical line
-        pygame.draw.rect(surface, lighter_color, 
-                        (size // 2 - cross_thickness // 2, y + height // 5, 
-                         cross_thickness, height * 3 // 5))
-        # Horizontal line
-        pygame.draw.rect(surface, lighter_color, 
-                        (x + width // 5, y + height // 2 - cross_thickness // 2, 
-                         width * 3 // 5, cross_thickness))
-                        
-    def _draw_nuke_icon(self, surface, size, enabled):
-        """Draw a radiation symbol icon."""
-        color = (255, 255, 0) if enabled else (80, 80, 80)
-        darker_color = tuple(int(c * 0.7) for c in color)
-        center = size // 2
-        radius = int(size * 0.35)
-        
-        # Draw cleaner radiation symbol
-        for i in range(3):
-            angle = i * (2 * math.pi / 3) - math.pi / 2
-            
-            # More defined triangular segments
-            inner_radius = radius * 0.25
-            outer_radius = radius * 0.9
-            segment_width = 0.35  # Width of each segment
-            
-            x1 = center + int(inner_radius * math.cos(angle))
-            y1 = center + int(inner_radius * math.sin(angle))
-            x2 = center + int(outer_radius * math.cos(angle - segment_width))
-            y2 = center + int(outer_radius * math.sin(angle - segment_width))
-            x3 = center + int(outer_radius * math.cos(angle + segment_width))
-            y3 = center + int(outer_radius * math.sin(angle + segment_width))
-            
-            # Draw filled triangle
-            pygame.draw.polygon(surface, color, [(x1, y1), (x2, y2), (x3, y3)])
-            # Add outline for definition
-            pygame.draw.polygon(surface, darker_color, [(x1, y1), (x2, y2), (x3, y3)], 1)
-            
-        # Draw center dot
-        pygame.draw.circle(surface, color, (center, center), radius // 5)
-        pygame.draw.circle(surface, darker_color, (center, center), radius // 5, 1)
-            
-    def _draw_parachute_icon(self, surface, size, enabled):
-        """Draw a parachute icon."""
-        color = (100, 200, 100) if enabled else (80, 80, 80)
-        darker_color = tuple(int(c * 0.7) for c in color)
-        
-        # Cleaner parachute design
-        canopy_width = int(size * 0.7)
-        canopy_height = int(size * 0.35)
-        canopy_x = (size - canopy_width) // 2
-        canopy_y = size // 5
-        
-        # Draw canopy as filled semi-circle
-        # First draw a filled circle
-        canopy_center_x = size // 2
-        canopy_center_y = canopy_y + canopy_height // 2
-        
-        # Draw the canopy segments
-        segment_count = 5
-        for i in range(segment_count):
-            angle_start = math.pi + (math.pi * i / segment_count)
-            angle_end = math.pi + (math.pi * (i + 1) / segment_count)
-            
-            # Calculate points for the segment
-            points = [(canopy_center_x, canopy_center_y)]
-            for angle in [angle_start, angle_end]:
-                x = canopy_center_x + int(canopy_width // 2 * math.cos(angle))
-                y = canopy_center_y + int(canopy_height * math.sin(angle))
-                points.append((x, y))
-            
-            # Alternate colors for segments
-            segment_color = color if i % 2 == 0 else darker_color
-            pygame.draw.polygon(surface, segment_color, points)
-        
-        # Draw strings (cleaner lines)
-        string_end_y = size - size // 3
-        string_end_x = size // 2
-        
-        # Draw 3 main strings
-        string_positions = [canopy_x + canopy_width // 4, size // 2, canopy_x + 3 * canopy_width // 4]
-        for string_x in string_positions:
-            pygame.draw.line(surface, darker_color, 
-                           (string_x, canopy_y + canopy_height), 
-                           (string_end_x, string_end_y), 1)
-        
-        # Draw simplified person/cargo as a small rectangle
-        cargo_size = size // 8
-        pygame.draw.rect(surface, color, 
-                        (string_end_x - cargo_size // 2, string_end_y, 
-                         cargo_size, cargo_size))
-        
-    def _create_airstrike_effect(self, row, col, board):
-        """Create visual effect for airstrike."""
-        current_time = pygame.time.get_ticks()
-        x, y = board.get_square_pos(row, col)
-        
-        # Add jet flyby animation FIRST
-        self.animations.append({
-            "type": "jet_flyby",
-            "target_x": x,
-            "target_y": y,
-            "start_time": current_time,
-            "duration": 1500,  # 1.5 seconds for jet to fly across
-            "row": row,
-            "col": col
-        })
-        
-        # Add explosion animation AFTER bomb hits (delayed by 1.4 seconds)
-        # The bomb drops from 0.4 to 0.6 progress (0.6-0.8 seconds into animation)
-        # So explosion should start around 0.9-1.0 seconds after jet starts
-        self.animations.append({
-            "type": "airstrike",
-            "x": x,
-            "y": y,
-            "start_time": current_time + 900,  # Delay explosion to match bomb impact
-            "duration": 700,  # 100ms per frame x 7 frames
-            "row": row,
-            "col": col
-        })
-        
-        # Remove particle effects - we don't need them since we have the explosion sprite

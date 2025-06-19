@@ -237,22 +237,30 @@ class Renderer:
                 self.screen.blit(scaled_piece, rect)
                 
     def draw_highlights(self, board):
-        """Draw valid move indicators - SIMPLIFIED."""
+        """Draw valid move indicators with pulsing effect."""
         if not board.selected_piece:
             return
             
         current_time = pygame.time.get_ticks()
         square_size_scaled = int(config.SQUARE_SIZE * self.scale)
         
-        # Use simpler dots for better performance
+        # Calculate pulse effect
+        pulse = math.sin(current_time / 300) * 0.3 + 0.7  # Oscillates between 0.4 and 1.0
+        
         for move_row, move_col in board.valid_moves:
             x, y = board.get_square_pos(move_row, move_col)
             center_x = x + square_size_scaled // 2
             center_y = y + square_size_scaled // 2
             
-            # Simple static dot (no pulsing for performance)
-            size = int(12 * self.scale)
-            pygame.draw.circle(self.screen, (100, 100, 100, 180), (center_x, center_y), size)
+            # Pulsing dot with varying size and opacity
+            base_size = int(12 * self.scale)
+            size = int(base_size * pulse)
+            alpha = int(180 * pulse)  # Pulsing opacity
+            
+            # Draw dot with pulsing effect
+            dot_surface = pygame.Surface((size * 2, size * 2), pygame.SRCALPHA)
+            pygame.draw.circle(dot_surface, (100, 100, 100, alpha), (size, size), size)
+            self.screen.blit(dot_surface, (center_x - size, center_y - size))
             
     def draw_scuffle(self, board):
         """Draw capture animation - SIMPLIFIED."""
@@ -499,8 +507,15 @@ class Renderer:
         
         winner_text = f"{board.winner.upper()} WINS!"
         text = self.pixel_fonts['huge'].render(winner_text, True, config.WHITE)
-        rect = text.get_rect(center=(config.WIDTH // 2, config.HEIGHT // 2 - 50 * self.scale))
+        rect = text.get_rect(center=(config.WIDTH // 2, config.HEIGHT // 2 - 80 * self.scale))
         self.screen.blit(text, rect)
+        
+        # Show reward if player won
+        if board.winner == "white" and hasattr(board, 'victory_reward') and board.victory_reward > 0:
+            reward_text = f"EARNED ${board.victory_reward}!"
+            text = self.pixel_fonts['large'].render(reward_text, True, (255, 215, 0))
+            rect = text.get_rect(center=(config.WIDTH // 2, config.HEIGHT // 2 - 30 * self.scale))
+            self.screen.blit(text, rect)
         
         # Check if player won and if there's a new difficulty to unlock
         if board.winner == "white" and hasattr(board, 'selected_difficulty'):
@@ -510,14 +525,14 @@ class Renderer:
             if current_index >= 0 and current_index < len(config.AI_DIFFICULTIES) - 1:
                 next_diff = config.AI_DIFFICULTIES[current_index + 1]
                 if next_diff not in progress.get("unlocked_difficulties", []):
-                    unlock_text = f"🎉 {config.AI_DIFFICULTY_NAMES[next_diff]} DIFFICULTY UNLOCKED! 🎉"
+                    unlock_text = f"{config.AI_DIFFICULTY_NAMES[next_diff]} DIFFICULTY UNLOCKED!"
                     text = self.pixel_fonts['medium'].render(unlock_text, True, (255, 215, 0))
-                    rect = text.get_rect(center=(config.WIDTH // 2, config.HEIGHT // 2))
+                    rect = text.get_rect(center=(config.WIDTH // 2, config.HEIGHT // 2 + 20 * self.scale))
                     self.screen.blit(text, rect)
         
         restart_text = "PRESS R TO RESTART OR ESC TO MAIN MENU"
         text = self.pixel_fonts['medium'].render(restart_text, True, (200, 200, 200))
-        rect = text.get_rect(center=(config.WIDTH // 2, config.HEIGHT // 2 + 20 * self.scale))
+        rect = text.get_rect(center=(config.WIDTH // 2, config.HEIGHT // 2 + 70 * self.scale))
         self.screen.blit(text, rect)
         
     def draw_difficulty_menu(self, difficulty_buttons, back_button, mouse_pos):
@@ -564,10 +579,9 @@ class Renderer:
             pygame.draw.rect(self.screen, hover_color if is_hover else color, button, border_radius=10)
             pygame.draw.rect(self.screen, border_color, button, 3, border_radius=10)
             
-            # Button text
+            # Button text - REMOVED THE EMOJI
             text = config.AI_DIFFICULTY_NAMES[difficulty]
-            if not is_unlocked:
-                text = f"🔒 {text}"
+            # No longer adding lock emoji or any prefix for locked difficulties
             text_surface = self.pixel_fonts['large'].render(text, True, config.WHITE)
             text_rect = text_surface.get_rect(center=button.center)
             self.screen.blit(text_surface, text_rect)
@@ -633,6 +647,7 @@ class Renderer:
             
             # Buttons
             self._draw_button(buttons['play'], "PLAY GAME", (70, 150, 70), (100, 200, 100), mouse_pos)
+            self._draw_button(buttons['arms_dealer'], "ARMS DEALER", (150, 100, 50), (200, 150, 100), mouse_pos)
             self._draw_button(buttons['credits'], "CREDITS", (70, 70, 150), (100, 100, 200), mouse_pos)
             
         elif screen_type == config.SCREEN_CREDITS:
@@ -673,6 +688,146 @@ class Renderer:
                 
             # Back button
             self._draw_button(buttons['back'], "BACK", (150, 70, 70), (200, 100, 100), mouse_pos)
+            
+    def draw_arms_dealer(self, powerup_system, shop_buttons, back_button, mouse_pos):
+        """Draw the arms dealer shop."""
+        self.draw_parallax_background(0.8)  # Darker background
+        
+        # Dark overlay
+        overlay = pygame.Surface((config.WIDTH, config.HEIGHT), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 150))
+        self.screen.blit(overlay, (0, 0))
+        
+        # Calculate center
+        if config.SCALE != 1.0:
+            game_center_x = config.GAME_OFFSET_X + (config.BASE_WIDTH * config.SCALE) // 2
+            game_center_y = config.GAME_OFFSET_Y + (config.BASE_HEIGHT * config.SCALE) // 2
+        else:
+            game_center_x = config.WIDTH // 2
+            game_center_y = config.HEIGHT // 2
+        
+        # Title
+        title = self.pixel_fonts['huge'].render("ARMS DEALER", True, (255, 100, 100))
+        title_rect = title.get_rect(center=(game_center_x, game_center_y - 280 * config.SCALE))
+        self.screen.blit(title, title_rect)
+        
+        # Player's money
+        progress = config.load_progress()
+        money = progress.get("money", 0)
+        money_text = self.pixel_fonts['large'].render(f"FUNDS: ${money}", True, (255, 215, 0))
+        money_rect = money_text.get_rect(center=(game_center_x, game_center_y - 220 * config.SCALE))
+        self.screen.blit(money_text, money_rect)
+        
+        # Get unlocked powerups
+        unlocked = progress.get("unlocked_powerups", ["shield"])
+        
+        # Draw powerup cards
+        card_width = int(140 * config.SCALE)
+        card_height = int(180 * config.SCALE)
+        card_spacing = int(20 * config.SCALE)
+        
+        # Calculate total width needed
+        powerup_keys = ["shield", "gun", "airstrike", "paratroopers", "nuke"]
+        total_width = len(powerup_keys) * card_width + (len(powerup_keys) - 1) * card_spacing
+        start_x = game_center_x - total_width // 2
+        
+        shop_buttons.clear()
+        
+        for i, powerup_key in enumerate(powerup_keys):
+            powerup = powerup_system.powerups[powerup_key]
+            price = powerup_system.powerup_prices[powerup_key]
+            is_unlocked = powerup_key in unlocked
+            can_afford = money >= price and not is_unlocked
+            
+            # Card position
+            card_x = start_x + i * (card_width + card_spacing)
+            card_y = game_center_y - 60 * config.SCALE
+            
+            card_rect = pygame.Rect(card_x, card_y, card_width, card_height)
+            shop_buttons[powerup_key] = card_rect
+            
+            # Card background
+            if is_unlocked:
+                card_color = (50, 100, 50)  # Green for owned
+                border_color = (100, 255, 100)
+            elif can_afford:
+                card_color = (70, 70, 40)  # Yellow tint for affordable
+                border_color = (255, 215, 0)
+            else:
+                card_color = (40, 40, 40)  # Dark for unaffordable
+                border_color = (80, 80, 80)
+            
+            # Hover effect
+            if card_rect.collidepoint(mouse_pos) and not is_unlocked:
+                card_color = tuple(min(255, c + 20) for c in card_color)
+            
+            pygame.draw.rect(self.screen, card_color, card_rect, border_radius=10)
+            pygame.draw.rect(self.screen, border_color, card_rect, 3, border_radius=10)
+            
+            # Powerup icon
+            icon_text = powerup["icon"]
+            icon_surface = self.pixel_fonts['huge'].render(icon_text, True, config.WHITE)
+            icon_rect = icon_surface.get_rect(center=(card_rect.centerx, card_y + 40 * config.SCALE))
+            self.screen.blit(icon_surface, icon_rect)
+            
+            # Powerup name
+            name_color = config.WHITE if is_unlocked else powerup["color"]
+            name_surface = self.pixel_fonts['small'].render(powerup["name"], True, name_color)
+            name_rect = name_surface.get_rect(center=(card_rect.centerx, card_y + 80 * config.SCALE))
+            self.screen.blit(name_surface, name_rect)
+            
+            # Description
+            desc_lines = self._wrap_text(powerup["description"], self.pixel_fonts['tiny'], card_width - 20)
+            desc_y = card_y + 100 * config.SCALE
+            for line in desc_lines[:2]:  # Max 2 lines
+                line_surface = self.pixel_fonts['tiny'].render(line, True, (200, 200, 200))
+                line_rect = line_surface.get_rect(center=(card_rect.centerx, desc_y))
+                self.screen.blit(line_surface, line_rect)
+                desc_y += 15 * config.SCALE
+            
+            # Price or status
+            if is_unlocked:
+                status_text = "OWNED"
+                status_color = (100, 255, 100)
+            else:
+                status_text = f"${price}"
+                status_color = (255, 215, 0) if can_afford else (200, 100, 100)
+            
+            status_surface = self.pixel_fonts['medium'].render(status_text, True, status_color)
+            status_rect = status_surface.get_rect(center=(card_rect.centerx, card_rect.bottom - 20 * config.SCALE))
+            self.screen.blit(status_surface, status_rect)
+        
+        # Instructions
+        inst_text = "Purchase powerups to use in battle!"
+        inst_surface = self.pixel_fonts['small'].render(inst_text, True, (150, 150, 150))
+        inst_rect = inst_surface.get_rect(center=(game_center_x, game_center_y + 150 * config.SCALE))
+        self.screen.blit(inst_surface, inst_rect)
+        
+        # Back button
+        self._draw_button(back_button, "BACK", (150, 70, 70), (200, 100, 100), mouse_pos)
+
+    def _wrap_text(self, text, font, max_width):
+        """Wrap text to fit within max_width."""
+        words = text.split(' ')
+        lines = []
+        current_line = []
+        
+        for word in words:
+            current_line.append(word)
+            line_text = ' '.join(current_line)
+            if font.size(line_text)[0] > max_width:
+                if len(current_line) > 1:
+                    current_line.pop()
+                    lines.append(' '.join(current_line))
+                    current_line = [word]
+                else:
+                    lines.append(word)
+                    current_line = []
+        
+        if current_line:
+            lines.append(' '.join(current_line))
+        
+        return lines
             
     def _draw_button(self, rect, text, color, hover_color, mouse_pos):
         """Draw a button."""
