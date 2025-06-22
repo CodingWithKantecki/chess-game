@@ -550,41 +550,48 @@ class PowerupRenderer:
                                (center_x, center_y - radius), (center_x, center_y + radius), 2)
                                
     def _draw_chopper_targeting(self, board, mouse_pos):
-        """Draw chopper gunner warning overlay."""
-        # Draw red tint over entire board
-        board_size_scaled = int(BOARD_SIZE * self.scale)
-        warning_surface = pygame.Surface((board_size_scaled, board_size_scaled), pygame.SRCALPHA)
-        warning_surface.fill((255, 0, 0, 30))
-        self.screen.blit(warning_surface, (BOARD_OFFSET_X, BOARD_OFFSET_Y))
-        
-        # Draw warning text
-        warning_text = "CHOPPER GUNNER - CLICK ANYWHERE TO CONFIRM"
-        text_surface = self.renderer.pixel_fonts['large'].render(warning_text, True, (255, 0, 0))
-        text_rect = text_surface.get_rect(center=(BOARD_OFFSET_X + board_size_scaled // 2, 
-                                                  BOARD_OFFSET_Y + board_size_scaled // 2))
-        self.screen.blit(text_surface, text_rect)
-        
-        # Draw animated helicopter
-        heli_y = BOARD_OFFSET_Y + board_size_scaled // 2 - int(50 * self.scale)
-        heli_x = BOARD_OFFSET_X + board_size_scaled // 2
-        
-        # Helicopter body
-        body_width = int(40 * self.scale)
-        body_height = int(20 * self.scale)
-        pygame.draw.ellipse(self.screen, (100, 100, 100), 
-                           (heli_x - body_width // 2, heli_y - body_height // 2, 
-                            body_width, body_height))
-        
-        # Animated rotor
-        rotor_length = int(60 * self.scale)
-        rotor_angle = (pygame.time.get_ticks() // 10) % 360
-        for i in range(2):
-            angle = rotor_angle + i * 180
-            x1 = heli_x + int(math.cos(math.radians(angle)) * rotor_length)
-            y1 = heli_y - body_height // 2 - 5 + int(math.sin(math.radians(angle)) * 3)
-            x2 = heli_x - int(math.cos(math.radians(angle)) * rotor_length)
-            y2 = heli_y - body_height // 2 - 5 - int(math.sin(math.radians(angle)) * 3)
-            pygame.draw.line(self.screen, (80, 80, 80), (x1, y1), (x2, y2), 3)
+        """Draw chopper gunner activation overlay."""
+        # Check if we have the custom overlay image
+        if hasattr(self.renderer, 'assets') and hasattr(self.renderer.assets, 'chopper_activation_overlay') and self.renderer.assets.chopper_activation_overlay:
+            # Scale and display the overlay
+            overlay = pygame.transform.scale(self.renderer.assets.chopper_activation_overlay, (WIDTH, HEIGHT))
+            self.screen.blit(overlay, (0, 0))
+        else:
+            # Fallback to the original implementation if no overlay found
+            # Draw red tint over entire board
+            board_size_scaled = int(BOARD_SIZE * self.scale)
+            warning_surface = pygame.Surface((board_size_scaled, board_size_scaled), pygame.SRCALPHA)
+            warning_surface.fill((255, 0, 0, 30))
+            self.screen.blit(warning_surface, (BOARD_OFFSET_X, BOARD_OFFSET_Y))
+            
+            # Draw warning text
+            warning_text = "CHOPPER GUNNER - CLICK ANYWHERE TO CONFIRM"
+            text_surface = self.renderer.pixel_fonts['large'].render(warning_text, True, (255, 0, 0))
+            text_rect = text_surface.get_rect(center=(BOARD_OFFSET_X + board_size_scaled // 2, 
+                                                      BOARD_OFFSET_Y + board_size_scaled // 2))
+            self.screen.blit(text_surface, text_rect)
+            
+            # Draw animated helicopter
+            heli_y = BOARD_OFFSET_Y + board_size_scaled // 2 - int(50 * self.scale)
+            heli_x = BOARD_OFFSET_X + board_size_scaled // 2
+            
+            # Helicopter body
+            body_width = int(40 * self.scale)
+            body_height = int(20 * self.scale)
+            pygame.draw.ellipse(self.screen, (100, 100, 100), 
+                               (heli_x - body_width // 2, heli_y - body_height // 2, 
+                                body_width, body_height))
+            
+            # Animated rotor
+            rotor_length = int(60 * self.scale)
+            rotor_angle = (pygame.time.get_ticks() // 10) % 360
+            for i in range(2):
+                angle = rotor_angle + i * 180
+                x1 = heli_x + int(math.cos(math.radians(angle)) * rotor_length)
+                y1 = heli_y - body_height // 2 - 5 + int(math.sin(math.radians(angle)) * 3)
+                x2 = heli_x - int(math.cos(math.radians(angle)) * rotor_length)
+                y2 = heli_y - body_height // 2 - 5 - int(math.sin(math.radians(angle)) * 3)
+                pygame.draw.line(self.screen, (80, 80, 80), (x1, y1), (x2, y2), 3)
                                
     def _draw_paratroopers_targeting(self, board, mouse_pos):
         """Draw paratrooper placement indicators."""

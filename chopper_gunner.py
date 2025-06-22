@@ -66,10 +66,13 @@ class ChopperGunnerMode:
                 
         # Sounds
         self.helicopter_sound = None
+        self.helicopter_blade_sound = None  # New blade sound
         self.minigun_sound = None
         if hasattr(assets, 'sounds'):
             if 'helicopter' in assets.sounds:
                 self.helicopter_sound = assets.sounds['helicopter']
+            if 'helicopter_blade' in assets.sounds:  # Check for blade sound
+                self.helicopter_blade_sound = assets.sounds['helicopter_blade']
             if 'minigun' in assets.sounds:
                 self.minigun_sound = assets.sounds['minigun']
                 
@@ -79,9 +82,21 @@ class ChopperGunnerMode:
         self.phase = "takeoff"
         self.phase_timer = pygame.time.get_ticks()
         
-        # Start helicopter sound
+        # Debug prints
+        print("Starting chopper gunner mode...")
+        print(f"Helicopter sound available: {self.helicopter_sound is not None}")
+        print(f"Helicopter blade sound available: {self.helicopter_blade_sound is not None}")
+        
+        # Start helicopter sounds
         if self.helicopter_sound:
             self.helicopter_sound.play(-1)  # Loop
+            print("Playing helicopter sound")
+        # Play blade sound if available
+        if self.helicopter_blade_sound:
+            self.helicopter_blade_sound.play(-1)  # Loop the blade sound
+            print("Playing helicopter blade sound")
+        else:
+            print("No helicopter blade sound loaded!")
             
     def stop(self):
         """End chopper gunner mode."""
@@ -90,6 +105,8 @@ class ChopperGunnerMode:
         # Stop sounds
         if self.helicopter_sound:
             self.helicopter_sound.stop()
+        if self.helicopter_blade_sound:
+            self.helicopter_blade_sound.stop()
             
     def handle_mouse(self, pos):
         """Update crosshair position."""
@@ -155,14 +172,27 @@ class ChopperGunnerMode:
             
         # Update phase
         if self.phase == "takeoff":
-            if current_time - self.phase_timer > 2000:  # 2 second takeoff
+            if current_time - self.phase_timer > 3000:  # 3 second takeoff (was 2)
                 self.phase = "descent"
                 self.phase_timer = current_time
                 
         elif self.phase == "descent":
-            # Descend to combat altitude
-            self.altitude = max(self.target_altitude, 
-                               self.altitude - 10)
+            # Descend to combat altitude - SLOWER DESCENT
+            # Calculate descent speed based on altitude difference
+            altitude_diff = self.altitude - self.target_altitude
+            
+            # Start fast, slow down as we approach target (easing)
+            if altitude_diff > 500:
+                descent_speed = 15  # Fast at first
+            elif altitude_diff > 200:
+                descent_speed = 8   # Medium speed
+            elif altitude_diff > 50:
+                descent_speed = 4   # Slow down
+            else:
+                descent_speed = 2   # Very slow at the end
+                
+            self.altitude = max(self.target_altitude, self.altitude - descent_speed)
+            
             if self.altitude <= self.target_altitude:
                 self.phase = "active"
                 self.phase_timer = current_time

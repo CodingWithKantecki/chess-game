@@ -312,6 +312,8 @@ class ChessGame:
             self.assets.sounds['minigun'].set_volume(self.sfx_volume * 0.6)  # Minigun at 60% of SFX volume
         if 'helicopter' in self.assets.sounds:
             self.assets.sounds['helicopter'].set_volume(self.sfx_volume * 0.5)  # Helicopter at 50% of SFX volume
+        if 'helicopter_blade' in self.assets.sounds:
+            self.assets.sounds['helicopter_blade'].set_volume(self.sfx_volume * 0.8)  # Helicopter blade at 80% of SFX volume
                 
     def handle_click(self, pos):
         """Handle mouse click."""

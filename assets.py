@@ -21,6 +21,7 @@ class AssetManager:
         self.tariq_image = None  # Store Tariq character image
         self.arms_background = None  # Store arms dealer background
         self.cockpit_view = None  # Store cockpit view for chopper gunner
+        self.chopper_activation_overlay = None  # Store chopper activation overlay
         
     def load_all(self):
         """Load all game assets."""
@@ -35,6 +36,7 @@ class AssetManager:
         self.load_tariq()
         self.load_arms_background()
         self.load_cockpit_view()
+        self.load_chopper_activation_overlay()
         print("Assets loaded!")
         
     def load_pieces(self):
@@ -215,6 +217,17 @@ class AssetManager:
             except:
                 pass
                 
+        # Load helicopter blade sound
+        helicopter_blade_path = os.path.join(ASSETS_DIR, "helicopta.wav")
+        if os.path.exists(helicopter_blade_path):
+            try:
+                self.sounds['helicopter_blade'] = pygame.mixer.Sound(helicopter_blade_path)
+                print("✓ Loaded helicopter blade sound")
+            except Exception as e:
+                print(f"✗ Error loading helicopter blade sound: {str(e)}")
+        else:
+            print(f"✗ helicopta.wav not found at {helicopter_blade_path}")
+                
     def load_explosion_frames(self):
         """Load explosion animation frames."""
         print("\nLoading explosion animation frames...")
@@ -308,3 +321,15 @@ class AssetManager:
                 print(f"✗ Error loading cockpit view: {str(e)}")
         else:
             print("✗ Cockpit view not found")
+            
+    def load_chopper_activation_overlay(self):
+        """Load chopper activation overlay."""
+        overlay_path = os.path.join(ASSETS_DIR, "copter2.png")
+        if os.path.exists(overlay_path):
+            try:
+                self.chopper_activation_overlay = pygame.image.load(overlay_path).convert_alpha()
+                print("✓ Loaded chopper activation overlay")
+            except Exception as e:
+                print(f"✗ Error loading chopper activation overlay: {str(e)}")
+        else:
+            print("✗ copter2.png not found")
