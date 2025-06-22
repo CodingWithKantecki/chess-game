@@ -755,14 +755,14 @@ class Renderer:
         unlocked = progress.get("unlocked_powerups", ["shield"])
         
         # Draw powerup cards (shifted right to make room for Tariq)
-        card_width = int(120 * config.SCALE)  # Smaller cards
-        card_height = int(160 * config.SCALE)
-        card_spacing = int(15 * config.SCALE)
+        card_width = int(120 * self.scale)  # Smaller cards
+        card_height = int(160 * self.scale)
+        card_spacing = int(15 * self.scale)
         
         # Calculate total width needed
-        powerup_keys = ["shield", "gun", "airstrike", "paratroopers", "nuke"]
+        powerup_keys = ["shield", "gun", "airstrike", "paratroopers", "chopper"]
         total_width = len(powerup_keys) * card_width + (len(powerup_keys) - 1) * card_spacing
-        start_x = game_center_x - total_width // 2 + int(100 * config.SCALE)  # Shift right
+        start_x = game_center_x - total_width // 2 + int(100 * self.scale)  # Shift right
         
         shop_buttons.clear()
         
@@ -774,7 +774,7 @@ class Renderer:
             
             # Card position
             card_x = start_x + i * (card_width + card_spacing)
-            card_y = game_center_y - 40 * config.SCALE
+            card_y = game_center_y - 40 * self.scale
             
             card_rect = pygame.Rect(card_x, card_y, card_width, card_height)
             shop_buttons[powerup_key] = card_rect
@@ -800,23 +800,23 @@ class Renderer:
             # Powerup icon
             icon_text = powerup["icon"]
             icon_surface = self.pixel_fonts['large'].render(icon_text, True, config.WHITE)
-            icon_rect = icon_surface.get_rect(center=(card_rect.centerx, card_y + 35 * config.SCALE))
+            icon_rect = icon_surface.get_rect(center=(card_rect.centerx, card_y + 35 * self.scale))
             self.screen.blit(icon_surface, icon_rect)
             
             # Powerup name
             name_color = config.WHITE if is_unlocked else powerup["color"]
             name_surface = self.pixel_fonts['small'].render(powerup["name"], True, name_color)
-            name_rect = name_surface.get_rect(center=(card_rect.centerx, card_y + 70 * config.SCALE))
+            name_rect = name_surface.get_rect(center=(card_rect.centerx, card_y + 70 * self.scale))
             self.screen.blit(name_surface, name_rect)
             
             # Description (shortened for smaller cards)
             desc_lines = self._wrap_text(powerup["description"], self.pixel_fonts['tiny'], card_width - 10)
-            desc_y = card_y + 90 * config.SCALE
+            desc_y = card_y + 90 * self.scale
             for line in desc_lines[:2]:  # Max 2 lines
                 line_surface = self.pixel_fonts['tiny'].render(line, True, (200, 200, 200))
                 line_rect = line_surface.get_rect(center=(card_rect.centerx, desc_y))
                 self.screen.blit(line_surface, line_rect)
-                desc_y += 12 * config.SCALE
+                desc_y += 12 * self.scale
             
             # Price or status
             if is_unlocked:
@@ -827,13 +827,13 @@ class Renderer:
                 status_color = (255, 215, 0) if can_afford else (200, 100, 100)
             
             status_surface = self.pixel_fonts['medium'].render(status_text, True, status_color)
-            status_rect = status_surface.get_rect(center=(card_rect.centerx, card_rect.bottom - 15 * config.SCALE))
+            status_rect = status_surface.get_rect(center=(card_rect.centerx, card_rect.bottom - 15 * self.scale))
             self.screen.blit(status_surface, status_rect)
         
         # Instructions
         inst_text = "Click on items to purchase. Click Tariq for more info!"
         inst_surface = self.pixel_fonts['small'].render(inst_text, True, (200, 200, 200))
-        inst_rect = inst_surface.get_rect(center=(game_center_x, game_center_y + 170 * config.SCALE))
+        inst_rect = inst_surface.get_rect(center=(game_center_x, game_center_y + 170 * self.scale))
         self.screen.blit(inst_surface, inst_rect)
         
         # Back button

@@ -43,12 +43,12 @@ class PowerupSystem:
                 "color": (100, 150, 100),
                 "icon": "🪂"
             },
-            "nuke": {
-                "name": "NUKE",
+            "chopper": {
+                "name": "CHOPPER GUNNER",
                 "cost": 25,
-                "description": "Destroy everything!",
+                "description": "Aerial minigun assault!",
                 "color": (255, 50, 50),
-                "icon": "☢️"
+                "icon": "🚁"
             }
         }
         
@@ -58,7 +58,7 @@ class PowerupSystem:
             "gun": 500,       # Mid-tier
             "airstrike": 1000,  # Expensive
             "paratroopers": 1500,  # Very expensive
-            "nuke": 3000      # Ultimate powerup
+            "chopper": 3000      # Ultimate powerup
         }
         
         # Piece point values
@@ -99,6 +99,9 @@ class PowerupSystem:
         
         # Assets reference (will be set by game)
         self.assets = None
+        
+        # Chopper gunner flag
+        self.chopper_gunner_requested = False
         
     def add_points_for_capture(self, captured_piece, capturing_player):
         """Award points when a piece is captured."""
@@ -158,8 +161,8 @@ class PowerupSystem:
             return self._handle_shield_click(row, col, board)
         elif self.active_powerup == "gun":
             return self._handle_gun_click(row, col, board)
-        elif self.active_powerup == "nuke":
-            return self._handle_nuke_click(row, col, board)
+        elif self.active_powerup == "chopper":
+            return self._handle_chopper_click(row, col, board)
         elif self.active_powerup == "paratroopers":
             return self._handle_paratroopers_click(row, col, board)
             
@@ -274,6 +277,65 @@ class PowerupSystem:
                 
         return targets
         
+    def _handle_chopper_click(self, row, col, board):
+        """Handle chopper gunner activation."""
+        # Spend points
+        player = self.powerup_state["player"]
+        self.points[player] -= self.powerups["chopper"]["cost"]
+        
+        # Set flag to request chopper mode
+        self.chopper_gunner_requested = True
+        
+        # Clear powerup state
+        self.active_powerup = None
+        self.powerup_state = None
+        
+        return True
+        
+    def _handle_paratroopers_click(self, row, col, board):
+        """Handle paratroopers - place pawns on empty squares."""
+        player = self.powerup_state["player"]
+        
+        # Check if square is empty
+        if board.get_piece(row, col) != "":
+            return False
+            
+        # Initialize data if first click
+        if "placed" not in self.powerup_state["data"]:
+            self.powerup_state["data"]["placed"] = []
+            
+        # Record where pawn will be placed
+        self.powerup_state["data"]["placed"].append((row, col))
+        
+        # Create paratrooper drop effect
+        self._create_paratrooper_effect(row, col, board)
+        
+        # Schedule pawn placement for when parachute lands (1500ms delay)
+        current_time = pygame.time.get_ticks()
+        pawn_color = 'w' if player == "white" else 'b'
+        self.animations.append({
+            "type": "delayed_pawn_placement",
+            "row": row,
+            "col": col,
+            "pawn": pawn_color + 'P',
+            "start_time": current_time + 1500,  # Same as paratrooper animation duration
+            "duration": 1,  # Instant once it triggers
+            "board": board
+        })
+        
+        # Check if we've placed all 3 pawns
+        if len(self.powerup_state["data"]["placed"]) >= 3:
+            # Spend points
+            self.points[player] -= self.powerups["paratroopers"]["cost"]
+            
+            # Clear powerup state
+            self.active_powerup = None
+            self.powerup_state = None
+            
+            return True
+            
+        return False
+        
     def update_shields(self):
         """Decrement shield counters each turn."""
         to_remove = []
@@ -316,6 +378,12 @@ class PowerupSystem:
         self.effects = [effect for effect in self.effects 
                        if current_time - effect["start_time"] < effect["duration"]]
                        
+        # Update screen shake
+        if self.screen_shake["active"]:
+            elapsed = current_time - self.screen_shake["start_time"]
+            if elapsed >= self.screen_shake["duration"]:
+                self.screen_shake["active"] = False
+                
     def _execute_delayed_destruction(self, anim):
         """Execute the delayed destruction of pieces from airstrike."""
         row = anim["row"]
@@ -382,8 +450,6 @@ class PowerupSystem:
             "row": row,
             "col": col
         })
-        
-        # REMOVED: Particle effects - we don't need them since we have explosion sprites
             
     def _create_shield_effect(self, row, col, board):
         """Create visual effect for shield."""
@@ -442,112 +508,6 @@ class PowerupSystem:
             "duration": 300
         })
         
-    def _handle_nuke_click(self, row, col, board):
-        """Handle nuclear strike - destroys everything except kings."""
-        # Spend points
-        player = self.powerup_state["player"]
-        self.points[player] -= self.powerups["nuke"]["cost"]
-        
-        # Create massive explosion effect
-        self._create_nuke_effect(board)
-        
-        # Trigger intense screen shake for nuke
-        self.start_screen_shake(25, 1000)  # 25 pixel intensity, 1 second duration
-        
-        # Destroy all pieces except kings
-        destroyed_count = 0
-        for r in range(8):
-            for c in range(8):
-                piece = board.get_piece(r, c)
-                if piece and piece[1] != 'K':  # Don't destroy kings
-                    board.set_piece(r, c, "")
-                    destroyed_count += 1
-                    
-        print(f"NUCLEAR STRIKE! Destroyed {destroyed_count} pieces!")
-        
-        # Clear powerup state
-        self.active_powerup = None
-        self.powerup_state = None
-        
-        return True
-        
-    def _handle_paratroopers_click(self, row, col, board):
-        """Handle paratroopers - place pawns on empty squares."""
-        player = self.powerup_state["player"]
-        
-        # Check if square is empty
-        if board.get_piece(row, col) != "":
-            return False
-            
-        # Initialize data if first click
-        if "placed" not in self.powerup_state["data"]:
-            self.powerup_state["data"]["placed"] = []
-            
-        # Record where pawn will be placed
-        self.powerup_state["data"]["placed"].append((row, col))
-        
-        # Create paratrooper drop effect
-        self._create_paratrooper_effect(row, col, board)
-        
-        # Schedule pawn placement for when parachute lands (1500ms delay)
-        current_time = pygame.time.get_ticks()
-        pawn_color = 'w' if player == "white" else 'b'
-        self.animations.append({
-            "type": "delayed_pawn_placement",
-            "row": row,
-            "col": col,
-            "pawn": pawn_color + 'P',
-            "start_time": current_time + 1500,  # Same as paratrooper animation duration
-            "duration": 1,  # Instant once it triggers
-            "board": board
-        })
-        
-        # Check if we've placed all 3 pawns
-        if len(self.powerup_state["data"]["placed"]) >= 3:
-            # Spend points
-            self.points[player] -= self.powerups["paratroopers"]["cost"]
-            
-            # Clear powerup state
-            self.active_powerup = None
-            self.powerup_state = None
-            
-            return True
-            
-        return False
-        
-    def _create_nuke_effect(self, board):
-        """Create nuclear explosion effect."""
-        current_time = pygame.time.get_ticks()
-        
-        # Get center of board
-        center_x = BOARD_OFFSET_X + (BOARD_SIZE // 2)
-        center_y = BOARD_OFFSET_Y + (BOARD_SIZE // 2)
-        
-        # Add massive explosion animation
-        self.animations.append({
-            "type": "nuke",
-            "x": center_x,
-            "y": center_y,
-            "start_time": current_time,
-            "duration": 3000,  # 3 seconds
-        })
-        
-        # Add radiation particles
-        for _ in range(50):
-            angle = random.uniform(0, 2 * math.pi)
-            speed = random.uniform(100, 500)
-            self.effects.append({
-                "type": "radiation_particle",
-                "x": center_x,
-                "y": center_y,
-                "vx": math.cos(angle) * speed,
-                "vy": math.sin(angle) * speed,
-                "color": random.choice([(255, 255, 0), (255, 150, 0), (100, 255, 0)]),
-                "size": random.randint(5, 15),
-                "start_time": current_time,
-                "duration": 2000
-            })
-            
     def start_screen_shake(self, intensity, duration):
         """Start a screen shake effect."""
         current_time = pygame.time.get_ticks()

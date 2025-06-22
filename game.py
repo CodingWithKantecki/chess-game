@@ -10,6 +10,7 @@ from graphics import Renderer
 from ai import ChessAI
 from powerups import PowerupSystem
 from powerup_renderer import PowerupRenderer
+from chopper_gunner import ChopperGunnerMode
 
 class ChessGame:
     def __init__(self):
@@ -43,6 +44,9 @@ class ChessGame:
         
         # Connect powerup system to board
         self.board.set_powerup_system(self.powerup_system)
+        
+        # Chopper gunner mode
+        self.chopper_mode = None
         
         # Game state
         self.running = True
@@ -216,6 +220,10 @@ class ChessGame:
         # Update board scaling
         self.board.update_scale(config.SCALE)
         
+        # Update chopper mode if it exists
+        if self.chopper_mode:
+            self.chopper_mode.screen = self.screen
+        
         # IMPORTANT: Update UI positions AFTER everything else
         # This ensures we use the correct config values
         self.update_ui_positions()
@@ -228,38 +236,48 @@ class ChessGame:
                 
             elif event.type == pygame.MOUSEMOTION:
                 self.mouse_pos = event.pos
+                
+                # Handle chopper mode mouse movement
+                if self.chopper_mode and self.chopper_mode.active:
+                    self.chopper_mode.handle_mouse(event.pos)
                 # Handle volume slider dragging
-                if self.dragging_music_slider:
+                elif self.dragging_music_slider:
                     self.update_music_volume_from_mouse(event.pos)
                 elif self.dragging_sfx_slider:
                     self.update_sfx_volume_from_mouse(event.pos)
                     
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 1:  # Left click
-                    # Check music slider first
-                    music_knob_x = self.music_slider_rect.x + int(self.music_volume * self.music_slider_rect.width)
-                    music_knob_rect = pygame.Rect(music_knob_x - self.volume_knob_radius, 
-                                          self.music_slider_rect.centery - self.volume_knob_radius,
-                                          self.volume_knob_radius * 2, self.volume_knob_radius * 2)
-                    
-                    # Check SFX slider
-                    sfx_knob_x = self.sfx_slider_rect.x + int(self.sfx_volume * self.sfx_slider_rect.width)
-                    sfx_knob_rect = pygame.Rect(sfx_knob_x - self.volume_knob_radius, 
-                                          self.sfx_slider_rect.centery - self.volume_knob_radius,
-                                          self.volume_knob_radius * 2, self.volume_knob_radius * 2)
-                    
-                    if music_knob_rect.collidepoint(event.pos) or self.music_slider_rect.collidepoint(event.pos):
-                        self.dragging_music_slider = True
-                        self.update_music_volume_from_mouse(event.pos)
-                    elif sfx_knob_rect.collidepoint(event.pos) or self.sfx_slider_rect.collidepoint(event.pos):
-                        self.dragging_sfx_slider = True
-                        self.update_sfx_volume_from_mouse(event.pos)
+                    # Handle chopper mode clicks
+                    if self.chopper_mode and self.chopper_mode.active:
+                        self.chopper_mode.handle_click(event.pos)
                     else:
-                        self.handle_click(event.pos)
+                        # Check music slider first
+                        music_knob_x = self.music_slider_rect.x + int(self.music_volume * self.music_slider_rect.width)
+                        music_knob_rect = pygame.Rect(music_knob_x - self.volume_knob_radius, 
+                                              self.music_slider_rect.centery - self.volume_knob_radius,
+                                              self.volume_knob_radius * 2, self.volume_knob_radius * 2)
+                        
+                        # Check SFX slider
+                        sfx_knob_x = self.sfx_slider_rect.x + int(self.sfx_volume * self.sfx_slider_rect.width)
+                        sfx_knob_rect = pygame.Rect(sfx_knob_x - self.volume_knob_radius, 
+                                              self.sfx_slider_rect.centery - self.volume_knob_radius,
+                                              self.volume_knob_radius * 2, self.volume_knob_radius * 2)
+                        
+                        if music_knob_rect.collidepoint(event.pos) or self.music_slider_rect.collidepoint(event.pos):
+                            self.dragging_music_slider = True
+                            self.update_music_volume_from_mouse(event.pos)
+                        elif sfx_knob_rect.collidepoint(event.pos) or self.sfx_slider_rect.collidepoint(event.pos):
+                            self.dragging_sfx_slider = True
+                            self.update_sfx_volume_from_mouse(event.pos)
+                        else:
+                            self.handle_click(event.pos)
                     
             elif event.type == pygame.MOUSEBUTTONUP:
                 if event.button == 1:  # Left release
-                    if self.dragging_music_slider:
+                    if self.chopper_mode and self.chopper_mode.active:
+                        self.chopper_mode.handle_release()
+                    elif self.dragging_music_slider:
                         self.dragging_music_slider = False
                     elif self.dragging_sfx_slider:
                         self.dragging_sfx_slider = False
@@ -290,6 +308,10 @@ class ChessGame:
             self.assets.sounds['capture'].set_volume(self.sfx_volume * 0.7)  # Capture sound at 70% of SFX volume
         if 'bomb' in self.assets.sounds:
             self.assets.sounds['bomb'].set_volume(self.sfx_volume * 0.8)  # Bomb sound at 80% of SFX volume
+        if 'minigun' in self.assets.sounds:
+            self.assets.sounds['minigun'].set_volume(self.sfx_volume * 0.6)  # Minigun at 60% of SFX volume
+        if 'helicopter' in self.assets.sounds:
+            self.assets.sounds['helicopter'].set_volume(self.sfx_volume * 0.5)  # Helicopter at 50% of SFX volume
                 
     def handle_click(self, pos):
         """Handle mouse click."""
@@ -431,10 +453,56 @@ class ChessGame:
             self.toggle_fullscreen()
             return
             
+        # CHEAT CODE: Press 'T' for TEST MODE - unlocks everything and gives money
+        if key == pygame.K_t:
+            # Check if SHIFT is also held for the cheat
+            keys = pygame.key.get_pressed()
+            if keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]:
+                print("CHEAT CODE ACTIVATED! TEST MODE ENABLED!")
+                
+                # Load progress
+                progress = config.load_progress()
+                
+                # Unlock all difficulties
+                progress["unlocked_difficulties"] = ["easy", "medium", "hard", "very_hard"]
+                
+                # Unlock all powerups
+                progress["unlocked_powerups"] = ["shield", "gun", "airstrike", "paratroopers", "chopper"]
+                
+                # Give lots of money
+                progress["money"] = 99999
+                
+                # Save progress
+                config.save_progress(progress)
+                
+                # Also give current player lots of points if in game
+                if self.current_screen == config.SCREEN_GAME:
+                    self.powerup_system.points["white"] = 999
+                    self.powerup_system.points["black"] = 999
+                    
+                print("✓ All difficulties unlocked!")
+                print("✓ All powerups unlocked!")
+                print("✓ Money set to $99,999!")
+                print("✓ Both players have 999 powerup points!")
+                
+                # Visual feedback - flash the screen green
+                flash_surface = pygame.Surface((config.WIDTH, config.HEIGHT))
+                flash_surface.fill((0, 255, 0))
+                flash_surface.set_alpha(100)
+                self.screen.blit(flash_surface, (0, 0))
+                pygame.display.flip()
+                pygame.time.wait(200)
+                
+                return
+            
         if self.current_screen == config.SCREEN_GAME:
             if key == pygame.K_ESCAPE:
+                # Exit chopper mode if active
+                if self.chopper_mode and self.chopper_mode.active:
+                    self.chopper_mode.stop()
+                    self.chopper_mode = None
                 # Cancel active powerup
-                if self.powerup_system.active_powerup:
+                elif self.powerup_system.active_powerup:
                     self.powerup_system.cancel_powerup()
                 # If in fullscreen, exit fullscreen first
                 elif self.fullscreen:
@@ -450,6 +518,8 @@ class ChessGame:
                 if hasattr(self, 'victory_processed'):
                     delattr(self, 'victory_processed')  # Reset victory flag
                 self.victory_reward = 0  # Reset reward display
+                # Clear chopper mode
+                self.chopper_mode = None
         elif self.current_screen == config.SCREEN_DIFFICULTY:
             if key == pygame.K_ESCAPE:
                 self.start_fade(config.SCREEN_DIFFICULTY, config.SCREEN_START)
@@ -479,6 +549,19 @@ class ChessGame:
                     self.powerup_system.assets = self.assets  # Pass assets reference
                     self.board.set_powerup_system(self.powerup_system)
                     self.powerup_renderer.powerup_system = self.powerup_system
+                    
+        # Check if chopper gunner was requested
+        if self.powerup_system.chopper_gunner_requested:
+            self.powerup_system.chopper_gunner_requested = False
+            # Create and start chopper mode
+            self.chopper_mode = ChopperGunnerMode(self.screen, self.assets, self.board)
+            self.chopper_mode.start()
+            
+        # Update chopper mode if active
+        if self.chopper_mode and self.chopper_mode.active:
+            self.chopper_mode.update()
+            # Don't update other game logic while in chopper mode
+            return
                     
         # Update board
         if self.current_screen == config.SCREEN_GAME:
@@ -529,6 +612,12 @@ class ChessGame:
                     
     def draw(self):
         """Draw everything."""
+        # Handle chopper mode drawing separately
+        if self.chopper_mode and self.chopper_mode.active:
+            self.chopper_mode.draw()
+            pygame.display.flip()
+            return
+            
         # Get screen shake offset
         shake_x, shake_y = self.powerup_system.get_screen_shake_offset()
         

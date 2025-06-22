@@ -175,6 +175,9 @@ class PowerupRenderer:
                 icon_rect = scaled_revolver.get_rect(centerx=button_rect.centerx, 
                                                    y=button_rect.y + int(12 * self.scale))  # Adjusted position
                 self.screen.blit(scaled_revolver, icon_rect)
+            elif key == "chopper":
+                # Draw helicopter icon
+                self._draw_helicopter_icon(button_rect, can_afford)
             else:
                 # Draw custom icons for other powerups
                 icon_size = int(30 * self.scale)
@@ -187,9 +190,6 @@ class PowerupRenderer:
                 elif key == "shield":
                     # Draw shield icon
                     self._draw_shield_icon(icon_surface, icon_size, can_afford)
-                elif key == "nuke":
-                    # Draw radiation symbol
-                    self._draw_nuke_icon(icon_surface, icon_size, can_afford)
                 elif key == "paratroopers":
                     # Draw parachute icon
                     self._draw_parachute_icon(icon_surface, icon_size, can_afford)
@@ -233,6 +233,51 @@ class PowerupRenderer:
             cancel_rect = cancel_surface.get_rect(centerx=menu_x + menu_width // 2, 
                                                 bottom=menu_y + menu_height - int(40 * self.scale))
             self.screen.blit(cancel_surface, cancel_rect)
+            
+    def _draw_helicopter_icon(self, button_rect, enabled):
+        """Draw a helicopter icon for chopper gunner."""
+        color = (255, 100, 100) if enabled else (80, 80, 80)
+        darker_color = tuple(c // 2 for c in color)
+        
+        # Calculate center position
+        center_x = button_rect.centerx
+        center_y = button_rect.y + int(22 * self.scale)
+        
+        # Main body
+        body_width = int(20 * self.scale)
+        body_height = int(12 * self.scale)
+        body_rect = pygame.Rect(center_x - body_width // 2, center_y - body_height // 2, 
+                               body_width, body_height)
+        pygame.draw.ellipse(self.screen, color, body_rect)
+        pygame.draw.ellipse(self.screen, darker_color, body_rect, 1)
+        
+        # Tail
+        tail_width = int(15 * self.scale)
+        tail_height = int(4 * self.scale)
+        pygame.draw.rect(self.screen, color, 
+                        (center_x + body_width // 2 - 2, center_y - tail_height // 2, 
+                         tail_width, tail_height))
+        
+        # Main rotor (animated)
+        rotor_length = int(25 * self.scale)
+        rotor_angle = (pygame.time.get_ticks() // 20) % 360
+        for i in range(2):
+            angle = rotor_angle + i * 180
+            x1 = center_x + math.cos(math.radians(angle)) * rotor_length
+            y1 = center_y - body_height // 2 - 3 + math.sin(math.radians(angle)) * 2
+            x2 = center_x - math.cos(math.radians(angle)) * rotor_length
+            y2 = center_y - body_height // 2 - 3 - math.sin(math.radians(angle)) * 2
+            pygame.draw.line(self.screen, darker_color, (x1, y1), (x2, y2), 2)
+            
+        # Tail rotor
+        tail_rotor_x = center_x + body_width // 2 + tail_width - 3
+        pygame.draw.circle(self.screen, darker_color, (tail_rotor_x, center_y), int(4 * self.scale), 1)
+        
+        # Landing skids
+        skid_y = center_y + body_height // 2 + 2
+        pygame.draw.line(self.screen, darker_color, 
+                        (center_x - body_width // 2, skid_y), 
+                        (center_x + body_width // 2, skid_y), 1)
             
     def _draw_missile_icon(self, surface, size, enabled):
         """Draw a horizontal missile icon for airstrike."""
@@ -324,38 +369,6 @@ class PowerupRenderer:
         pygame.draw.rect(surface, lighter_color, 
                         (x + width // 5, y + height // 2 - cross_thickness // 2, 
                          width * 3 // 5, cross_thickness))
-                        
-    def _draw_nuke_icon(self, surface, size, enabled):
-        """Draw a radiation symbol icon."""
-        color = (255, 255, 0) if enabled else (80, 80, 80)
-        darker_color = tuple(int(c * 0.7) for c in color)
-        center = size // 2
-        radius = int(size * 0.35)
-        
-        # Draw cleaner radiation symbol
-        for i in range(3):
-            angle = i * (2 * math.pi / 3) - math.pi / 2
-            
-            # More defined triangular segments
-            inner_radius = radius * 0.25
-            outer_radius = radius * 0.9
-            segment_width = 0.35  # Width of each segment
-            
-            x1 = center + int(inner_radius * math.cos(angle))
-            y1 = center + int(inner_radius * math.sin(angle))
-            x2 = center + int(outer_radius * math.cos(angle - segment_width))
-            y2 = center + int(outer_radius * math.sin(angle - segment_width))
-            x3 = center + int(outer_radius * math.cos(angle + segment_width))
-            y3 = center + int(outer_radius * math.sin(angle + segment_width))
-            
-            # Draw filled triangle
-            pygame.draw.polygon(surface, color, [(x1, y1), (x2, y2), (x3, y3)])
-            # Add outline for definition
-            pygame.draw.polygon(surface, darker_color, [(x1, y1), (x2, y2), (x3, y3)], 1)
-            
-        # Draw center dot
-        pygame.draw.circle(surface, color, (center, center), radius // 5)
-        pygame.draw.circle(surface, darker_color, (center, center), radius // 5, 1)
             
     def _draw_parachute_icon(self, surface, size, enabled):
         """Draw a parachute icon."""
@@ -418,8 +431,8 @@ class PowerupRenderer:
             self._draw_shield_targeting(board, mouse_pos)
         elif self.powerup_system.active_powerup == "gun":
             self._draw_gun_targeting(board, mouse_pos)
-        elif self.powerup_system.active_powerup == "nuke":
-            self._draw_nuke_targeting(board, mouse_pos)
+        elif self.powerup_system.active_powerup == "chopper":
+            self._draw_chopper_targeting(board, mouse_pos)
         elif self.powerup_system.active_powerup == "paratroopers":
             self._draw_paratroopers_targeting(board, mouse_pos)
             
@@ -536,8 +549,8 @@ class PowerupRenderer:
                 pygame.draw.line(self.screen, color, 
                                (center_x, center_y - radius), (center_x, center_y + radius), 2)
                                
-    def _draw_nuke_targeting(self, board, mouse_pos):
-        """Draw nuclear warning overlay."""
+    def _draw_chopper_targeting(self, board, mouse_pos):
+        """Draw chopper gunner warning overlay."""
         # Draw red tint over entire board
         board_size_scaled = int(BOARD_SIZE * self.scale)
         warning_surface = pygame.Surface((board_size_scaled, board_size_scaled), pygame.SRCALPHA)
@@ -545,28 +558,34 @@ class PowerupRenderer:
         self.screen.blit(warning_surface, (BOARD_OFFSET_X, BOARD_OFFSET_Y))
         
         # Draw warning text
-        warning_text = "NUCLEAR STRIKE - CLICK ANYWHERE TO CONFIRM"
+        warning_text = "CHOPPER GUNNER - CLICK ANYWHERE TO CONFIRM"
         text_surface = self.renderer.pixel_fonts['large'].render(warning_text, True, (255, 0, 0))
         text_rect = text_surface.get_rect(center=(BOARD_OFFSET_X + board_size_scaled // 2, 
                                                   BOARD_OFFSET_Y + board_size_scaled // 2))
         self.screen.blit(text_surface, text_rect)
         
-        # Draw radiation symbol
-        center_x = BOARD_OFFSET_X + board_size_scaled // 2
-        center_y = BOARD_OFFSET_Y + board_size_scaled // 2
-        radius = int(50 * self.scale)
+        # Draw animated helicopter
+        heli_y = BOARD_OFFSET_Y + board_size_scaled // 2 - int(50 * self.scale)
+        heli_x = BOARD_OFFSET_X + board_size_scaled // 2
         
-        # Draw three triangular segments
-        for i in range(3):
-            angle = i * (2 * math.pi / 3) - math.pi / 2
-            x1 = center_x + int(radius * 0.3 * math.cos(angle))
-            y1 = center_y + int(radius * 0.3 * math.sin(angle))
-            x2 = center_x + int(radius * math.cos(angle - 0.5))
-            y2 = center_y + int(radius * math.sin(angle - 0.5))
-            x3 = center_x + int(radius * math.cos(angle + 0.5))
-            y3 = center_y + int(radius * math.sin(angle + 0.5))
-            pygame.draw.polygon(self.screen, (255, 255, 0), [(x1, y1), (x2, y2), (x3, y3)])
-            
+        # Helicopter body
+        body_width = int(40 * self.scale)
+        body_height = int(20 * self.scale)
+        pygame.draw.ellipse(self.screen, (100, 100, 100), 
+                           (heli_x - body_width // 2, heli_y - body_height // 2, 
+                            body_width, body_height))
+        
+        # Animated rotor
+        rotor_length = int(60 * self.scale)
+        rotor_angle = (pygame.time.get_ticks() // 10) % 360
+        for i in range(2):
+            angle = rotor_angle + i * 180
+            x1 = heli_x + int(math.cos(math.radians(angle)) * rotor_length)
+            y1 = heli_y - body_height // 2 - 5 + int(math.sin(math.radians(angle)) * 3)
+            x2 = heli_x - int(math.cos(math.radians(angle)) * rotor_length)
+            y2 = heli_y - body_height // 2 - 5 - int(math.sin(math.radians(angle)) * 3)
+            pygame.draw.line(self.screen, (80, 80, 80), (x1, y1), (x2, y2), 3)
+                               
     def _draw_paratroopers_targeting(self, board, mouse_pos):
         """Draw paratrooper placement indicators."""
         square_size_scaled = int(SQUARE_SIZE * self.scale)
@@ -621,8 +640,6 @@ class PowerupRenderer:
                 self._draw_shield_animation(anim, progress)
             elif anim["type"] == "gunshot":
                 self._draw_gunshot_animation(anim, progress)
-            elif anim["type"] == "nuke":
-                self._draw_nuke_animation(anim, progress)
             elif anim["type"] == "paratrooper":
                 self._draw_paratrooper_animation(anim, progress)
                 
@@ -634,8 +651,6 @@ class PowerupRenderer:
                 self._draw_muzzle_flash(effect, current_time)
             elif effect["type"] == "impact":
                 self._draw_impact_effect(effect, current_time)
-            elif effect["type"] == "radiation_particle":
-                self._draw_radiation_particle(effect, current_time)
                 
         # Draw persistent shield indicators
         self._draw_active_shields(board)
@@ -801,7 +816,7 @@ class PowerupRenderer:
                         pygame.draw.circle(explosion_surface, (255, 150 - i * 30, 0), (radius, radius), radius)
                         explosion_surface.set_alpha(alpha)
                         self.screen.blit(explosion_surface, (center_x - radius, center_y - radius))
-                               
+                        
     def _draw_shield_animation(self, anim, progress):
         """Draw shield activation effect."""
         square_size_scaled = int(SQUARE_SIZE * self.scale)
@@ -966,46 +981,13 @@ class PowerupRenderer:
                 return "Select piece to shoot with"
             else:
                 return "Click enemy to shoot"
-        elif self.powerup_system.active_powerup == "nuke":
+        elif self.powerup_system.active_powerup == "chopper":
             return "Click anywhere to confirm"
         elif self.powerup_system.active_powerup == "paratroopers":
             placed = len(self.powerup_system.powerup_state["data"].get("placed", []))
             return f"Place pawn {placed + 1} of 3"
         return ""
         
-    def _draw_nuke_animation(self, anim, progress):
-        """Draw nuclear explosion effect."""
-        x, y = anim["x"], anim["y"]
-        
-        # Multiple expanding shockwaves
-        for i in range(5):
-            wave_progress = max(0, min(1, (progress - i * 0.1) * 1.5))
-            if wave_progress > 0 and wave_progress < 1:
-                radius = int(BOARD_SIZE * wave_progress)
-                alpha = int(255 * (1 - wave_progress))
-                
-                if radius > 0:
-                    # Create shockwave surface
-                    wave_surface = pygame.Surface((radius * 2, radius * 2), pygame.SRCALPHA)
-                    wave_surface.fill((0, 0, 0, 0))
-                    
-                    # Draw multiple rings for intensity
-                    for ring in range(3):
-                        ring_radius = radius - ring * 5
-                        if ring_radius > 0:
-                            color = (255, 200 - ring * 50, 100 - ring * 30)
-                            pygame.draw.circle(wave_surface, color, (radius, radius), ring_radius, 3)
-                    
-                    wave_surface.set_alpha(alpha)
-                    self.screen.blit(wave_surface, (x - radius, y - radius))
-        
-        # Bright flash at the beginning
-        if progress < 0.2:
-            flash_alpha = int(255 * (1 - progress * 5))
-            flash_surface = pygame.Surface((BOARD_SIZE, BOARD_SIZE), pygame.SRCALPHA)
-            flash_surface.fill((255, 255, 255, flash_alpha))
-            self.screen.blit(flash_surface, (BOARD_OFFSET_X, BOARD_OFFSET_Y))
-            
     def _draw_paratrooper_animation(self, anim, progress):
         """Draw paratrooper drop effect."""
         square_size_scaled = int(SQUARE_SIZE * self.scale)
@@ -1036,34 +1018,3 @@ class PowerupRenderer:
         if pawn_y < y + square_size_scaled // 2:
             pygame.draw.circle(self.screen, (100, 100, 100), 
                              (chute_x, pawn_y), int(10 * self.scale))
-                             
-    def _draw_radiation_particle(self, effect, current_time):
-        """Draw radiation particle effect."""
-        elapsed = current_time - effect["start_time"]
-        progress = elapsed / effect["duration"]
-        
-        # Update position with deceleration
-        decel = 1 - progress * 0.7
-        x = effect["x"] + effect["vx"] * elapsed / 1000 * decel
-        y = effect["y"] + effect["vy"] * elapsed / 1000 * decel
-        
-        # Pulsing size and fade
-        pulse = math.sin(elapsed / 100) * 0.3 + 0.7
-        size = int(effect["size"] * pulse * (1 - progress * 0.5))
-        alpha = int(200 * (1 - progress))
-        
-        if size > 0:
-            particle_surface = pygame.Surface((size * 2, size * 2), pygame.SRCALPHA)
-            particle_surface.fill((0, 0, 0, 0))
-            
-            # Glowing effect
-            for i in range(3):
-                glow_size = size + i * 2
-                glow_alpha = alpha // (i + 1)
-                glow_surface = pygame.Surface((glow_size * 2, glow_size * 2), pygame.SRCALPHA)
-                glow_surface.fill((0, 0, 0, 0))
-                pygame.draw.circle(glow_surface, effect["color"], (glow_size, glow_size), glow_size)
-                glow_surface.set_alpha(glow_alpha)
-                particle_surface.blit(glow_surface, (-i * 2, -i * 2))
-            
-            self.screen.blit(particle_surface, (x - size, y - size))

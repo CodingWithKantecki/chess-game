@@ -20,6 +20,7 @@ class AssetManager:
         self.jet_frames = []  # Store jet animation frames
         self.tariq_image = None  # Store Tariq character image
         self.arms_background = None  # Store arms dealer background
+        self.cockpit_view = None  # Store cockpit view for chopper gunner
         
     def load_all(self):
         """Load all game assets."""
@@ -33,6 +34,7 @@ class AssetManager:
         self.load_jet_frames()
         self.load_tariq()
         self.load_arms_background()
+        self.load_cockpit_view()
         print("Assets loaded!")
         
     def load_pieces(self):
@@ -195,6 +197,24 @@ class AssetManager:
             except:
                 pass
                 
+        # Load minigun sound
+        minigun_path = os.path.join(ASSETS_DIR, "minigun.mp3")
+        if os.path.exists(minigun_path):
+            try:
+                self.sounds['minigun'] = pygame.mixer.Sound(minigun_path)
+                print("✓ Loaded minigun sound")
+            except:
+                pass
+                
+        # Load helicopter sound
+        helicopter_path = os.path.join(ASSETS_DIR, "helicopter.mp3")
+        if os.path.exists(helicopter_path):
+            try:
+                self.sounds['helicopter'] = pygame.mixer.Sound(helicopter_path)
+                print("✓ Loaded helicopter sound")
+            except:
+                pass
+                
     def load_explosion_frames(self):
         """Load explosion animation frames."""
         print("\nLoading explosion animation frames...")
@@ -276,3 +296,15 @@ class AssetManager:
                 print(f"✗ Error loading arms background: {str(e)}")
         else:
             print("✗ Arms dealer background not found")
+            
+    def load_cockpit_view(self):
+        """Load cockpit view for chopper gunner."""
+        cockpit_path = os.path.join(ASSETS_DIR, "cockpit_view.png")
+        if os.path.exists(cockpit_path):
+            try:
+                self.cockpit_view = pygame.image.load(cockpit_path).convert_alpha()
+                print("✓ Loaded cockpit view")
+            except Exception as e:
+                print(f"✗ Error loading cockpit view: {str(e)}")
+        else:
+            print("✗ Cockpit view not found")
