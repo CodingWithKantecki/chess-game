@@ -52,6 +52,17 @@ class ChessGame:
         
         # Arms dealer
         self.shop_buttons = {}
+        self.arms_dealer_game_button = None
+        
+        # Arms dealer dialogue state
+        self.tariq_dialogue_index = 0
+        self.tariq_dialogues = [
+            "Welcome, my friend! I am Tariq, the finest arms dealer in the kingdom.",
+            "I have powerful tools that can turn the tide of battle...",
+            "Each powerup has its price, but victory is priceless!",
+            "Shield your pieces, rain fire from above, or unleash total destruction!",
+            "What will it be today?"
+        ]
         
         # UI elements - will be updated for scaling
         self.update_ui_positions()
@@ -153,15 +164,9 @@ class ChessGame:
             int(200 * config.SCALE), 
             int(60 * config.SCALE)
         )
-        self.arms_dealer_button = pygame.Rect(
-            center_x - int(100 * config.SCALE), 
-            center_y + int(50 * config.SCALE), 
-            int(200 * config.SCALE), 
-            int(60 * config.SCALE)
-        )
         self.credits_button = pygame.Rect(
             center_x - int(100 * config.SCALE), 
-            center_y + int(130 * config.SCALE), 
+            center_y + int(50 * config.SCALE), 
             int(200 * config.SCALE), 
             int(60 * config.SCALE)
         )
@@ -295,8 +300,6 @@ class ChessGame:
         if self.current_screen == config.SCREEN_START:
             if self.play_button.collidepoint(pos):
                 self.start_fade(config.SCREEN_START, config.SCREEN_DIFFICULTY)
-            elif self.arms_dealer_button.collidepoint(pos):
-                self.start_fade(config.SCREEN_START, config.SCREEN_ARMS_DEALER)
             elif self.credits_button.collidepoint(pos):
                 self.start_fade(config.SCREEN_START, config.SCREEN_CREDITS)
                 
@@ -315,9 +318,13 @@ class ChessGame:
                         else:
                             print("Not enough money!")
             
+            # Click on Tariq to cycle dialogue
+            if hasattr(self.renderer, 'tariq_rect') and self.renderer.tariq_rect.collidepoint(pos):
+                self.tariq_dialogue_index = (self.tariq_dialogue_index + 1) % len(self.tariq_dialogues)
+            
             # Back button
             if self.back_button.collidepoint(pos):
-                self.start_fade(config.SCREEN_ARMS_DEALER, config.SCREEN_START)
+                self.start_fade(config.SCREEN_ARMS_DEALER, config.SCREEN_GAME)
                 
         elif self.current_screen == config.SCREEN_DIFFICULTY:
             # Load progress to check unlocked difficulties
@@ -341,6 +348,11 @@ class ChessGame:
                 self.start_fade(config.SCREEN_CREDITS, config.SCREEN_START)
                 
         elif self.current_screen == config.SCREEN_GAME:
+            # Check Arms Dealer button
+            if self.arms_dealer_game_button and self.arms_dealer_game_button.collidepoint(pos):
+                self.start_fade(config.SCREEN_GAME, config.SCREEN_ARMS_DEALER)
+                return
+                
             # Check powerup menu buttons first
             if self.board.current_turn == "white":  # Only player can use powerups
                 for powerup_key, button_rect in self.powerup_system.button_rects.items():
@@ -571,7 +583,6 @@ class ChessGame:
         if screen_type == config.SCREEN_START:
             buttons = {
                 'play': self.play_button, 
-                'arms_dealer': self.arms_dealer_button,
                 'credits': self.credits_button
             }
             self.renderer.draw_menu(config.SCREEN_START, buttons, self.mouse_pos)
@@ -579,7 +590,8 @@ class ChessGame:
             
         elif screen_type == config.SCREEN_ARMS_DEALER:
             self.renderer.draw_arms_dealer(self.powerup_system, self.shop_buttons, 
-                                          self.back_button, self.mouse_pos)
+                                          self.back_button, self.mouse_pos, 
+                                          self.tariq_dialogue_index, self.tariq_dialogues)
             self.draw_volume_sliders()
             
         elif screen_type == config.SCREEN_DIFFICULTY:
@@ -608,6 +620,9 @@ class ChessGame:
             self.renderer.draw_ui(self.board, None, False, self.mouse_pos, 
                                  self.ai, self.selected_difficulty)
             self.draw_volume_sliders()
+            
+            # Add Arms Dealer button in game
+            self.draw_arms_dealer_button()
             
             # Powerup menu
             self.powerup_renderer.draw_powerup_menu(self.board, self.mouse_pos)
@@ -699,6 +714,29 @@ class ChessGame:
         text_surface = self.renderer.pixel_fonts['tiny'].render(sfx_text, True, config.WHITE)
         text_rect = text_surface.get_rect(midright=(self.sfx_slider_rect.x - 10, self.sfx_slider_rect.centery))
         self.screen.blit(text_surface, text_rect)
+            
+    def draw_arms_dealer_button(self):
+        """Draw the Arms Dealer button in the game screen."""
+        # Position it in the middle left side of the screen
+        button_width = int(150 * config.SCALE)
+        button_height = int(40 * config.SCALE)
+        button_x = int(20 * config.SCALE)
+        button_y = config.HEIGHT // 2 - button_height // 2  # Center vertically
+        
+        self.arms_dealer_game_button = pygame.Rect(button_x, button_y, button_width, button_height)
+        
+        # Check if hovering
+        is_hover = self.arms_dealer_game_button.collidepoint(self.mouse_pos)
+        
+        # Draw button
+        button_color = (150, 100, 50) if is_hover else (120, 80, 40)
+        pygame.draw.rect(self.screen, button_color, self.arms_dealer_game_button, border_radius=10)
+        pygame.draw.rect(self.screen, (200, 150, 100), self.arms_dealer_game_button, 3, border_radius=10)
+        
+        # Draw text
+        text = self.renderer.pixel_fonts['small'].render("VISIT ARMS DEALER", True, config.WHITE)
+        text_rect = text.get_rect(center=self.arms_dealer_game_button.center)
+        self.screen.blit(text, text_rect)
             
     def run(self):
         """Main game loop."""

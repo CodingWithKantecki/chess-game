@@ -647,7 +647,6 @@ class Renderer:
             
             # Buttons
             self._draw_button(buttons['play'], "PLAY GAME", (70, 150, 70), (100, 200, 100), mouse_pos)
-            self._draw_button(buttons['arms_dealer'], "ARMS DEALER", (150, 100, 50), (200, 150, 100), mouse_pos)
             self._draw_button(buttons['credits'], "CREDITS", (70, 70, 150), (100, 100, 200), mouse_pos)
             
         elif screen_type == config.SCREEN_CREDITS:
@@ -689,22 +688,56 @@ class Renderer:
             # Back button
             self._draw_button(buttons['back'], "BACK", (150, 70, 70), (200, 100, 100), mouse_pos)
             
-    def draw_arms_dealer(self, powerup_system, shop_buttons, back_button, mouse_pos):
-        """Draw the arms dealer shop."""
-        self.draw_parallax_background(0.8)  # Darker background
-        
-        # Dark overlay
+    def draw_arms_dealer(self, powerup_system, shop_buttons, back_button, mouse_pos, dialogue_index=0, dialogues=None):
+        """Draw the arms dealer shop with Tariq character."""
+        # Check if arms background is loaded
+        if hasattr(self.assets, 'arms_background') and self.assets.arms_background:
+            # Scale background to fill screen
+            scaled_bg = pygame.transform.scale(self.assets.arms_background, (config.WIDTH, config.HEIGHT))
+            self.screen.blit(scaled_bg, (0, 0))
+        else:
+            # Fallback: darker parallax background
+            self.draw_parallax_background(0.6)
+            
+        # Semi-transparent overlay for better text visibility
         overlay = pygame.Surface((config.WIDTH, config.HEIGHT), pygame.SRCALPHA)
-        overlay.fill((0, 0, 0, 150))
+        overlay.fill((0, 0, 0, 100))
         self.screen.blit(overlay, (0, 0))
         
-        # Calculate center
+        # Calculate layout
         if config.SCALE != 1.0:
             game_center_x = config.GAME_OFFSET_X + (config.BASE_WIDTH * config.SCALE) // 2
             game_center_y = config.GAME_OFFSET_Y + (config.BASE_HEIGHT * config.SCALE) // 2
         else:
             game_center_x = config.WIDTH // 2
             game_center_y = config.HEIGHT // 2
+        
+        # Draw Tariq character
+        if hasattr(self.assets, 'tariq_image') and self.assets.tariq_image:
+            # Scale Tariq to appropriate size
+            tariq_height = int(450 * config.SCALE)  # Even taller
+            aspect_ratio = self.assets.tariq_image.get_width() / self.assets.tariq_image.get_height()
+            tariq_width = int(tariq_height * aspect_ratio)
+            scaled_tariq = pygame.transform.scale(self.assets.tariq_image, (tariq_width, tariq_height))
+            
+            # Position Tariq on the left side, at the very bottom
+            tariq_x = int(50 * config.SCALE)
+            # Position him so he's standing at the bottom edge
+            tariq_y = config.HEIGHT - tariq_height  # Right at the bottom
+            
+            self.screen.blit(scaled_tariq, (tariq_x, tariq_y))
+            
+            # Store rect for click detection
+            self.tariq_rect = pygame.Rect(tariq_x, tariq_y, tariq_width, tariq_height)
+            
+            # Draw speech bubble with dialogue - position it higher up near his head
+            if dialogues and 0 <= dialogue_index < len(dialogues):
+                dialogue = dialogues[dialogue_index]
+                # Position bubble near Tariq's head/upper body
+                bubble_y = tariq_y + int(80 * config.SCALE)  # Near top of character
+                self._draw_speech_bubble(tariq_x + tariq_width + int(20 * config.SCALE), 
+                                       bubble_y, 
+                                       dialogue, int(300 * config.SCALE))
         
         # Title
         title = self.pixel_fonts['huge'].render("ARMS DEALER", True, (255, 100, 100))
@@ -721,15 +754,15 @@ class Renderer:
         # Get unlocked powerups
         unlocked = progress.get("unlocked_powerups", ["shield"])
         
-        # Draw powerup cards
-        card_width = int(140 * config.SCALE)
-        card_height = int(180 * config.SCALE)
-        card_spacing = int(20 * config.SCALE)
+        # Draw powerup cards (shifted right to make room for Tariq)
+        card_width = int(120 * config.SCALE)  # Smaller cards
+        card_height = int(160 * config.SCALE)
+        card_spacing = int(15 * config.SCALE)
         
         # Calculate total width needed
         powerup_keys = ["shield", "gun", "airstrike", "paratroopers", "nuke"]
         total_width = len(powerup_keys) * card_width + (len(powerup_keys) - 1) * card_spacing
-        start_x = game_center_x - total_width // 2
+        start_x = game_center_x - total_width // 2 + int(100 * config.SCALE)  # Shift right
         
         shop_buttons.clear()
         
@@ -741,7 +774,7 @@ class Renderer:
             
             # Card position
             card_x = start_x + i * (card_width + card_spacing)
-            card_y = game_center_y - 60 * config.SCALE
+            card_y = game_center_y - 40 * config.SCALE
             
             card_rect = pygame.Rect(card_x, card_y, card_width, card_height)
             shop_buttons[powerup_key] = card_rect
@@ -766,24 +799,24 @@ class Renderer:
             
             # Powerup icon
             icon_text = powerup["icon"]
-            icon_surface = self.pixel_fonts['huge'].render(icon_text, True, config.WHITE)
-            icon_rect = icon_surface.get_rect(center=(card_rect.centerx, card_y + 40 * config.SCALE))
+            icon_surface = self.pixel_fonts['large'].render(icon_text, True, config.WHITE)
+            icon_rect = icon_surface.get_rect(center=(card_rect.centerx, card_y + 35 * config.SCALE))
             self.screen.blit(icon_surface, icon_rect)
             
             # Powerup name
             name_color = config.WHITE if is_unlocked else powerup["color"]
             name_surface = self.pixel_fonts['small'].render(powerup["name"], True, name_color)
-            name_rect = name_surface.get_rect(center=(card_rect.centerx, card_y + 80 * config.SCALE))
+            name_rect = name_surface.get_rect(center=(card_rect.centerx, card_y + 70 * config.SCALE))
             self.screen.blit(name_surface, name_rect)
             
-            # Description
-            desc_lines = self._wrap_text(powerup["description"], self.pixel_fonts['tiny'], card_width - 20)
-            desc_y = card_y + 100 * config.SCALE
+            # Description (shortened for smaller cards)
+            desc_lines = self._wrap_text(powerup["description"], self.pixel_fonts['tiny'], card_width - 10)
+            desc_y = card_y + 90 * config.SCALE
             for line in desc_lines[:2]:  # Max 2 lines
                 line_surface = self.pixel_fonts['tiny'].render(line, True, (200, 200, 200))
                 line_rect = line_surface.get_rect(center=(card_rect.centerx, desc_y))
                 self.screen.blit(line_surface, line_rect)
-                desc_y += 15 * config.SCALE
+                desc_y += 12 * config.SCALE
             
             # Price or status
             if is_unlocked:
@@ -794,17 +827,67 @@ class Renderer:
                 status_color = (255, 215, 0) if can_afford else (200, 100, 100)
             
             status_surface = self.pixel_fonts['medium'].render(status_text, True, status_color)
-            status_rect = status_surface.get_rect(center=(card_rect.centerx, card_rect.bottom - 20 * config.SCALE))
+            status_rect = status_surface.get_rect(center=(card_rect.centerx, card_rect.bottom - 15 * config.SCALE))
             self.screen.blit(status_surface, status_rect)
         
         # Instructions
-        inst_text = "Purchase powerups to use in battle!"
-        inst_surface = self.pixel_fonts['small'].render(inst_text, True, (150, 150, 150))
-        inst_rect = inst_surface.get_rect(center=(game_center_x, game_center_y + 150 * config.SCALE))
+        inst_text = "Click on items to purchase. Click Tariq for more info!"
+        inst_surface = self.pixel_fonts['small'].render(inst_text, True, (200, 200, 200))
+        inst_rect = inst_surface.get_rect(center=(game_center_x, game_center_y + 170 * config.SCALE))
         self.screen.blit(inst_surface, inst_rect)
         
         # Back button
-        self._draw_button(back_button, "BACK", (150, 70, 70), (200, 100, 100), mouse_pos)
+        self._draw_button(back_button, "BACK TO GAME", (150, 70, 70), (200, 100, 100), mouse_pos)
+        
+    def _draw_speech_bubble(self, x, y, text, max_width):
+        """Draw a speech bubble with text."""
+        # Wrap text
+        words = text.split(' ')
+        lines = []
+        current_line = []
+        
+        for word in words:
+            test_line = ' '.join(current_line + [word])
+            if self.pixel_fonts['small'].size(test_line)[0] <= max_width - 40:
+                current_line.append(word)
+            else:
+                if current_line:
+                    lines.append(' '.join(current_line))
+                    current_line = [word]
+                else:
+                    lines.append(word)
+        if current_line:
+            lines.append(' '.join(current_line))
+        
+        # Calculate bubble size
+        line_height = self.pixel_fonts['small'].get_height() + 5
+        bubble_height = len(lines) * line_height + 30
+        bubble_width = max_width
+        
+        # Draw bubble background
+        bubble_rect = pygame.Rect(x, y, bubble_width, bubble_height)
+        pygame.draw.rect(self.screen, (40, 40, 40), bubble_rect, border_radius=15)
+        pygame.draw.rect(self.screen, (200, 200, 200), bubble_rect, 3, border_radius=15)
+        
+        # Draw tail
+        tail_points = [
+            (x - 10, y + 30),
+            (x + 10, y + 20),
+            (x + 10, y + 40)
+        ]
+        pygame.draw.polygon(self.screen, (40, 40, 40), tail_points)
+        pygame.draw.lines(self.screen, (200, 200, 200), False, 
+                         [(x - 10, y + 30), (x + 10, y + 20)], 3)
+        pygame.draw.lines(self.screen, (200, 200, 200), False, 
+                         [(x - 10, y + 30), (x + 10, y + 40)], 3)
+        
+        # Draw text
+        text_y = y + 15
+        for line in lines:
+            text_surface = self.pixel_fonts['small'].render(line, True, (255, 255, 255))
+            text_rect = text_surface.get_rect(centerx=x + bubble_width // 2, y=text_y)
+            self.screen.blit(text_surface, text_rect)
+            text_y += line_height
 
     def _wrap_text(self, text, font, max_width):
         """Wrap text to fit within max_width."""

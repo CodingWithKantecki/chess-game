@@ -18,6 +18,8 @@ class AssetManager:
         self.explosion_frames = []  # Store explosion animation frames
         self.revolver_image = None  # Store revolver image
         self.jet_frames = []  # Store jet animation frames
+        self.tariq_image = None  # Store Tariq character image
+        self.arms_background = None  # Store arms dealer background
         
     def load_all(self):
         """Load all game assets."""
@@ -29,6 +31,8 @@ class AssetManager:
         self.load_explosion_frames()
         self.load_revolver()
         self.load_jet_frames()
+        self.load_tariq()
+        self.load_arms_background()
         print("Assets loaded!")
         
     def load_pieces(self):
@@ -248,3 +252,27 @@ class AssetManager:
                 print(f"✗ {filename} not found")
                 
         print(f"Loaded {len(self.jet_frames)}/4 jet frames")
+        
+    def load_tariq(self):
+        """Load Tariq character image."""
+        tariq_path = os.path.join(ASSETS_DIR, "Tariq Steele.png")
+        if os.path.exists(tariq_path):
+            try:
+                self.tariq_image = pygame.image.load(tariq_path).convert_alpha()
+                print("✓ Loaded Tariq character")
+            except Exception as e:
+                print(f"✗ Error loading Tariq: {str(e)}")
+        else:
+            print("✗ Tariq image not found")
+            
+    def load_arms_background(self):
+        """Load arms dealer background."""
+        bg_path = os.path.join(ASSETS_DIR, "arms_background.png")
+        if os.path.exists(bg_path):
+            try:
+                self.arms_background = pygame.image.load(bg_path).convert()
+                print("✓ Loaded arms dealer background")
+            except Exception as e:
+                print(f"✗ Error loading arms background: {str(e)}")
+        else:
+            print("✗ Arms dealer background not found")
