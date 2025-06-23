@@ -14,20 +14,24 @@ class ChopperGunnerMode:
         self.assets = assets
         self.board = board
         self.active = False
-        self.phase = "takeoff"  # takeoff, descent, active, complete
+        self.phase = "approach"  # approach, descent, active, complete
         self.phase_timer = 0
         
         # Camera properties
-        self.altitude = 1000  # Start high
+        self.altitude = 300  # Start at combat altitude
         self.target_altitude = 300  # Combat altitude
         self.camera_shake = {"x": 0, "y": 0, "intensity": 0}
         
         # Camera rotation for circling
-        self.camera_angle = 0  # Angle for circling around board
-        self.camera_tilt = 30  # Lowered by 10 more degrees for gentler angle
-        self.camera_distance = 400  # Moved back from 300 to 400
+        self.camera_angle = 0  # Angle for side-to-side movement
+        self.camera_tilt = 55  # Slightly less steep to see your pieces
+        self.camera_distance = 650  # Increased to see some of your pieces
         self.camera_bank = 0  # Banking angle (leaning into turns)
         self.prev_camera_angle = 0  # To calculate angular velocity
+        
+        # Simple zoom in effect
+        self.zoom_scale = 0.3  # Start zoomed out
+        self.target_zoom = 1.0  # Target zoom level
         
         # Helicopter movement dynamics - smoother values
         self.hover_offset_y = 0  # Vertical bobbing
@@ -58,8 +62,45 @@ class ChopperGunnerMode:
         
         # Board view properties
         self.board_center_x = WIDTH // 2
-        self.board_center_y = HEIGHT // 2
+        self.board_center_y = HEIGHT // 2 + 120  # Adjusted to show some of your pieces at bottom
         self.board_scale = 1.0
+        
+        # Weather effects
+        self.rain_particles = []
+        self.lightning_flash = 0
+        self.next_lightning = pygame.time.get_ticks() + random.randint(5000, 15000)
+        self.thunder_delay = 0
+        self.clouds = []
+        
+        # Initialize rain (reasonable amount)
+        print(f"Initializing rain particles...")
+        for _ in range(150):  # Reduced from 500 to 150
+            particle = {
+                "x": random.randint(-50, WIDTH + 50),
+                "y": random.randint(-200, HEIGHT),  # Start distributed across screen
+                "speed": random.randint(20, 30),  # Moderate speed
+                "length": random.randint(20, 35),  # Shorter streaks
+                "wind": random.uniform(-2, -4)  # Less wind
+            }
+            self.rain_particles.append(particle)
+        print(f"Created {len(self.rain_particles)} rain particles")
+        
+        # Debug first few particles
+        print("First 3 rain particles:")
+        for i in range(min(3, len(self.rain_particles))):
+            p = self.rain_particles[i]
+            print(f"  Particle {i}: x={p['x']}, y={p['y']}, speed={p['speed']}")
+            
+        # Initialize clouds
+        for _ in range(5):
+            self.clouds.append({
+                "x": random.randint(-200, WIDTH + 200),
+                "y": random.randint(50, 200),
+                "width": random.randint(300, 600),
+                "height": random.randint(100, 200),
+                "speed": random.uniform(0.5, 1.5),
+                "darkness": random.uniform(0.3, 0.6)
+            })
         
         # Cockpit overlay
         self.cockpit_overlay = None
@@ -96,9 +137,12 @@ class ChopperGunnerMode:
     def start(self):
         """Start the chopper gunner sequence."""
         self.active = True
-        self.phase = "sequence"  # Start with sequence instead of takeoff
+        self.phase = "approach"  # Start with approach
         self.phase_timer = pygame.time.get_ticks()
-        self.sequence_state = 0  # Track which image we're showing
+        
+        # Start zoomed out
+        self.zoom_scale = 0.3
+        self.target_zoom = 1.0
         
         # Debug prints
         print("Starting chopper gunner mode...")
@@ -168,122 +212,60 @@ class ChopperGunnerMode:
         """Update chopper gunner state."""
         current_time = pygame.time.get_ticks()
         
+        # Update weather effects
+        self.update_weather(current_time)
+        
+        # Update hover time for movement calculations
+        self.hover_time = current_time / 1000.0  # Convert to seconds
+        self.vibration_time = current_time / 100.0  # Faster for vibration
+        
         # Update phase
-        if self.phase == "sequence":
+        if self.phase == "approach":
             elapsed = current_time - self.phase_timer
+            approach_duration = 4000  # 4 seconds to zoom in (doubled from 2)
             
-            if elapsed < 2000:
-                # First image (0-2 seconds)
-                self.sequence_state = 0
-            elif elapsed < 4000:
-                # Second image (2-4 seconds)
-                self.sequence_state = 1
+            if elapsed < approach_duration:
+                # Simple zoom in effect
+                progress = elapsed / approach_duration
+                # Smooth easing - even smoother curve
+                eased_progress = 1 - math.pow(1 - progress, 4)  # Changed to quartic for smoother effect
+                self.zoom_scale = 0.3 + (0.7 * eased_progress)
+                
+                # Gradually start rotating in the last 25% of approach
+                if progress > 0.75:
+                    rotation_progress = (progress - 0.75) / 0.25  # 0 to 1 in last quarter
+                    # Gradually increase rotation speed
+                    self.camera_angle += 0.5 * rotation_progress * rotation_progress
+                    
+                    # Start introducing banking
+                    angle_rad = math.radians(self.camera_angle)
+                    bank_variation = math.sin(angle_rad * 2) * 5 * rotation_progress
+                    target_bank = 7.5 * rotation_progress + bank_variation
+                    self.camera_bank += (target_bank - self.camera_bank) * 0.05
             else:
-                # Move to takeoff phase
-                self.phase = "takeoff"
+                # Move to active phase
+                self.phase = "active"
                 self.phase_timer = current_time
+                self.zoom_scale = 1.0
                 
-        # Only update movement calculations after sequence
-        if self.phase != "sequence":
-            # Update hover time for movement calculations
-            self.hover_time = current_time / 1000.0  # Convert to seconds
-            self.vibration_time = current_time / 100.0  # Faster for vibration
-            
-            # Update camera rotation for circling effect
+        elif self.phase == "active":
+            # Update camera rotation for side-to-side movement
             self.prev_camera_angle = self.camera_angle
-            self.camera_angle += 0.5  # Slowly rotate around the board
-            if self.camera_angle >= 360:
-                self.camera_angle -= 360
-                
-            # Calculate banking based on turn rate
-            # Helicopter banks into the turn (tilts inward when circling)
-            turn_rate = 0.5  # degrees per frame
-            max_bank = 15  # Maximum banking angle in degrees
             
-            # Since we're always turning at constant rate, calculate bank based on direction
-            # For clockwise rotation, bank to the right (positive)
-            target_bank = max_bank * (turn_rate / 2.0)  # Scale banking with turn rate
+            # Side-to-side movement instead of full circle
+            # Use sine wave for smooth back and forth
+            self.camera_angle = math.sin(self.hover_time * 0.3) * 30  # ±30 degrees side to side
             
-            # Add dynamic banking based on current movement
-            # Check which quadrant we're in for more realistic banking
-            angle_rad = math.radians(self.camera_angle)
-            
-            # Add sinusoidal variation to make banking more dynamic
-            # This simulates the helicopter adjusting its bank through the turn
-            bank_variation = math.sin(angle_rad * 2) * 5  # Varies by ±5 degrees
-            target_bank += bank_variation
+            # Calculate banking based on movement direction
+            # Bank into the turn
+            angle_change = self.camera_angle - self.prev_camera_angle
+            target_bank = angle_change * 5  # Scale banking with turn rate
             
             # Smoothly interpolate to target bank angle
             bank_smoothing = 0.1
             self.camera_bank += (target_bank - self.camera_bank) * bank_smoothing
-                
-            # Add realistic helicopter movement - much smoother
-            # Vertical bobbing (gentle up and down)
-            self.hover_offset_y = math.sin(self.hover_time * 0.8) * 8  # Reduced from 15 to 8
             
-            # Horizontal swaying (subtle side-to-side)
-            self.sway_offset_x = math.sin(self.hover_time * 0.6) * 5  # Reduced from 10 to 5
-            
-            # Constant engine vibration
-            vibration_x = math.sin(self.vibration_time * 15) * 1.5  # Rapid small vibration
-            vibration_y = math.cos(self.vibration_time * 17) * 1.5  # Different frequency for Y
-            
-            # Smooth turbulence system - no sudden jumps
-            if random.random() < 0.005:  # 0.5% chance to change turbulence target
-                # Set new target, but don't jump to it
-                self.target_turbulence_x = random.uniform(-3, 3)
-                self.target_turbulence_y = random.uniform(-3, 3)
-            else:
-                # Gradually move target back to zero
-                self.target_turbulence_x *= 0.99
-                self.target_turbulence_y *= 0.99
-                
-            # Smoothly interpolate current turbulence toward target
-            turbulence_smoothing = 0.05  # How fast to move toward target (lower = smoother)
-            self.turbulence_x += (self.target_turbulence_x - self.turbulence_x) * turbulence_smoothing
-            self.turbulence_y += (self.target_turbulence_y - self.turbulence_y) * turbulence_smoothing
-            
-            # Add vibration to turbulence
-            self.turbulence_x += vibration_x
-            self.turbulence_y += vibration_y
-                
-            # Update altitude with very slight variations
-            if self.phase == "active":
-                # Add small altitude variations during combat
-                altitude_variation = math.sin(self.hover_time * 0.5) * 10  # Reduced from 20 to 10
-                self.altitude = self.target_altitude + altitude_variation
-                
-        # Handle phase transitions
-        if self.phase == "takeoff":
-            if current_time - self.phase_timer > 3000:  # 3 second takeoff
-                self.phase = "descent"
-                self.phase_timer = current_time
-                
-        elif self.phase == "descent":
-            # Descend to combat altitude - SLOWER DESCENT
-            # Calculate descent speed based on altitude difference
-            altitude_diff = self.altitude - self.target_altitude
-            
-            # Start fast, slow down as we approach target (easing)
-            if altitude_diff > 500:
-                descent_speed = 15  # Fast at first
-            elif altitude_diff > 200:
-                descent_speed = 8   # Medium speed
-            elif altitude_diff > 50:
-                descent_speed = 4   # Slow down
-            else:
-                descent_speed = 2   # Very slow at the end
-                
-            self.altitude = max(self.target_altitude, self.altitude - descent_speed)
-            
-            if self.altitude <= self.target_altitude:
-                self.phase = "active"
-                self.phase_timer = current_time
-                
-        elif self.phase == "active":
             # Update minigun sound state
-            current_time = pygame.time.get_ticks()
-            
             if self.minigun_state == "revving":
                 # Check if rev up is complete (0.5 second rev up)
                 if hasattr(self, 'rev_start_time') and current_time - self.rev_start_time > 500:
@@ -323,6 +305,48 @@ class ChopperGunnerMode:
             if current_time - self.phase_timer > 2000:  # 2 second exit
                 self.stop()
                 
+        # Update movement calculations - always apply some movement
+        # Add realistic helicopter movement - MODERATE SHAKE
+        # Vertical bobbing (moderate)
+        self.hover_offset_y = math.sin(self.hover_time * 0.8) * 10  # Reduced from 15
+        
+        # Horizontal swaying (moderate)
+        self.sway_offset_x = math.sin(self.hover_time * 0.6) * 7  # Reduced from 10
+        
+        # Constant engine vibration - MODERATE
+        vibration_x = math.sin(self.vibration_time * 25) * 2  # Reduced from 3
+        vibration_y = math.cos(self.vibration_time * 28) * 2  # Reduced from 3
+        
+        # Add secondary high-frequency vibration for that helicopter feel
+        vibration_x += math.sin(self.vibration_time * 45) * 1
+        vibration_y += math.cos(self.vibration_time * 48) * 1
+        
+        # Random turbulence system - moderate
+        if random.random() < 0.015:  # 1.5% chance (slightly less frequent)
+            # Set new target with moderate variation
+            self.target_turbulence_x = random.uniform(-5, 5)  # Reduced from -8,8
+            self.target_turbulence_y = random.uniform(-5, 5)
+        else:
+            # Gradually move target back to zero
+            self.target_turbulence_x *= 0.98
+            self.target_turbulence_y *= 0.98
+            
+        # Smoothly interpolate current turbulence toward target
+        turbulence_smoothing = 0.06  # Slightly slower for smoother movement
+        self.turbulence_x += (self.target_turbulence_x - self.turbulence_x) * turbulence_smoothing
+        self.turbulence_y += (self.target_turbulence_y - self.turbulence_y) * turbulence_smoothing
+        
+        # Add vibration to turbulence
+        self.turbulence_x += vibration_x
+        self.turbulence_y += vibration_y
+        
+        # Add occasional "bumps" from air pockets (less frequent)
+        if random.random() < 0.007:  # 0.7% chance per frame
+            bump_x = random.uniform(-3, 3)
+            bump_y = random.uniform(-3, 3)
+            self.turbulence_x += bump_x
+            self.turbulence_y += bump_y
+                
         # Update visual effects
         self.update_explosions()
         self.update_bullet_tracers()
@@ -337,26 +361,26 @@ class ChopperGunnerMode:
         # Camera shake - moderate when firing
         self.camera_shake["intensity"] = 6  # Reduced from 8
         
-        # Add very slight recoil movement to target (not instant)
-        self.target_turbulence_x += random.uniform(-1.5, 1.5)
-        self.target_turbulence_y += random.uniform(-1, 0.5)  # Slight upward tendency
+        # Add moderate recoil movement
+        self.target_turbulence_x += random.uniform(-2, 2)
+        self.target_turbulence_y += random.uniform(-1.5, 0.5)  # Moderate upward kick
         
         # Keep targets reasonable
-        self.target_turbulence_x = max(-5, min(5, self.target_turbulence_x))
-        self.target_turbulence_y = max(-5, min(5, self.target_turbulence_y))
+        self.target_turbulence_x = max(-7, min(7, self.target_turbulence_x))
+        self.target_turbulence_y = max(-7, min(7, self.target_turbulence_y))
         
-        # Note: Fire sound is already playing in loop from handle_click
+        # Get helicopter bottom center position (where bullets come from)
+        heli_x = WIDTH // 2
+        heli_y = HEIGHT - 100  # Bottom of screen, helicopter position
             
-        # Get gun position from draw method
-        gun_pos = getattr(self, '_gun_position', (WIDTH - 150, HEIGHT // 2))
-            
-        # Add bullet tracer from gun to crosshair
+        # Add bullet tracer from helicopter to crosshair
         self.bullet_tracers.append({
-            "start_x": gun_pos[0],
-            "start_y": gun_pos[1],
+            "start_x": heli_x,
+            "start_y": heli_y,
             "end_x": self.crosshair_x,
             "end_y": self.crosshair_y,
-            "timer": 10
+            "timer": 10,
+            "ricochet": random.random() < 0.15  # 15% chance of ricochet
         })
         
         # Create bullet impact effects at crosshair location
@@ -543,10 +567,17 @@ class ChopperGunnerMode:
         
         # Apply perspective based on depth
         # Objects farther away (larger projected_z) should be smaller
-        # Include altitude variations in perspective calculation
-        altitude_scale = 1.0 - (self.altitude - self.target_altitude) / 1500.0
-        altitude_scale = max(0.4, min(1.0, altitude_scale))
-        perspective_scale = (600 / (600 + projected_z * 50 + (self.altitude - self.target_altitude) * 0.5)) * altitude_scale
+        # Fixed calculation to prevent stretching during descent
+        altitude_factor = self.altitude / 1000.0  # Normalize altitude (0 to 1)
+        altitude_factor = max(0.3, min(1.0, altitude_factor))  # Clamp
+        
+        # Use fixed perspective that doesn't change dramatically with altitude
+        base_distance = 400
+        depth_factor = max(0.1, base_distance / (base_distance + projected_z * 30))
+        perspective_scale = depth_factor * 0.85  # Fixed scale
+        
+        # Apply zoom scale
+        perspective_scale *= self.zoom_scale
         
         # Scale positions
         screen_x = self.board_center_x + projected_x * 100 * perspective_scale
@@ -582,14 +613,10 @@ class ChopperGunnerMode:
         # Base size with perspective scaling - INCREASED from 60 to 80
         base_size = 80
         
-        # Apply altitude scaling - pieces should be smaller when helicopter is higher
-        altitude_factor = 1.0 - (self.altitude - self.target_altitude) / 1000.0
-        altitude_factor = max(0.3, min(1.0, altitude_factor))  # Clamp between 30% and 100%
-        
-        # Combine perspective factors
+        # Apply zoom scale
         size_factor = 0.6 + y_normalized * 0.4  # Size varies from 60% to 100%
         
-        return int(base_size * size_factor * altitude_factor)
+        return int(base_size * size_factor * self.zoom_scale)
         
     def create_explosion_particles(self, x, y):
         """Create explosion particle effects."""
@@ -650,6 +677,36 @@ class ChopperGunnerMode:
                 remaining.append(tracer)
         self.bullet_tracers = remaining
         
+    def update_weather(self, current_time):
+        """Update weather effects."""
+        # Update rain particles
+        for particle in self.rain_particles:
+            particle["y"] += particle["speed"]
+            particle["x"] += particle["wind"]
+            
+            # Reset rain that goes off screen
+            if particle["y"] > HEIGHT:
+                particle["y"] = random.randint(-100, -50)
+                particle["x"] = random.randint(-50, WIDTH + 50)
+            if particle["x"] < -50:
+                particle["x"] = WIDTH + 50
+            elif particle["x"] > WIDTH + 50:
+                particle["x"] = -50
+                
+        # Handle lightning
+        if current_time >= self.next_lightning:
+            self.lightning_flash = 15  # Flash duration in frames
+            self.thunder_delay = random.randint(500, 2000)  # Delay before thunder
+            self.next_lightning = current_time + random.randint(8000, 20000)
+            
+            # Add moderate turbulence during lightning
+            self.target_turbulence_x += random.uniform(-10, 10)
+            self.target_turbulence_y += random.uniform(-10, 10)
+            
+        # Decay lightning flash
+        if self.lightning_flash > 0:
+            self.lightning_flash -= 1
+            
     def update_camera_shake(self):
         """Update camera shake effect."""
         if self.camera_shake["intensity"] > 0:
@@ -678,27 +735,29 @@ class ChopperGunnerMode:
         
     def draw(self):
         """Draw the chopper gunner view."""
-        # Handle sequence phase separately
-        if self.phase == "sequence":
-            self.draw_sequence()
-            return
-            
         # Draw parallax background with rotation
         self.draw_rotating_parallax_background()
         
         # Draw board and pieces from aerial view
         self.draw_aerial_board()
         
-        # Draw effects
+        # Draw effects (before rain so explosions appear under rain)
         self.draw_explosions()
         self.draw_bullet_tracers()
         
-        # Draw cockpit overlay
+        # Draw rain BEFORE cockpit so it appears outside
+        self.draw_rain()
+        
+        # Draw lightning flash
+        if self.lightning_flash > 0:
+            flash_surface = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+            alpha = int(50 * (self.lightning_flash / 15))
+            flash_surface.fill((255, 255, 255, alpha))
+            self.screen.blit(flash_surface, (0, 0))
+        
+        # Draw cockpit overlay AFTER rain so cockpit blocks rain
         if self.cockpit_overlay:
             self.screen.blit(self.cockpit_overlay, (0, 0))
-            
-        # Draw minigun
-        self.draw_minigun()
         
         # Draw crosshair
         self.draw_crosshair()
@@ -706,125 +765,58 @@ class ChopperGunnerMode:
         # Draw HUD
         self.draw_hud()
         
+        # DEBUG: Draw phase info
+        font = pygame.font.Font(None, 24)
+        phase_text = font.render(f"Phase: {self.phase}", True, (255, 255, 0))
+        self.screen.blit(phase_text, (10, 70))
+        
     def draw_rotating_parallax_background(self):
         """Draw parallax background that rotates with the helicopter."""
-        # Clear screen with base color
-        self.screen.fill((30, 30, 40))
+        # Dark stormy sky
+        self.screen.fill((15, 15, 25))  # Very dark blue-grey
         
-        # Check if parallax layers exist
-        if not hasattr(self.assets, 'parallax_layers') or not self.assets.parallax_layers:
-            # Fallback to gradient if no parallax
-            self.draw_sky_gradient()
-            return
-            
-        # SIMPLIFIED APPROACH: Just draw the bottom 2-3 layers without rotation
-        # This gives the effect of distant scenery without the performance hit
+        # Draw storm clouds
+        for cloud in self.clouds:
+            # Multiple layers for cloud depth
+            for i in range(3):
+                cloud_surface = pygame.Surface((cloud["width"], cloud["height"]), pygame.SRCALPHA)
+                alpha = int(100 * cloud["darkness"] * (1 - i * 0.3))
+                gray = 30 + i * 10
+                cloud_surface.fill((gray, gray, gray + 5, alpha))
+                
+                # Draw cloud shape with circles
+                for _ in range(10):
+                    circle_x = random.randint(0, cloud["width"])
+                    circle_y = random.randint(0, cloud["height"])
+                    circle_r = random.randint(cloud["height"] // 4, cloud["height"] // 2)
+                    pygame.draw.circle(cloud_surface, (gray, gray, gray + 5, alpha), 
+                                     (circle_x, circle_y), circle_r)
+                
+                self.screen.blit(cloud_surface, (int(cloud["x"]), int(cloud["y"]) - i * 10))
         
-        # Only use the farthest background layers (usually sky and distant mountains)
-        layers_to_draw = min(3, len(self.assets.parallax_layers))
-        
-        for i in range(layers_to_draw):
-            layer = self.assets.parallax_layers[i]
-            if not layer.get("image"):
-                continue
+        # Update cloud positions
+        for cloud in self.clouds:
+            cloud["x"] += cloud["speed"]
+            if cloud["x"] > WIDTH + 200:
+                cloud["x"] = -cloud["width"]
+                cloud["y"] = random.randint(50, 200)
                 
-            # Simple horizontal scrolling based on camera angle
-            scroll_offset = int(self.camera_angle * layer["speed"] * 2)
-            
-            # Get image dimensions
-            img = layer["image"]
-            img_width = img.get_width()
-            
-            # Calculate position (no rotation, just scrolling)
-            x = -(scroll_offset % img_width)
-            
-            # Draw the layer twice for seamless scrolling
-            while x < WIDTH:
-                # Simple vertical offset for banking
-                y_offset = int(self.camera_bank * layer["speed"] * 5)
-                self.screen.blit(img, (x, y_offset))
-                x += img_width
-                
-        # Add a gradient overlay to blend with the sky
-        gradient_surface = pygame.Surface((WIDTH, HEIGHT // 3), pygame.SRCALPHA)
-        for y in range(HEIGHT // 3):
-            alpha = int(255 * (1 - y / (HEIGHT // 3)))
-            color = (30, 30, 40, alpha)
-            pygame.draw.rect(gradient_surface, color, (0, y, WIDTH, 1))
-        self.screen.blit(gradient_surface, (0, 0))
-            
-    def draw_sky_gradient(self):
-        """Draw the sky gradient with banking effect."""
-        # Calculate horizon tilt based on banking
-        bank_offset = int(self.camera_bank * 10)  # Pixels to shift horizon
-        
-        for y in range(0, HEIGHT, 5):
-            progress = y / HEIGHT
-            color = (
-                int(50 - progress * 30),  # R: 50 to 20
-                int(50 - progress * 30),  # G: 50 to 20  
-                int(70 - progress * 40)   # B: 70 to 30
-            )
-            
-            # Create a polygon that's tilted based on banking
-            left_y = y - bank_offset
-            right_y = y + bank_offset
-            
-            points = [
-                (0, left_y),
-                (WIDTH, right_y),
-                (WIDTH, right_y + 5),
-                (0, left_y + 5)
-            ]
-            
-            pygame.draw.polygon(self.screen, color, points)
-        
-    def draw_sequence(self):
-        """Draw the helicopter takeoff sequence."""
-        current_time = pygame.time.get_ticks()
-        elapsed = current_time - self.phase_timer
-        
-        # Check if we have the sequence images
-        if hasattr(self.assets, 'airstrike_sequence') and len(self.assets.airstrike_sequence) >= 2:
-            if self.sequence_state == 0 and elapsed < 2000:
-                # First image (0-2 seconds)
-                alpha = 255
-                if elapsed < 500:  # Fade in
-                    alpha = int((elapsed / 500) * 255)
-                elif elapsed > 1500:  # Fade out
-                    alpha = int(((2000 - elapsed) / 500) * 255)
-                
-                # Scale image to screen
-                img = self.assets.airstrike_sequence[0]
-                scaled_img = pygame.transform.scale(img, (WIDTH, HEIGHT))
-                
-                # Create a copy to set alpha
-                fade_img = scaled_img.copy()
-                fade_img.set_alpha(alpha)
-                self.screen.blit(fade_img, (0, 0))
-                
-            elif self.sequence_state == 1 and elapsed >= 2000 and elapsed < 4000:
-                # Second image (2-4 seconds)
-                alpha = 255
-                if elapsed < 2500:  # Fade in
-                    alpha = int(((elapsed - 2000) / 500) * 255)
-                elif elapsed > 3500:  # Fade out
-                    alpha = int(((4000 - elapsed) / 500) * 255)
-                
-                # Scale image to screen
-                img = self.assets.airstrike_sequence[1]
-                scaled_img = pygame.transform.scale(img, (WIDTH, HEIGHT))
-                
-                # Create a copy to set alpha
-                fade_img = scaled_img.copy()
-                fade_img.set_alpha(alpha)
-                self.screen.blit(fade_img, (0, 0))
-        else:
-            # Fallback if images not loaded - just show black screen
-            self.screen.fill((0, 0, 0))
-        
     def draw_aerial_board(self):
         """Draw the chess board from aerial perspective with rotation."""
+        # Draw ground/terrain first (before the board)
+        self.draw_ground_terrain()
+        
+        # Calculate board bounds for proper 3D positioning
+        board_y_min = float('inf')
+        board_y_max = float('-inf')
+        
+        # First pass: determine the vertical bounds of the board
+        for row in range(8):
+            for col in range(8):
+                _, y = self.get_piece_screen_pos(row, col)
+                board_y_min = min(board_y_min, y)
+                board_y_max = max(board_y_max, y)
+        
         # Draw board squares with rotation and perspective
         for row in range(8):
             for col in range(8):
@@ -836,11 +828,11 @@ class ChopperGunnerMode:
                 if y < -100:
                     continue
                 
-                # Alternate square colors
+                # Alternate square colors - darker for stormy atmosphere
                 if (row + col) % 2 == 0:
-                    color = (200, 180, 140)
+                    color = (120, 100, 80)  # Darker light squares
                 else:
-                    color = (120, 100, 70)
+                    color = (60, 50, 40)    # Much darker dark squares
                     
                 # Calculate the four corners of the square with perspective
                 corners = []
@@ -851,7 +843,7 @@ class ChopperGunnerMode:
                 # Draw the square as a polygon for proper perspective
                 if len(corners) == 4:
                     pygame.draw.polygon(self.screen, color, corners)
-                    pygame.draw.polygon(self.screen, (80, 80, 80), corners, 1)
+                    pygame.draw.polygon(self.screen, (40, 40, 40), corners, 1)  # Darker border
         
         # Draw pieces with perspective scaling
         piece_draw_order = []  # Store pieces with their y position for depth sorting
@@ -871,6 +863,149 @@ class ChopperGunnerMode:
         # Draw pieces in depth order
         for _, row, col, piece in piece_draw_order:
             self.draw_piece_aerial(row, col, piece)
+            
+    def draw_ground_terrain(self):
+        """Draw ground terrain with trees and other objects."""
+        # Horizon position based on altitude - moves up as we descend
+        # At altitude 300 (combat), horizon should be off screen
+        # At altitude 800+ (approach), horizon should be visible
+        altitude_factor = (self.altitude - 300) / 500  # 0 at combat altitude, 1 at high altitude
+        altitude_factor = max(0, min(1, altitude_factor))  # Clamp between 0 and 1
+        
+        # Horizon starts at 25% when high, moves to -10% (off screen) when low
+        horizon_y = int(HEIGHT * (0.25 - 0.35 * (1 - altitude_factor)))
+        
+        # Draw dark ground gradient
+        for y in range(max(0, horizon_y), HEIGHT):
+            progress = (y - horizon_y) / (HEIGHT - horizon_y) if HEIGHT > horizon_y else 0
+            progress = max(0, min(1, progress))  # Clamp progress
+            # Dark muddy ground colors
+            color = (
+                int(20 + progress * 20),   # R: 20 to 40
+                int(25 + progress * 20),   # G: 25 to 45
+                int(15 + progress * 15)    # B: 15 to 30
+            )
+            pygame.draw.line(self.screen, color, (0, y), (WIDTH, y))
+        
+        # Draw trees around the battlefield
+        tree_positions = [
+            # Trees arranged in a circle around the board
+            (-5, -5), (-3, -5), (0, -5), (3, -5), (5, -5),
+            (-5, -3), (5, -3),
+            (-5, 0), (5, 0),
+            (-5, 3), (5, 3),
+            (-5, 5), (-3, 5), (0, 5), (3, 5), (5, 5),
+            # Additional trees further out
+            (-7, -7), (7, -7), (-7, 7), (7, 7),
+            (-8, 0), (8, 0), (0, -8), (0, 8)
+        ]
+        
+        # Sort trees by distance from camera for proper depth ordering
+        angle_rad = math.radians(self.camera_angle)
+        trees_with_depth = []
+        
+        for tree_x, tree_z in tree_positions:
+            # Apply rotation based on camera angle
+            rotated_x = tree_x * math.cos(angle_rad) - tree_z * math.sin(angle_rad)
+            rotated_z = tree_x * math.sin(angle_rad) + tree_z * math.cos(angle_rad)
+            
+            # Trees are at ground level (y = 0 in 3D space)
+            trees_with_depth.append((rotated_z, tree_x, tree_z, rotated_x, rotated_z))
+        
+        # Sort by depth (farther trees first)
+        trees_with_depth.sort(key=lambda t: -t[0])
+        
+        # Draw trees
+        for _, orig_x, orig_z, rotated_x, rotated_z in trees_with_depth:
+            self.draw_tree(orig_x, orig_z, rotated_x, rotated_z)
+            
+    def draw_tree(self, grid_x, grid_z, rotated_x, rotated_z):
+        """Draw a single tree with proper 3D perspective."""
+        # Trees are positioned at same level as board base
+        tree_y = 0  # Same level as board
+        
+        # Apply camera tilt and perspective
+        tilt_rad = math.radians(self.camera_tilt)
+        
+        # Project 3D position to 2D screen - using similar math to original perspective
+        projected_x = rotated_x
+        projected_y = tree_y + rotated_z * math.sin(tilt_rad)
+        projected_z = rotated_z * math.cos(tilt_rad)
+        
+        # Apply perspective based on depth
+        altitude_scale = 1.0 - (self.altitude - self.target_altitude) / 1500.0
+        altitude_scale = max(0.4, min(1.0, altitude_scale))
+        
+        # Perspective calculation with camera distance
+        perspective_scale = (self.camera_distance / (self.camera_distance + projected_z * 50)) * 0.85
+        
+        # Apply zoom scale
+        perspective_scale *= self.zoom_scale
+        
+        # Screen position
+        screen_x = self.board_center_x + projected_x * 100 * perspective_scale
+        screen_y = self.board_center_y - projected_y * 100 * perspective_scale
+        
+        # Apply helicopter movement
+        screen_x += self.sway_offset_x + self.turbulence_x
+        screen_y += self.hover_offset_y + self.turbulence_y
+        
+        # Apply camera shake
+        screen_x += self.camera_shake["x"]
+        screen_y += self.camera_shake["y"]
+        
+        # Skip if tree is behind camera or off screen
+        if screen_y < -200 or screen_y > HEIGHT + 100:
+            return
+        
+        # Tree size based on perspective - scale with altitude for consistency
+        tree_height = int(100 * perspective_scale)
+        trunk_width = int(12 * perspective_scale)
+        foliage_width = int(50 * perspective_scale)
+        
+        # Get horizon line
+        horizon_y = int(HEIGHT * 0.35)
+        
+        # Draw trunk (brown rectangle)
+        trunk_height = int(tree_height * 0.4)
+        trunk_x = int(screen_x - trunk_width // 2)
+        trunk_y = int(screen_y - trunk_height)
+        
+        # Only draw trunk if it's below horizon
+        if trunk_y > horizon_y and trunk_height > 0 and trunk_width > 0:
+            # Darker trunk colors for stormy weather
+            pygame.draw.rect(self.screen, (40, 30, 20), 
+                            (trunk_x, trunk_y, trunk_width, trunk_height))
+            pygame.draw.rect(self.screen, (30, 20, 15), 
+                            (trunk_x, trunk_y, trunk_width, trunk_height), 1)
+        
+        # Draw foliage (green circles/triangles)
+        foliage_y = trunk_y
+        foliage_height = int(tree_height * 0.6)
+        
+        # Draw three overlapping circles for foliage
+        if foliage_width > 10:  # Only draw if big enough
+            for i in range(3):
+                circle_y = foliage_y - i * (foliage_height // 3)
+                circle_radius = foliage_width // 2 - i * 5
+                
+                # Only draw circles that are below the horizon
+                if circle_radius > 0 and circle_y > horizon_y:
+                    # Darker green for stormy atmosphere
+                    green_variation = (15 + i * 5, 25 + i * 5, 15)
+                    pygame.draw.circle(self.screen, green_variation, 
+                                     (int(screen_x), int(circle_y)), circle_radius)
+                    
+        # Add a simple shadow on the ground (only if tree base is visible)
+        if screen_y > horizon_y:
+            shadow_width = int(foliage_width * 0.8)
+            shadow_height = int(shadow_width * 0.3)
+            if shadow_width > 5 and shadow_height > 2:
+                shadow_surface = pygame.Surface((shadow_width, shadow_height), pygame.SRCALPHA)
+                pygame.draw.ellipse(shadow_surface, (0, 0, 0, 50), 
+                                   (0, 0, shadow_width, shadow_height))
+                self.screen.blit(shadow_surface, 
+                                (int(screen_x - shadow_width // 2), int(screen_y)))
                         
     def draw_piece_aerial(self, row, col, piece):
         """Draw a single piece from aerial view using actual piece images."""
@@ -883,14 +1018,19 @@ class ChopperGunnerMode:
             # Scale the piece image based on perspective
             scaled_piece = pygame.transform.scale(piece_image, (size, size))
             
+            # Create a darker version by adjusting the piece itself
+            darkened_piece = scaled_piece.copy()
+            darkened_piece.fill((180, 180, 180), special_flags=pygame.BLEND_RGB_MULT)
+            
             # Don't rotate the piece - just center it at the position
-            rect = scaled_piece.get_rect(center=(x, y))
-            self.screen.blit(scaled_piece, rect)
+            rect = darkened_piece.get_rect(center=(x, y))
+            self.screen.blit(darkened_piece, rect)
         else:
             # Fallback: Draw piece as a circle with letter if no image
-            color = (200, 200, 200) if piece[0] == 'w' else (50, 50, 50)
+            # Darker colors for stormy weather
+            color = (100, 100, 100) if piece[0] == 'w' else (30, 30, 30)
             pygame.draw.circle(self.screen, color, (x, y), size // 2)
-            pygame.draw.circle(self.screen, (100, 100, 100), (x, y), size // 2, 2)
+            pygame.draw.circle(self.screen, (50, 50, 50), (x, y), size // 2, 2)
             
             # Draw piece type letter
             if hasattr(self, 'font'):
@@ -900,70 +1040,9 @@ class ChopperGunnerMode:
                 font = self.font
                 
             text = font.render(piece[1], True, 
-                              (50, 50, 50) if piece[0] == 'w' else (200, 200, 200))
+                              (30, 30, 30) if piece[0] == 'w' else (100, 100, 100))
             text_rect = text.get_rect(center=(x, y))
             self.screen.blit(text, text_rect)
-        
-    def draw_minigun(self):
-        """Draw the minigun at side of screen (mounted on helicopter)."""
-        # Position minigun on the right side, angled towards center
-        gun_x = WIDTH - 150
-        gun_y = HEIGHT // 2
-        
-        # Gun mount/base
-        mount_width = 60
-        mount_height = 80
-        pygame.draw.rect(self.screen, (40, 40, 40), 
-                        (gun_x, gun_y - mount_height // 2, mount_width, mount_height))
-        pygame.draw.rect(self.screen, (60, 60, 60), 
-                        (gun_x + 5, gun_y - mount_height // 2 + 5, mount_width - 10, mount_height - 10))
-        
-        # Gun body angled towards center
-        angle_to_center = math.atan2(self.crosshair_y - gun_y, self.crosshair_x - gun_x)
-        
-        # Draw rotating barrels
-        barrel_length = 80
-        barrel_end_x = gun_x + math.cos(angle_to_center) * barrel_length
-        barrel_end_y = gun_y + math.sin(angle_to_center) * barrel_length
-        
-        # Main barrel housing
-        pygame.draw.line(self.screen, (80, 80, 80), (gun_x, gun_y), 
-                        (barrel_end_x, barrel_end_y), 25)
-        
-        # Rotating barrels effect
-        barrel_rotation = (pygame.time.get_ticks() // 30) % 360
-        for i in range(6):
-            angle = barrel_rotation + i * 60
-            # Small offset for each barrel
-            offset_x = math.cos(math.radians(angle)) * 8
-            offset_y = math.sin(math.radians(angle)) * 8
-            
-            start_x = gun_x + offset_x
-            start_y = gun_y + offset_y
-            end_x = barrel_end_x + offset_x
-            end_y = barrel_end_y + offset_y
-            
-            pygame.draw.line(self.screen, (50, 50, 50), 
-                           (start_x, start_y), (end_x, end_y), 3)
-            
-        # Muzzle flash at barrel end
-        if self.muzzle_flash_timer > 0:
-            flash_size = 50 + random.randint(-10, 10)
-            flash_surface = pygame.Surface((flash_size * 2, flash_size * 2), pygame.SRCALPHA)
-            
-            # Multiple flash layers for better effect
-            for i in range(3):
-                size = flash_size - i * 15
-                alpha = 200 - i * 50
-                color = (255, 255 - i * 30, 200 - i * 60, alpha)
-                pygame.draw.circle(flash_surface, color, 
-                                 (flash_size, flash_size), size)
-            
-            self.screen.blit(flash_surface, 
-                           (barrel_end_x - flash_size, barrel_end_y - flash_size))
-            
-        # Update tracer start position
-        self._gun_position = (barrel_end_x, barrel_end_y)
             
     def draw_explosions(self):
         """Draw explosion effects."""
@@ -1005,22 +1084,55 @@ class ChopperGunnerMode:
         for tracer in self.bullet_tracers:
             alpha = tracer["timer"] * 25
             
-            # Draw multiple lines for a thicker, more visible tracer
-            # Main tracer line (bright yellow/orange)
-            pygame.draw.line(self.screen, (255, 200, 100), 
-                           (tracer["start_x"], tracer["start_y"]),
-                           (tracer["end_x"], tracer["end_y"]), 3)
-            
-            # Outer glow (slightly transparent)
-            if tracer["timer"] > 5:
-                pygame.draw.line(self.screen, (255, 150, 50), 
+            # Check if this is a ricochet
+            if tracer.get("ricochet", False):
+                # Calculate ricochet from the impact point
+                if tracer["timer"] < 8:  # Start ricochet effect
+                    progress = 1 - (tracer["timer"] / 10)
+                    
+                    # Ricochet starts from the end point (impact)
+                    start_x = tracer["end_x"]
+                    start_y = tracer["end_y"]
+                    
+                    # Ricochet upward and to the side
+                    ricochet_angle = tracer.get("ricochet_angle", random.uniform(-45, 45))
+                    tracer["ricochet_angle"] = ricochet_angle  # Store angle for consistency
+                    
+                    ricochet_distance = progress * 150
+                    end_x = start_x + math.cos(math.radians(ricochet_angle)) * ricochet_distance
+                    end_y = start_y - ricochet_distance  # Goes up
+                    
+                    # Draw the ricochet part
+                    pygame.draw.line(self.screen, (255, 150, 50), 
+                                   (start_x, start_y), (end_x, end_y), 2)
+                    
+                    # Spark effect at impact point
+                    if tracer["timer"] > 6:
+                        pygame.draw.circle(self.screen, (255, 255, 150), 
+                                         (tracer["end_x"], tracer["end_y"]), 5)
+                
+                # Draw the main tracer dimmer
+                pygame.draw.line(self.screen, (150, 100, 50), 
                                (tracer["start_x"], tracer["start_y"]),
-                               (tracer["end_x"], tracer["end_y"]), 5)
-                               
-            # Inner hot core
-            pygame.draw.line(self.screen, (255, 255, 200), 
-                           (tracer["start_x"], tracer["start_y"]),
-                           (tracer["end_x"], tracer["end_y"]), 1)
+                               (tracer["end_x"], tracer["end_y"]), 2)
+            else:
+                # Normal tracer
+                # Draw multiple lines for a thicker, more visible tracer
+                # Main tracer line (bright yellow/orange)
+                pygame.draw.line(self.screen, (255, 200, 100), 
+                               (tracer["start_x"], tracer["start_y"]),
+                               (tracer["end_x"], tracer["end_y"]), 3)
+                
+                # Outer glow (slightly transparent)
+                if tracer["timer"] > 5:
+                    pygame.draw.line(self.screen, (255, 150, 50), 
+                                   (tracer["start_x"], tracer["start_y"]),
+                                   (tracer["end_x"], tracer["end_y"]), 5)
+                                   
+                # Inner hot core
+                pygame.draw.line(self.screen, (255, 255, 200), 
+                               (tracer["start_x"], tracer["start_y"]),
+                               (tracer["end_x"], tracer["end_y"]), 1)
                            
     def draw_crosshair(self):
         """Draw targeting crosshair."""
@@ -1048,6 +1160,24 @@ class ChopperGunnerMode:
         pygame.draw.circle(self.screen, (0, 255, 0), 
                          (self.crosshair_x, self.crosshair_y), 2)
                          
+    def draw_rain(self):
+        """Draw rain effect."""
+        # Draw rain particles with more subtle appearance
+        for particle in self.rain_particles:
+            # Rain color - semi-transparent blue-grey
+            rain_color = (180, 180, 200)
+            
+            # Draw rain streak
+            start_x = int(particle["x"])
+            start_y = int(particle["y"])
+            end_x = int(particle["x"] + particle["wind"] * 2)
+            end_y = int(particle["y"] + particle["length"])
+            
+            # Only draw if at least part of the line is on screen
+            if end_y > 0 and start_y < HEIGHT and start_x > -50 and start_x < WIDTH + 50:
+                pygame.draw.line(self.screen, rain_color, 
+                                 (start_x, start_y), (end_x, end_y), 1)  # Thinner lines
+                               
     def draw_hud(self):
         """Draw heads-up display."""
         # Draw ammo counter
@@ -1056,16 +1186,14 @@ class ChopperGunnerMode:
         self.screen.blit(ammo_text, (WIDTH - 200, HEIGHT - 50))
         
         # Draw altitude
-        if self.phase in ["descent", "active"]:
+        if self.phase in ["approach", "descent", "active"]:
             alt_text = font.render(f"ALT: {int(self.altitude)}ft", True, (0, 255, 0))
             self.screen.blit(alt_text, (WIDTH - 200, HEIGHT - 90))
             
         # Draw phase indicator
         phase_text = ""
-        if self.phase == "takeoff":
-            phase_text = "TAKING OFF..."
-        elif self.phase == "descent":
-            phase_text = "DESCENDING..."
+        if self.phase == "approach":
+            phase_text = "APPROACHING TARGET..."
         elif self.phase == "complete":
             phase_text = "MISSION COMPLETE"
             
