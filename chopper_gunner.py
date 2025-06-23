@@ -51,6 +51,8 @@ class ChopperGunnerMode:
         self.explosions = []
         self.bullet_tracers = []
         self.destroyed_pieces = []
+        self.piece_hit_counts = {}  # Track hits on each piece
+        self.piece_shake = {}  # Track shake effect for hit pieces
         
         # Board view properties
         self.board_center_x = WIDTH // 2
@@ -66,21 +68,35 @@ class ChopperGunnerMode:
                 
         # Sounds
         self.helicopter_sound = None
-        self.helicopter_blade_sound = None  # New blade sound
+        self.helicopter_blade_sound = None
         self.minigun_sound = None
+        self.minigun_revup_sound = None
+        self.minigun_fire_sound = None
+        self.minigun_spindown_sound = None
         if hasattr(assets, 'sounds'):
             if 'helicopter' in assets.sounds:
                 self.helicopter_sound = assets.sounds['helicopter']
-            if 'helicopter_blade' in assets.sounds:  # Check for blade sound
+            if 'helicopter_blade' in assets.sounds:
                 self.helicopter_blade_sound = assets.sounds['helicopter_blade']
             if 'minigun' in assets.sounds:
                 self.minigun_sound = assets.sounds['minigun']
+            if 'minigun_revup' in assets.sounds:
+                self.minigun_revup_sound = assets.sounds['minigun_revup']
+            if 'minigun_fire' in assets.sounds:
+                self.minigun_fire_sound = assets.sounds['minigun_fire']
+            if 'minigun_spindown' in assets.sounds:
+                self.minigun_spindown_sound = assets.sounds['minigun_spindown']
+                
+        # Minigun sound state
+        self.minigun_state = "idle"  # idle, revving, firing, spindown
+        self.minigun_fire_channel = None  # To loop the firing sound
                 
     def start(self):
         """Start the chopper gunner sequence."""
         self.active = True
-        self.phase = "takeoff"
+        self.phase = "sequence"  # Start with sequence instead of takeoff
         self.phase_timer = pygame.time.get_ticks()
+        self.sequence_state = 0  # Track which image we're showing
         
         # Debug prints
         print("Starting chopper gunner mode...")
@@ -108,6 +124,11 @@ class ChopperGunnerMode:
         if self.helicopter_blade_sound:
             self.helicopter_blade_sound.stop()
             
+        # Stop any minigun sounds
+        if self.minigun_fire_channel:
+            self.minigun_fire_channel.stop()
+        self.minigun_state = "idle"
+            
     def handle_mouse(self, pos):
         """Update crosshair position."""
         self.crosshair_x, self.crosshair_y = pos
@@ -117,62 +138,99 @@ class ChopperGunnerMode:
         if self.phase == "active" and self.ammo > 0:
             self.firing = True
             
+            # Start minigun rev up if not already firing
+            if self.minigun_state == "idle":
+                self.minigun_state = "revving"
+                if self.minigun_revup_sound:
+                    self.minigun_revup_sound.play()
+                    # Schedule firing sound to start after rev up
+                    self.rev_start_time = pygame.time.get_ticks()
+            
     def handle_release(self):
         """Stop firing."""
         self.firing = False
+        
+        # Start spin down if was firing
+        if self.minigun_state == "firing":
+            self.minigun_state = "spindown"
+            if self.minigun_fire_channel:
+                self.minigun_fire_channel.stop()
+            if self.minigun_spindown_sound:
+                self.minigun_spindown_sound.play()
+                self.spindown_start_time = pygame.time.get_ticks()
+        elif self.minigun_state == "revving":
+            # If released during rev up, just go back to idle
+            self.minigun_state = "idle"
         
     def update(self):
         """Update chopper gunner state."""
         current_time = pygame.time.get_ticks()
         
-        # Update hover time for movement calculations
-        self.hover_time = current_time / 1000.0  # Convert to seconds
-        self.vibration_time = current_time / 100.0  # Faster for vibration
-        
-        # Update camera rotation for circling effect
-        self.camera_angle += 0.5  # Slowly rotate around the board
-        if self.camera_angle >= 360:
-            self.camera_angle -= 360
-            
-        # Add realistic helicopter movement - much smoother
-        # Vertical bobbing (gentle up and down)
-        self.hover_offset_y = math.sin(self.hover_time * 0.8) * 8  # Reduced from 15 to 8
-        
-        # Horizontal swaying (subtle side-to-side)
-        self.sway_offset_x = math.sin(self.hover_time * 0.6) * 5  # Reduced from 10 to 5
-        
-        # Constant engine vibration
-        vibration_x = math.sin(self.vibration_time * 15) * 1.5  # Rapid small vibration
-        vibration_y = math.cos(self.vibration_time * 17) * 1.5  # Different frequency for Y
-        
-        # Smooth turbulence system - no sudden jumps
-        if random.random() < 0.005:  # 0.5% chance to change turbulence target
-            # Set new target, but don't jump to it
-            self.target_turbulence_x = random.uniform(-3, 3)
-            self.target_turbulence_y = random.uniform(-3, 3)
-        else:
-            # Gradually move target back to zero
-            self.target_turbulence_x *= 0.99
-            self.target_turbulence_y *= 0.99
-            
-        # Smoothly interpolate current turbulence toward target
-        turbulence_smoothing = 0.05  # How fast to move toward target (lower = smoother)
-        self.turbulence_x += (self.target_turbulence_x - self.turbulence_x) * turbulence_smoothing
-        self.turbulence_y += (self.target_turbulence_y - self.turbulence_y) * turbulence_smoothing
-        
-        # Add vibration to turbulence
-        self.turbulence_x += vibration_x
-        self.turbulence_y += vibration_y
-            
-        # Update altitude with very slight variations
-        if self.phase == "active":
-            # Add small altitude variations during combat
-            altitude_variation = math.sin(self.hover_time * 0.5) * 10  # Reduced from 20 to 10
-            self.altitude = self.target_altitude + altitude_variation
-            
         # Update phase
+        if self.phase == "sequence":
+            elapsed = current_time - self.phase_timer
+            
+            if elapsed < 2000:
+                # First image (0-2 seconds)
+                self.sequence_state = 0
+            elif elapsed < 4000:
+                # Second image (2-4 seconds)
+                self.sequence_state = 1
+            else:
+                # Move to takeoff phase
+                self.phase = "takeoff"
+                self.phase_timer = current_time
+                
+        # Only update movement calculations after sequence
+        if self.phase != "sequence":
+            # Update hover time for movement calculations
+            self.hover_time = current_time / 1000.0  # Convert to seconds
+            self.vibration_time = current_time / 100.0  # Faster for vibration
+            
+            # Update camera rotation for circling effect
+            self.camera_angle += 0.5  # Slowly rotate around the board
+            if self.camera_angle >= 360:
+                self.camera_angle -= 360
+                
+            # Add realistic helicopter movement - much smoother
+            # Vertical bobbing (gentle up and down)
+            self.hover_offset_y = math.sin(self.hover_time * 0.8) * 8  # Reduced from 15 to 8
+            
+            # Horizontal swaying (subtle side-to-side)
+            self.sway_offset_x = math.sin(self.hover_time * 0.6) * 5  # Reduced from 10 to 5
+            
+            # Constant engine vibration
+            vibration_x = math.sin(self.vibration_time * 15) * 1.5  # Rapid small vibration
+            vibration_y = math.cos(self.vibration_time * 17) * 1.5  # Different frequency for Y
+            
+            # Smooth turbulence system - no sudden jumps
+            if random.random() < 0.005:  # 0.5% chance to change turbulence target
+                # Set new target, but don't jump to it
+                self.target_turbulence_x = random.uniform(-3, 3)
+                self.target_turbulence_y = random.uniform(-3, 3)
+            else:
+                # Gradually move target back to zero
+                self.target_turbulence_x *= 0.99
+                self.target_turbulence_y *= 0.99
+                
+            # Smoothly interpolate current turbulence toward target
+            turbulence_smoothing = 0.05  # How fast to move toward target (lower = smoother)
+            self.turbulence_x += (self.target_turbulence_x - self.turbulence_x) * turbulence_smoothing
+            self.turbulence_y += (self.target_turbulence_y - self.turbulence_y) * turbulence_smoothing
+            
+            # Add vibration to turbulence
+            self.turbulence_x += vibration_x
+            self.turbulence_y += vibration_y
+                
+            # Update altitude with very slight variations
+            if self.phase == "active":
+                # Add small altitude variations during combat
+                altitude_variation = math.sin(self.hover_time * 0.5) * 10  # Reduced from 20 to 10
+                self.altitude = self.target_altitude + altitude_variation
+                
+        # Handle phase transitions
         if self.phase == "takeoff":
-            if current_time - self.phase_timer > 3000:  # 3 second takeoff (was 2)
+            if current_time - self.phase_timer > 3000:  # 3 second takeoff
                 self.phase = "descent"
                 self.phase_timer = current_time
                 
@@ -198,8 +256,24 @@ class ChopperGunnerMode:
                 self.phase_timer = current_time
                 
         elif self.phase == "active":
+            # Update minigun sound state
+            current_time = pygame.time.get_ticks()
+            
+            if self.minigun_state == "revving":
+                # Check if rev up is complete (0.5 second rev up)
+                if hasattr(self, 'rev_start_time') and current_time - self.rev_start_time > 500:
+                    self.minigun_state = "firing"
+                    # Start looping fire sound
+                    if self.minigun_fire_sound:
+                        self.minigun_fire_channel = self.minigun_fire_sound.play(-1)
+                        
+            elif self.minigun_state == "spindown":
+                # Check if spin down is complete (assuming 1.5 second spin down)
+                if hasattr(self, 'spindown_start_time') and current_time - self.spindown_start_time > 1500:
+                    self.minigun_state = "idle"
+            
             # Handle firing
-            if self.firing and self.ammo > 0:
+            if self.firing and self.ammo > 0 and self.minigun_state == "firing":
                 if current_time - self.last_shot_time > self.fire_rate:
                     self.fire_minigun()
                     self.last_shot_time = current_time
@@ -228,6 +302,7 @@ class ChopperGunnerMode:
         self.update_explosions()
         self.update_bullet_tracers()
         self.update_camera_shake()
+        self.update_piece_shake()
         
     def fire_minigun(self):
         """Fire the minigun."""
@@ -245,9 +320,7 @@ class ChopperGunnerMode:
         self.target_turbulence_x = max(-5, min(5, self.target_turbulence_x))
         self.target_turbulence_y = max(-5, min(5, self.target_turbulence_y))
         
-        # Play sound
-        if self.minigun_sound:
-            self.minigun_sound.play()
+        # Note: Fire sound is already playing in loop from handle_click
             
         # Get gun position from draw method
         gun_pos = getattr(self, '_gun_position', (WIDTH - 150, HEIGHT // 2))
@@ -261,10 +334,42 @@ class ChopperGunnerMode:
             "timer": 10
         })
         
+        # Create bullet impact effects at crosshair location
+        self.create_bullet_impact(self.crosshair_x, self.crosshair_y)
+        
         # Check for hit
         hit_piece = self.check_hit(self.crosshair_x, self.crosshair_y)
         if hit_piece:
-            self.destroy_piece(hit_piece)
+            self.hit_piece(hit_piece)
+            
+    def create_bullet_impact(self, x, y):
+        """Create small impact effects where bullets land."""
+        # Create 3-5 small sparks/fragments
+        num_sparks = random.randint(3, 5)
+        
+        for _ in range(num_sparks):
+            angle = random.uniform(0, 2 * math.pi)
+            speed = random.uniform(2, 5)
+            
+            self.explosions.append({
+                "x": x,
+                "y": y,
+                "timer": 15,  # Short lifetime
+                "particles": [{
+                    "x": x,
+                    "y": y,
+                    "vx": math.cos(angle) * speed,
+                    "vy": math.sin(angle) * speed - 1,  # Slight upward bias
+                    "life": 15,
+                    "size": random.randint(1, 3),
+                    "color": random.choice([
+                        (200, 200, 200),  # Light grey
+                        (255, 255, 200),  # Yellowish (spark)
+                        (150, 150, 150),  # Medium grey
+                        (255, 200, 100)   # Orange (hot metal)
+                    ])
+                }]
+            })
             
     def check_hit(self, x, y):
         """Check if crosshair is over an enemy piece."""
@@ -285,6 +390,61 @@ class ChopperGunnerMode:
                         return (row, col)
         return None
         
+    def hit_piece(self, pos):
+        """Hit a piece at given position."""
+        row, col = pos
+        
+        # Initialize hit count if not tracked
+        if pos not in self.piece_hit_counts:
+            self.piece_hit_counts[pos] = 0
+            
+        # Increment hit count
+        self.piece_hit_counts[pos] += 1
+        
+        # Add shake effect
+        self.piece_shake[pos] = {
+            "timer": 15,  # Shake for 15 frames
+            "intensity": 5  # Shake intensity
+        }
+        
+        # Create impact fragments at hit location
+        piece_x, piece_y = self.get_piece_screen_pos(row, col)
+        self.create_impact_fragments(piece_x, piece_y)
+        
+        # Check if piece should be destroyed (3 hits)
+        if self.piece_hit_counts[pos] >= 3:
+            self.destroy_piece(pos)
+            
+    def create_impact_fragments(self, x, y):
+        """Create small grey fragments at impact location."""
+        # Create 5-8 small fragments
+        num_fragments = random.randint(5, 8)
+        
+        for _ in range(num_fragments):
+            angle = random.uniform(0, 2 * math.pi)
+            speed = random.uniform(1, 4)
+            size = random.randint(2, 4)
+            
+            self.explosions.append({
+                "x": x,
+                "y": y,
+                "timer": 20,  # Shorter lifetime than explosion
+                "particles": [{
+                    "x": x,
+                    "y": y,
+                    "vx": math.cos(angle) * speed,
+                    "vy": math.sin(angle) * speed - 2,  # Initial upward velocity
+                    "life": 20,
+                    "size": size,
+                    "color": random.choice([
+                        (128, 128, 128),  # Grey
+                        (105, 105, 105),  # Dim grey
+                        (160, 160, 160),  # Light grey
+                        (80, 80, 80)      # Dark grey
+                    ])
+                }]
+            })
+            
     def destroy_piece(self, pos):
         """Destroy a piece at given position."""
         row, col = pos
@@ -302,6 +462,27 @@ class ChopperGunnerMode:
         # Remove piece from board
         self.board.set_piece(row, col, "")
         
+        # Play capture sound
+        if hasattr(self.assets, 'sounds') and 'capture' in self.assets.sounds:
+            self.assets.sounds['capture'].play()
+            
+        # Clean up tracking
+        if pos in self.piece_hit_counts:
+            del self.piece_hit_counts[pos]
+        if pos in self.piece_shake:
+            del self.piece_shake[pos]
+        
+    def update_piece_shake(self):
+        """Update shake effects for hit pieces."""
+        to_remove = []
+        for pos, shake in self.piece_shake.items():
+            shake["timer"] -= 1
+            if shake["timer"] <= 0:
+                to_remove.append(pos)
+                
+        for pos in to_remove:
+            del self.piece_shake[pos]
+            
     def get_piece_screen_pos(self, row, col):
         """Get screen position of a piece with perspective and rotation."""
         # Flip the board so white is at bottom (row 7 becomes row 0)
@@ -346,6 +527,14 @@ class ChopperGunnerMode:
         # Apply camera shake (from firing)
         screen_x += self.camera_shake["x"]
         screen_y += self.camera_shake["y"]
+        
+        # Apply piece shake if this piece is being hit
+        if (row, col) in self.piece_shake:
+            shake = self.piece_shake[(row, col)]
+            shake_x = random.randint(-shake["intensity"], shake["intensity"])
+            shake_y = random.randint(-shake["intensity"], shake["intensity"])
+            screen_x += shake_x
+            screen_y += shake_y
         
         return int(screen_x), int(screen_y)
         
@@ -405,6 +594,11 @@ class ChopperGunnerMode:
                 particle["vy"] += 0.5  # Gravity
                 particle["life"] -= 1
                 
+                # Add some air resistance to fragments
+                if "size" in particle:
+                    particle["vx"] *= 0.95
+                    particle["vy"] *= 0.98
+                
                 if particle["life"] > 0:
                     remaining_particles.append(particle)
                     
@@ -452,6 +646,11 @@ class ChopperGunnerMode:
         
     def draw(self):
         """Draw the chopper gunner view."""
+        # Handle sequence phase separately
+        if self.phase == "sequence":
+            self.draw_sequence()
+            return
+            
         # Clear screen with sky gradient
         # Bottom of screen is darker (ground/far view)
         for y in range(0, HEIGHT, 5):
@@ -482,6 +681,50 @@ class ChopperGunnerMode:
         
         # Draw HUD
         self.draw_hud()
+        
+    def draw_sequence(self):
+        """Draw the helicopter takeoff sequence."""
+        current_time = pygame.time.get_ticks()
+        elapsed = current_time - self.phase_timer
+        
+        # Check if we have the sequence images
+        if hasattr(self.assets, 'airstrike_sequence') and len(self.assets.airstrike_sequence) >= 2:
+            if self.sequence_state == 0 and elapsed < 2000:
+                # First image (0-2 seconds)
+                alpha = 255
+                if elapsed < 500:  # Fade in
+                    alpha = int((elapsed / 500) * 255)
+                elif elapsed > 1500:  # Fade out
+                    alpha = int(((2000 - elapsed) / 500) * 255)
+                
+                # Scale image to screen
+                img = self.assets.airstrike_sequence[0]
+                scaled_img = pygame.transform.scale(img, (WIDTH, HEIGHT))
+                
+                # Create a copy to set alpha
+                fade_img = scaled_img.copy()
+                fade_img.set_alpha(alpha)
+                self.screen.blit(fade_img, (0, 0))
+                
+            elif self.sequence_state == 1 and elapsed >= 2000 and elapsed < 4000:
+                # Second image (2-4 seconds)
+                alpha = 255
+                if elapsed < 2500:  # Fade in
+                    alpha = int(((elapsed - 2000) / 500) * 255)
+                elif elapsed > 3500:  # Fade out
+                    alpha = int(((4000 - elapsed) / 500) * 255)
+                
+                # Scale image to screen
+                img = self.assets.airstrike_sequence[1]
+                scaled_img = pygame.transform.scale(img, (WIDTH, HEIGHT))
+                
+                # Create a copy to set alpha
+                fade_img = scaled_img.copy()
+                fade_img.set_alpha(alpha)
+                self.screen.blit(fade_img, (0, 0))
+        else:
+            # Fallback if images not loaded - just show black screen
+            self.screen.fill((0, 0, 0))
         
     def draw_aerial_board(self):
         """Draw the chess board from aerial perspective with rotation."""
@@ -628,29 +871,59 @@ class ChopperGunnerMode:
     def draw_explosions(self):
         """Draw explosion effects."""
         for explosion in self.explosions:
-            # Draw expanding circle
-            radius = (30 - explosion["timer"]) * 3
-            if radius > 0:
-                pygame.draw.circle(self.screen, (255, 200, 0), 
-                                 (explosion["x"], explosion["y"]), radius, 3)
+            # Only draw expanding circle for actual explosions (not fragments)
+            if explosion["timer"] > 20:  # Full explosions have timer of 30
+                radius = (30 - explosion["timer"]) * 3
+                if radius > 0:
+                    pygame.draw.circle(self.screen, (255, 200, 0), 
+                                     (explosion["x"], explosion["y"]), radius, 3)
                 
             # Draw particles
             for particle in explosion["particles"]:
-                size = particle["life"] // 5
-                if size > 0:
-                    pygame.draw.circle(self.screen, particle["color"], 
-                                     (int(particle["x"]), int(particle["y"])), size)
+                # Check if it's a fragment (has size attribute) or explosion particle
+                if "size" in particle:
+                    # Draw fragment
+                    size = particle["size"]
+                    if size > 0 and particle["life"] > 0:
+                        # Fade out based on life
+                        alpha = int(255 * (particle["life"] / 20))
+                        color = particle["color"]
+                        
+                        # Draw as small rectangle fragments
+                        fragment_rect = pygame.Rect(
+                            int(particle["x"]) - size // 2,
+                            int(particle["y"]) - size // 2,
+                            size, size
+                        )
+                        pygame.draw.rect(self.screen, color, fragment_rect)
+                else:
+                    # Original explosion particle drawing
+                    size = particle["life"] // 5
+                    if size > 0:
+                        pygame.draw.circle(self.screen, particle["color"], 
+                                         (int(particle["x"]), int(particle["y"])), size)
                                      
     def draw_bullet_tracers(self):
         """Draw bullet tracer effects."""
         for tracer in self.bullet_tracers:
             alpha = tracer["timer"] * 25
-            color = (255, 200, 100, min(255, alpha))
             
-            # Draw tracer line
-            pygame.draw.line(self.screen, color[:3], 
+            # Draw multiple lines for a thicker, more visible tracer
+            # Main tracer line (bright yellow/orange)
+            pygame.draw.line(self.screen, (255, 200, 100), 
                            (tracer["start_x"], tracer["start_y"]),
                            (tracer["end_x"], tracer["end_y"]), 3)
+            
+            # Outer glow (slightly transparent)
+            if tracer["timer"] > 5:
+                pygame.draw.line(self.screen, (255, 150, 50), 
+                               (tracer["start_x"], tracer["start_y"]),
+                               (tracer["end_x"], tracer["end_y"]), 5)
+                               
+            # Inner hot core
+            pygame.draw.line(self.screen, (255, 255, 200), 
+                           (tracer["start_x"], tracer["start_y"]),
+                           (tracer["end_x"], tracer["end_y"]), 1)
                            
     def draw_crosshair(self):
         """Draw targeting crosshair."""

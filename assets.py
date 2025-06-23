@@ -22,6 +22,7 @@ class AssetManager:
         self.arms_background = None  # Store arms dealer background
         self.cockpit_view = None  # Store cockpit view for chopper gunner
         self.chopper_activation_overlay = None  # Store chopper activation overlay
+        self.airstrike_sequence = []  # Store helicopter takeoff sequence
         
     def load_all(self):
         """Load all game assets."""
@@ -37,6 +38,7 @@ class AssetManager:
         self.load_arms_background()
         self.load_cockpit_view()
         self.load_chopper_activation_overlay()
+        self.load_airstrike_sequence()
         print("Assets loaded!")
         
     def load_pieces(self):
@@ -208,6 +210,33 @@ class AssetManager:
             except:
                 pass
                 
+        # Load minigun rev up sound
+        guns1_path = os.path.join(ASSETS_DIR, "guns1.wav")
+        if os.path.exists(guns1_path):
+            try:
+                self.sounds['minigun_revup'] = pygame.mixer.Sound(guns1_path)
+                print("✓ Loaded minigun rev up sound")
+            except Exception as e:
+                print(f"✗ Error loading minigun rev up sound: {str(e)}")
+                
+        # Load minigun firing sound
+        guns2_path = os.path.join(ASSETS_DIR, "guns2.wav")
+        if os.path.exists(guns2_path):
+            try:
+                self.sounds['minigun_fire'] = pygame.mixer.Sound(guns2_path)
+                print("✓ Loaded minigun firing sound")
+            except Exception as e:
+                print(f"✗ Error loading minigun firing sound: {str(e)}")
+                
+        # Load minigun spin down sound
+        guns3_path = os.path.join(ASSETS_DIR, "guns3.wav")
+        if os.path.exists(guns3_path):
+            try:
+                self.sounds['minigun_spindown'] = pygame.mixer.Sound(guns3_path)
+                print("✓ Loaded minigun spin down sound")
+            except Exception as e:
+                print(f"✗ Error loading minigun spin down sound: {str(e)}")
+                
         # Load helicopter sound
         helicopter_path = os.path.join(ASSETS_DIR, "helicopter.mp3")
         if os.path.exists(helicopter_path):
@@ -333,3 +362,23 @@ class AssetManager:
                 print(f"✗ Error loading chopper activation overlay: {str(e)}")
         else:
             print("✗ copter2.png not found")
+            
+    def load_airstrike_sequence(self):
+        """Load helicopter takeoff sequence images."""
+        print("\nLoading airstrike sequence images...")
+        
+        sequence_files = ["1.png", "2.png"]
+        
+        for filename in sequence_files:
+            filepath = os.path.join(ASSETS_DIR, filename)
+            if os.path.exists(filepath):
+                try:
+                    img = pygame.image.load(filepath).convert_alpha()
+                    self.airstrike_sequence.append(img)
+                    print(f"✓ Loaded {filename}")
+                except Exception as e:
+                    print(f"✗ Error loading {filename}: {str(e)}")
+            else:
+                print(f"✗ {filename} not found")
+                
+        print(f"Loaded {len(self.airstrike_sequence)}/2 airstrike sequence images")

@@ -279,18 +279,43 @@ class PowerupSystem:
         
     def _handle_chopper_click(self, row, col, board):
         """Handle chopper gunner activation."""
-        # Spend points
-        player = self.powerup_state["player"]
-        self.points[player] -= self.powerups["chopper"]["cost"]
-        
-        # Set flag to request chopper mode
-        self.chopper_gunner_requested = True
-        
-        # Clear powerup state
-        self.active_powerup = None
-        self.powerup_state = None
-        
-        return True
+        # Check if we're clicking on YES/NO buttons
+        if hasattr(self, 'chopper_yes_button') and hasattr(self, 'chopper_no_button'):
+            import pygame
+            mouse_pos = pygame.mouse.get_pos()
+            
+            if self.chopper_yes_button.collidepoint(mouse_pos):
+                # User clicked YES - activate chopper gunner
+                player = self.powerup_state["player"]
+                self.points[player] -= self.powerups["chopper"]["cost"]
+                
+                # Set flag to request chopper mode
+                self.chopper_gunner_requested = True
+                
+                # Clear powerup state
+                self.active_powerup = None
+                self.powerup_state = None
+                
+                # Clean up buttons
+                delattr(self, 'chopper_yes_button')
+                delattr(self, 'chopper_no_button')
+                
+                return True
+                
+            elif self.chopper_no_button.collidepoint(mouse_pos):
+                # User clicked NO - cancel
+                self.cancel_powerup()
+                
+                # Clean up buttons
+                if hasattr(self, 'chopper_yes_button'):
+                    delattr(self, 'chopper_yes_button')
+                if hasattr(self, 'chopper_no_button'):
+                    delattr(self, 'chopper_no_button')
+                    
+                return True
+                
+        # If no buttons exist yet, don't do anything (dialog will appear)
+        return False
         
     def _handle_paratroopers_click(self, row, col, board):
         """Handle paratroopers - place pawns on empty squares."""
