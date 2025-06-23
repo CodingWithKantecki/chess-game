@@ -26,6 +26,8 @@ class ChopperGunnerMode:
         self.camera_angle = 0  # Angle for circling around board
         self.camera_tilt = 30  # Lowered by 10 more degrees for gentler angle
         self.camera_distance = 400  # Moved back from 300 to 400
+        self.camera_bank = 0  # Banking angle (leaning into turns)
+        self.prev_camera_angle = 0  # To calculate angular velocity
         
         # Helicopter movement dynamics - smoother values
         self.hover_offset_y = 0  # Vertical bobbing
@@ -188,9 +190,32 @@ class ChopperGunnerMode:
             self.vibration_time = current_time / 100.0  # Faster for vibration
             
             # Update camera rotation for circling effect
+            self.prev_camera_angle = self.camera_angle
             self.camera_angle += 0.5  # Slowly rotate around the board
             if self.camera_angle >= 360:
                 self.camera_angle -= 360
+                
+            # Calculate banking based on turn rate
+            # Helicopter banks into the turn (tilts inward when circling)
+            turn_rate = 0.5  # degrees per frame
+            max_bank = 15  # Maximum banking angle in degrees
+            
+            # Since we're always turning at constant rate, calculate bank based on direction
+            # For clockwise rotation, bank to the right (positive)
+            target_bank = max_bank * (turn_rate / 2.0)  # Scale banking with turn rate
+            
+            # Add dynamic banking based on current movement
+            # Check which quadrant we're in for more realistic banking
+            angle_rad = math.radians(self.camera_angle)
+            
+            # Add sinusoidal variation to make banking more dynamic
+            # This simulates the helicopter adjusting its bank through the turn
+            bank_variation = math.sin(angle_rad * 2) * 5  # Varies by ±5 degrees
+            target_bank += bank_variation
+            
+            # Smoothly interpolate to target bank angle
+            bank_smoothing = 0.1
+            self.camera_bank += (target_bank - self.camera_bank) * bank_smoothing
                 
             # Add realistic helicopter movement - much smoother
             # Vertical bobbing (gentle up and down)
@@ -499,13 +524,20 @@ class ChopperGunnerMode:
         rotated_x = board_x * math.cos(angle_rad) - board_y * math.sin(angle_rad)
         rotated_y = board_x * math.sin(angle_rad) + board_y * math.cos(angle_rad)
         
+        # Apply banking (roll) - this tilts the view
+        bank_rad = math.radians(self.camera_bank)
+        
+        # Banking affects the x-coordinate based on y-position
+        # This creates the effect of the world tilting
+        banked_x = rotated_x * math.cos(bank_rad) - rotated_y * 0.2 * math.sin(bank_rad)
+        
         # Apply tilt - looking down at the board
         tilt_rad = math.radians(self.camera_tilt)
         
         # For a proper 3D perspective looking down:
         # Y coordinate should be compressed based on tilt angle
         # Items farther away (negative rotated_y) should be higher on screen
-        projected_x = rotated_x
+        projected_x = banked_x
         projected_y = rotated_y * math.sin(tilt_rad)  # Compress Y based on tilt
         projected_z = rotated_y * math.cos(tilt_rad)  # Depth component
         
@@ -651,16 +683,8 @@ class ChopperGunnerMode:
             self.draw_sequence()
             return
             
-        # Clear screen with sky gradient
-        # Bottom of screen is darker (ground/far view)
-        for y in range(0, HEIGHT, 5):
-            progress = y / HEIGHT
-            color = (
-                int(50 - progress * 30),  # R: 50 to 20
-                int(50 - progress * 30),  # G: 50 to 20  
-                int(70 - progress * 40)   # B: 70 to 30
-            )
-            pygame.draw.rect(self.screen, color, (0, y, WIDTH, 5))
+        # Draw parallax background with rotation
+        self.draw_rotating_parallax_background()
         
         # Draw board and pieces from aerial view
         self.draw_aerial_board()
@@ -681,6 +705,79 @@ class ChopperGunnerMode:
         
         # Draw HUD
         self.draw_hud()
+        
+    def draw_rotating_parallax_background(self):
+        """Draw parallax background that rotates with the helicopter."""
+        # Clear screen with base color
+        self.screen.fill((30, 30, 40))
+        
+        # Check if parallax layers exist
+        if not hasattr(self.assets, 'parallax_layers') or not self.assets.parallax_layers:
+            # Fallback to gradient if no parallax
+            self.draw_sky_gradient()
+            return
+            
+        # SIMPLIFIED APPROACH: Just draw the bottom 2-3 layers without rotation
+        # This gives the effect of distant scenery without the performance hit
+        
+        # Only use the farthest background layers (usually sky and distant mountains)
+        layers_to_draw = min(3, len(self.assets.parallax_layers))
+        
+        for i in range(layers_to_draw):
+            layer = self.assets.parallax_layers[i]
+            if not layer.get("image"):
+                continue
+                
+            # Simple horizontal scrolling based on camera angle
+            scroll_offset = int(self.camera_angle * layer["speed"] * 2)
+            
+            # Get image dimensions
+            img = layer["image"]
+            img_width = img.get_width()
+            
+            # Calculate position (no rotation, just scrolling)
+            x = -(scroll_offset % img_width)
+            
+            # Draw the layer twice for seamless scrolling
+            while x < WIDTH:
+                # Simple vertical offset for banking
+                y_offset = int(self.camera_bank * layer["speed"] * 5)
+                self.screen.blit(img, (x, y_offset))
+                x += img_width
+                
+        # Add a gradient overlay to blend with the sky
+        gradient_surface = pygame.Surface((WIDTH, HEIGHT // 3), pygame.SRCALPHA)
+        for y in range(HEIGHT // 3):
+            alpha = int(255 * (1 - y / (HEIGHT // 3)))
+            color = (30, 30, 40, alpha)
+            pygame.draw.rect(gradient_surface, color, (0, y, WIDTH, 1))
+        self.screen.blit(gradient_surface, (0, 0))
+            
+    def draw_sky_gradient(self):
+        """Draw the sky gradient with banking effect."""
+        # Calculate horizon tilt based on banking
+        bank_offset = int(self.camera_bank * 10)  # Pixels to shift horizon
+        
+        for y in range(0, HEIGHT, 5):
+            progress = y / HEIGHT
+            color = (
+                int(50 - progress * 30),  # R: 50 to 20
+                int(50 - progress * 30),  # G: 50 to 20  
+                int(70 - progress * 40)   # B: 70 to 30
+            )
+            
+            # Create a polygon that's tilted based on banking
+            left_y = y - bank_offset
+            right_y = y + bank_offset
+            
+            points = [
+                (0, left_y),
+                (WIDTH, right_y),
+                (WIDTH, right_y + 5),
+                (0, left_y + 5)
+            ]
+            
+            pygame.draw.polygon(self.screen, color, points)
         
     def draw_sequence(self):
         """Draw the helicopter takeoff sequence."""
