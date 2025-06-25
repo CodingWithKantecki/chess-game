@@ -954,8 +954,9 @@ class ChopperGunnerMode:
         screen_x += self.camera_shake["x"]
         screen_y += self.camera_shake["y"]
         
-        # Skip if tree is behind camera or off screen
-        if screen_y < -200 or screen_y > HEIGHT + 100:
+        # Skip if tree is behind camera or too far below screen
+        # Allow trees to be drawn above the top of the screen
+        if screen_y > HEIGHT + 100:
             return
         
         # Tree size based on perspective - scale with altitude for consistency
@@ -963,16 +964,13 @@ class ChopperGunnerMode:
         trunk_width = int(12 * perspective_scale)
         foliage_width = int(50 * perspective_scale)
         
-        # Get horizon line
-        horizon_y = int(HEIGHT * 0.35)
-        
         # Draw trunk (brown rectangle)
         trunk_height = int(tree_height * 0.4)
         trunk_x = int(screen_x - trunk_width // 2)
         trunk_y = int(screen_y - trunk_height)
         
-        # Only draw trunk if it's below horizon
-        if trunk_y > horizon_y and trunk_height > 0 and trunk_width > 0:
+        # Only draw trunk if it's visible on screen
+        if trunk_height > 0 and trunk_width > 0:
             # Darker trunk colors for stormy weather
             pygame.draw.rect(self.screen, (40, 30, 20), 
                             (trunk_x, trunk_y, trunk_width, trunk_height))
@@ -989,23 +987,22 @@ class ChopperGunnerMode:
                 circle_y = foliage_y - i * (foliage_height // 3)
                 circle_radius = foliage_width // 2 - i * 5
                 
-                # Only draw circles that are below the horizon
-                if circle_radius > 0 and circle_y > horizon_y:
+                # Draw circles even if they're above the horizon
+                if circle_radius > 0:
                     # Darker green for stormy atmosphere
                     green_variation = (15 + i * 5, 25 + i * 5, 15)
                     pygame.draw.circle(self.screen, green_variation, 
                                      (int(screen_x), int(circle_y)), circle_radius)
                     
-        # Add a simple shadow on the ground (only if tree base is visible)
-        if screen_y > horizon_y:
-            shadow_width = int(foliage_width * 0.8)
-            shadow_height = int(shadow_width * 0.3)
-            if shadow_width > 5 and shadow_height > 2:
-                shadow_surface = pygame.Surface((shadow_width, shadow_height), pygame.SRCALPHA)
-                pygame.draw.ellipse(shadow_surface, (0, 0, 0, 50), 
-                                   (0, 0, shadow_width, shadow_height))
-                self.screen.blit(shadow_surface, 
-                                (int(screen_x - shadow_width // 2), int(screen_y)))
+        # Add a simple shadow on the ground
+        shadow_width = int(foliage_width * 0.8)
+        shadow_height = int(shadow_width * 0.3)
+        if shadow_width > 5 and shadow_height > 2 and screen_y < HEIGHT:
+            shadow_surface = pygame.Surface((shadow_width, shadow_height), pygame.SRCALPHA)
+            pygame.draw.ellipse(shadow_surface, (0, 0, 0, 50), 
+                               (0, 0, shadow_width, shadow_height))
+            self.screen.blit(shadow_surface, 
+                            (int(screen_x - shadow_width // 2), int(screen_y)))
                         
     def draw_piece_aerial(self, row, col, piece):
         """Draw a single piece from aerial view using actual piece images."""
