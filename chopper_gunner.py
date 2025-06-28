@@ -72,6 +72,37 @@ class ChopperGunnerMode:
         self.thunder_delay = 0
         self.clouds = []
         
+        # Fighter jets
+        self.fighter_jets = []
+        self.next_jet_spawn = pygame.time.get_ticks() + random.randint(5000, 10000)  # First jet in 5-10 seconds
+        self.jet_image = None
+        
+        # Try multiple ways to load the jet image
+        if hasattr(assets, 'jet55'):
+            self.jet_image = assets.jet55
+            print("Loaded jet image from assets.jet55")
+        elif hasattr(assets, 'images') and 'jet55' in assets.images:
+            self.jet_image = assets.images['jet55']
+            print("Loaded jet image from assets.images['jet55']")
+        elif hasattr(assets, 'jet_image'):
+            self.jet_image = assets.jet_image
+            print("Loaded jet image from assets.jet_image")
+        else:
+            # Try to load it directly if not in assets
+            try:
+                import os
+                jet_path = os.path.join('assets', 'jet55.png')
+                if os.path.exists(jet_path):
+                    self.jet_image = pygame.image.load(jet_path).convert_alpha()
+                    print(f"Loaded jet image directly from {jet_path}")
+                else:
+                    print(f"Jet image not found at {jet_path}")
+            except Exception as e:
+                print(f"Could not load jet image: {e}")
+                
+        if self.jet_image is None:
+            print("WARNING: No jet image loaded, will use triangle fallback")
+        
         # Initialize rain (reasonable amount)
         print(f"Initializing rain particles...")
         for _ in range(150):  # Reduced from 500 to 150
@@ -215,6 +246,9 @@ class ChopperGunnerMode:
         # Update weather effects
         self.update_weather(current_time)
         
+        # Update fighter jets
+        self.update_fighter_jets(current_time)
+        
         # Update hover time for movement calculations
         self.hover_time = current_time / 1000.0  # Convert to seconds
         self.vibration_time = current_time / 100.0  # Faster for vibration
@@ -252,9 +286,17 @@ class ChopperGunnerMode:
             # Update camera rotation for side-to-side movement
             self.prev_camera_angle = self.camera_angle
             
+            # Initialize sine offset on first active frame to match current angle
+            if not hasattr(self, 'sine_offset'):
+                # Calculate what the sine offset should be to match current angle
+                # We want: current_angle = sin(hover_time * 0.3 + offset) * 30
+                # So: offset = arcsin(current_angle / 30) - hover_time * 0.3
+                normalized_angle = max(-1, min(1, self.camera_angle / 30))
+                self.sine_offset = math.asin(normalized_angle) - self.hover_time * 0.3
+            
             # Side-to-side movement instead of full circle
             # Use sine wave for smooth back and forth
-            self.camera_angle = math.sin(self.hover_time * 0.3) * 30  # ±30 degrees side to side
+            self.camera_angle = math.sin(self.hover_time * 0.3 + self.sine_offset) * 30  # ±30 degrees side to side
             
             # Calculate banking based on movement direction
             # Bank into the turn
@@ -707,6 +749,147 @@ class ChopperGunnerMode:
         if self.lightning_flash > 0:
             self.lightning_flash -= 1
             
+    def update_fighter_jets(self, current_time):
+        """Update fighter jet spawning and movement."""
+        # Spawn new jets
+        if current_time >= self.next_jet_spawn and self.phase == "active":
+            # Decide on jet path
+            if random.random() < 0.5:
+                # Left to right
+                start_x = -200
+                end_x = WIDTH + 200
+                direction = 1
+            else:
+                # Right to left
+                start_x = WIDTH + 200
+                end_x = -200
+                direction = -1
+            
+            # Random altitude (appears below helicopter)
+            altitude = random.randint(50, 150)  # How far below helicopter
+            
+            # Random path across screen
+            start_y = random.randint(HEIGHT // 3, HEIGHT - 200)
+            
+            # Create jet
+            jet = {
+                "x": start_x,
+                "y": start_y,
+                "start_x": start_x,
+                "end_x": end_x,
+                "direction": direction,
+                "speed": random.uniform(8, 12),  # Fast!
+                "altitude": altitude,
+                "angle": 0 if direction > 0 else 180,  # Face direction of travel
+                "trail": [],  # Vapor trail positions
+                "wobble": random.uniform(0, math.pi * 2)  # Starting phase for sine wobble
+            }
+            
+            self.fighter_jets.append(jet)
+            
+            # Schedule next jet
+            self.next_jet_spawn = current_time + random.randint(8000, 15000)
+            
+            # Play jet sound if available
+            if hasattr(self.assets, 'sounds') and 'jet_flyby' in self.assets.sounds:
+                self.assets.sounds['jet_flyby'].play()
+        
+        # Update existing jets
+        jets_to_remove = []
+        for jet in self.fighter_jets:
+            # Move jet
+            jet["x"] += jet["speed"] * jet["direction"]
+            
+            # Add slight sine wave movement for realism
+            jet["wobble"] += 0.1
+            jet["y"] += math.sin(jet["wobble"]) * 0.5
+            
+            # Update vapor trail
+            jet["trail"].append({"x": jet["x"], "y": jet["y"], "life": 30})
+            
+            # Keep only recent trail positions
+            jet["trail"] = [t for t in jet["trail"] if t["life"] > 0]
+            for trail_point in jet["trail"]:
+                trail_point["life"] -= 1
+            
+            # Remove if off screen
+            if jet["direction"] > 0 and jet["x"] > jet["end_x"]:
+                jets_to_remove.append(jet)
+            elif jet["direction"] < 0 and jet["x"] < jet["end_x"]:
+                jets_to_remove.append(jet)
+        
+        # Remove jets that have flown off screen
+        for jet in jets_to_remove:
+            self.fighter_jets.remove(jet)
+            
+    def draw_fighter_jets(self):
+        """Draw fighter jets flying below the helicopter."""
+        for jet in self.fighter_jets:
+            # Draw vapor trail first (behind jet)
+            for i, trail_point in enumerate(jet["trail"]):
+                if trail_point["life"] > 0:
+                    # Fade out trail over time
+                    alpha = trail_point["life"] / 30.0
+                    size = int(3 * alpha)
+                    if size > 0:
+                        color = (
+                            int(200 + 55 * alpha),  # R
+                            int(200 + 55 * alpha),  # G 
+                            int(200 + 55 * alpha)   # B
+                        )
+                        pygame.draw.circle(self.screen, color, 
+                                         (int(trail_point["x"]), int(trail_point["y"])), size)
+            
+            # Calculate size based on altitude (perspective)
+            # Jets at higher altitude (smaller number) appear larger
+            size_factor = 1.0 - (jet["altitude"] / 300.0)
+            size_factor = max(0.3, min(1.0, size_factor))
+            
+            # Draw jet
+            if self.jet_image:
+                # Scale jet based on altitude - INCREASED SIZE
+                jet_width = int(150 * size_factor)  # Increased from 80 to 150
+                jet_height = int(150 * size_factor)  # Increased from 80 to 150
+                
+                scaled_jet = pygame.transform.scale(self.jet_image, (jet_width, jet_height))
+                
+                # Rotate jet to face direction of travel
+                if jet["direction"] < 0:
+                    scaled_jet = pygame.transform.flip(scaled_jet, True, False)
+                
+                # Add slight tilt based on movement
+                tilt_angle = math.sin(jet["wobble"]) * 5  # Slight banking
+                if abs(tilt_angle) > 0.1:
+                    scaled_jet = pygame.transform.rotate(scaled_jet, tilt_angle)
+                
+                # Draw with slight transparency for distance
+                scaled_jet.set_alpha(int(255 * (0.7 + 0.3 * size_factor)))
+                
+                jet_rect = scaled_jet.get_rect(center=(int(jet["x"]), int(jet["y"])))
+                self.screen.blit(scaled_jet, jet_rect)
+            else:
+                # Fallback: draw as triangle if no image - ALSO INCREASED
+                jet_size = int(40 * size_factor)  # Increased from 20 to 40
+                points = []
+                if jet["direction"] > 0:
+                    # Pointing right
+                    points = [
+                        (jet["x"] - jet_size, jet["y"]),
+                        (jet["x"] + jet_size, jet["y"]),
+                        (jet["x"], jet["y"] - jet_size // 2),
+                        (jet["x"], jet["y"] + jet_size // 2)
+                    ]
+                else:
+                    # Pointing left
+                    points = [
+                        (jet["x"] + jet_size, jet["y"]),
+                        (jet["x"] - jet_size, jet["y"]),
+                        (jet["x"], jet["y"] - jet_size // 2),
+                        (jet["x"], jet["y"] + jet_size // 2)
+                    ]
+                
+                pygame.draw.polygon(self.screen, (100, 100, 120), points)
+                
     def update_camera_shake(self):
         """Update camera shake effect."""
         if self.camera_shake["intensity"] > 0:
@@ -740,6 +923,9 @@ class ChopperGunnerMode:
         
         # Draw board and pieces from aerial view
         self.draw_aerial_board()
+        
+        # Draw fighter jets (below helicopter, above ground)
+        self.draw_fighter_jets()
         
         # Draw effects (before rain so explosions appear under rain)
         self.draw_explosions()
