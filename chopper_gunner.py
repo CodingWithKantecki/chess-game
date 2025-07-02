@@ -28,6 +28,7 @@ class ChopperGunnerMode:
         self.camera_distance = 650  # Increased to see some of your pieces
         self.camera_bank = 0  # Banking angle (leaning into turns)
         self.prev_camera_angle = 0  # To calculate angular velocity
+        self.sine_offset = 0  # Initialize sine offset for smooth transition
         
         # Simple zoom in effect
         self.zoom_scale = 0.3  # Start zoomed out
@@ -268,35 +269,38 @@ class ChopperGunnerMode:
                 # Gradually start rotating in the last 25% of approach
                 if progress > 0.75:
                     rotation_progress = (progress - 0.75) / 0.25  # 0 to 1 in last quarter
-                    # Gradually increase rotation speed
-                    self.camera_angle += 0.5 * rotation_progress * rotation_progress
                     
-                    # Start introducing banking
-                    angle_rad = math.radians(self.camera_angle)
-                    bank_variation = math.sin(angle_rad * 2) * 5 * rotation_progress
-                    target_bank = 7.5 * rotation_progress + bank_variation
-                    self.camera_bank += (target_bank - self.camera_bank) * 0.05
+                    # Use a sine-based rotation that will match the active phase pattern
+                    # This ensures continuity when switching phases
+                    transition_time = self.hover_time * 0.3
+                    
+                    # Start with small amplitude that grows
+                    amplitude = 30 * rotation_progress * rotation_progress
+                    self.camera_angle = math.sin(transition_time) * amplitude
+                    
+                    # Store the sine offset that makes this work
+                    self.sine_offset = 0  # We're already using hover_time directly
+                    
+                    # Start introducing banking based on actual movement
+                    if hasattr(self, 'prev_camera_angle'):
+                        angle_change = self.camera_angle - self.prev_camera_angle
+                        target_bank = angle_change * 5 * rotation_progress
+                        self.camera_bank += (target_bank - self.camera_bank) * 0.1
+                    self.prev_camera_angle = self.camera_angle
             else:
                 # Move to active phase
                 self.phase = "active"
                 self.phase_timer = current_time
                 self.zoom_scale = 1.0
+                # No need to recalculate - we're already in sync
                 
         elif self.phase == "active":
             # Update camera rotation for side-to-side movement
             self.prev_camera_angle = self.camera_angle
             
-            # Initialize sine offset on first active frame to match current angle
-            if not hasattr(self, 'sine_offset'):
-                # Calculate what the sine offset should be to match current angle
-                # We want: current_angle = sin(hover_time * 0.3 + offset) * 30
-                # So: offset = arcsin(current_angle / 30) - hover_time * 0.3
-                normalized_angle = max(-1, min(1, self.camera_angle / 30))
-                self.sine_offset = math.asin(normalized_angle) - self.hover_time * 0.3
-            
-            # Side-to-side movement instead of full circle
-            # Use sine wave for smooth back and forth
-            self.camera_angle = math.sin(self.hover_time * 0.3 + self.sine_offset) * 30  # ±30 degrees side to side
+            # Side-to-side movement - continue the exact same sine wave pattern
+            # No offset needed since we're already using hover_time directly
+            self.camera_angle = math.sin(self.hover_time * 0.3) * 30  # ±30 degrees side to side
             
             # Calculate banking based on movement direction
             # Bank into the turn
@@ -853,9 +857,13 @@ class ChopperGunnerMode:
                 
                 scaled_jet = pygame.transform.scale(self.jet_image, (jet_width, jet_height))
                 
-                # Rotate jet to face direction of travel
-                if jet["direction"] < 0:
-                    scaled_jet = pygame.transform.flip(scaled_jet, True, False)
+                # The jet image is oriented vertically (facing up), so rotate it to face horizontally
+                if jet["direction"] > 0:
+                    # Moving right - rotate 90 degrees clockwise
+                    scaled_jet = pygame.transform.rotate(scaled_jet, -90)
+                else:
+                    # Moving left - rotate 90 degrees counter-clockwise
+                    scaled_jet = pygame.transform.rotate(scaled_jet, 90)
                 
                 # Add slight tilt based on movement
                 tilt_angle = math.sin(jet["wobble"]) * 5  # Slight banking
