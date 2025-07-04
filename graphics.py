@@ -25,15 +25,13 @@ class Renderer:
         # Intro sequence state
         self.intro_start_time = pygame.time.get_ticks()
         self.intro_jet_triggered = False
-        self.intro_fire_active = False
-        self.intro_fire_start = 0
-        self.triggered_explosions = set()
-        self.explosion_animations = []
-        self.residual_fires = []  # For lingering fire effects
-        self.napalm_bombs = []  # For falling bomb animations
-        self.intro_sound_played = False  # Track if we've played the explosion sound
-        self.permanent_fire_zones = []  # Permanent fire that scrolls with background
-        self.last_parallax_offset = 0  # Track parallax movement
+        self.intro_sound_played = False
+        
+        # Fire system - COMPLETELY REDESIGNED
+        self.fire_zones = []  # List of fire zones that scroll with background
+        self.fire_particles = []  # Active fire particles
+        self.bomb_explosions = []  # Explosion animations
+        self.last_parallax_offset = 0
         
     def update_scale(self, scale):
         """Update scale factor for fullscreen mode."""
@@ -656,32 +654,20 @@ class Renderer:
             current_time = pygame.time.get_ticks()
             time_since_start = current_time - self.intro_start_time
             
-            # Draw permanent fires FIRST before overlay so they appear in background
-            if self.permanent_fire_zones:  # Only draw if we have fire zones
-                self._draw_permanent_fires(current_time)
+            # Draw fire effects BEFORE overlay so they appear in background
+            self._update_and_draw_fire_system(current_time)
             
             # Trigger jet at 5 seconds
             if time_since_start > 5000 and not self.intro_jet_triggered:
                 self.intro_jet_triggered = True
-                # Reset bomb progress tracker
-                if hasattr(self, '_last_bomb_progress'):
-                    delattr(self, '_last_bomb_progress')
                 # Play jet sound if available
                 if hasattr(self.assets, 'sounds') and 'jet_flyby' in self.assets.sounds:
                     self.assets.sounds['jet_flyby'].play()
             
-            # Draw jet flyby and napalm
+            # Draw jet flyby with bombs
             if self.intro_jet_triggered and time_since_start < 9000:  # Show jet for 4 seconds
-                self._draw_intro_jet_sequence(time_since_start - 5000)
-            
-            # Draw fire effect only if we have explosions
-            if self.explosion_animations:
-                self._draw_fire_effect(current_time)
-            
-            # Continuously spawn new fire to fill screen
-            if self.permanent_fire_zones:
-                self._spawn_continuous_fire(current_time)
-            
+                self._draw_intro_jet_with_bombs(time_since_start - 5000)
+                
             # Title
             text = self.pixel_fonts['huge'].render("CHECKMATE PROTOCOL", True, config.WHITE)
             rect = text.get_rect(center=(game_center_x, game_center_y - 150 * config.SCALE))
@@ -990,295 +976,278 @@ class Renderer:
         text_rect = text_surface.get_rect(center=rect.center)
         self.screen.blit(text_surface, text_rect)
         
-    def _draw_intro_jet_sequence(self, elapsed_time):
-        """Draw jet flyby and napalm drop for intro."""
+    def _draw_intro_jet_with_bombs(self, elapsed_time):
+        """Draw jet flyby and create fire zones."""
         # Jet flies from left to right
         jet_progress = elapsed_time / 4000.0  # 4 second flyby
         jet_x = -200 + (config.WIDTH + 400) * jet_progress
         jet_y = config.HEIGHT * 0.2  # 20% from top
         
-        # Draw jet using jet frames if available
+        # Initialize bomb list if needed
+        if not hasattr(self, 'falling_bombs'):
+            self.falling_bombs = []
+        
+        # Draw jet
         if hasattr(self.assets, 'jet_frames') and self.assets.jet_frames:
-            # Calculate frame
             frame_index = int((elapsed_time / 100) % len(self.assets.jet_frames))
             jet_frame = self.assets.jet_frames[frame_index]
             
-            # Scale jet much smaller
-            jet_scale = 0.3 * self.scale  # Much smaller!
+            jet_scale = 0.3 * self.scale
             jet_width = int(jet_frame.get_width() * jet_scale)
             jet_height = int(jet_frame.get_height() * jet_scale)
             scaled_jet = pygame.transform.scale(jet_frame, (jet_width, jet_height))
-            
-            # Flip horizontally to face right (no rotation needed)
             flipped_jet = pygame.transform.flip(scaled_jet, True, False)
             
             self.screen.blit(flipped_jet, (jet_x, jet_y))
             
-            # Drop bombs continuously at regular intervals
-            if 0.1 < jet_progress < 0.9:
-                # Calculate bomb drop interval based on desired coverage
-                bomb_interval_px = 70  # pixels between bombs
-                jet_speed_px_per_progress = (config.WIDTH + 400) / 1.0
-                bomb_interval_progress = bomb_interval_px / jet_speed_px_per_progress
-                
-                if not hasattr(self, '_last_bomb_progress'):
-                    self._last_bomb_progress = 0.1
+            # Drop bombs continuously
+            if 0.05 < jet_progress < 0.95:  # Extended bombing range
+                # Drop a bomb every 80 pixels
+                if not hasattr(self, '_last_bomb_drop_x'):
+                    self._last_bomb_drop_x = jet_x
                     
-                if jet_progress - self._last_bomb_progress >= bomb_interval_progress:
-                    self._last_bomb_progress = jet_progress
+                if jet_x - self._last_bomb_drop_x > 80:
+                    self._last_bomb_drop_x = jet_x
                     
-                    # Store the current parallax offset when dropping the bomb
-                    self.napalm_bombs.append({
+                    # Create a falling bomb
+                    self.falling_bombs.append({
                         'x': jet_x + jet_width // 2,
                         'y': jet_y + jet_height,
-                        'world_x': jet_x + jet_width // 2 + self.parallax_offset * 0.6,  # World position
                         'vy': 2,
-                        'target_y': config.HEIGHT - 50,
-                        'exploded': False,
-                        'explosion_id': None,
-                        'drop_time': elapsed_time,
-                        'drop_parallax_offset': self.parallax_offset  # Store parallax when dropped
+                        'world_x': jet_x + jet_width // 2 + self.parallax_offset * 0.6,
+                        'exploded': False
                     })
             
             # Update and draw falling bombs
-            for bomb in self.napalm_bombs[:]:
+            bombs_to_remove = []
+            for bomb in self.falling_bombs:
                 if not bomb['exploded']:
                     # Update bomb position
                     bomb['y'] += bomb['vy']
                     bomb['vy'] += 0.5  # Gravity
                     
-                    # Calculate screen position based on parallax movement
-                    parallax_delta = self.parallax_offset - bomb['drop_parallax_offset']
-                    screen_x = bomb['x'] - parallax_delta * 0.6
+                    # Draw bomb
+                    bomb_width = int(8 * self.scale)
+                    bomb_height = int(16 * self.scale)
                     
-                    # Draw small bomb
-                    bomb_width = int(6 * self.scale)
-                    bomb_height = int(12 * self.scale)
-                    
-                    # Simple bomb shape - dark gray ellipse
+                    # Main bomb body
                     pygame.draw.ellipse(self.screen, (60, 60, 60), 
-                                      (screen_x - bomb_width//2, bomb['y'] - bomb_height//2, 
+                                      (bomb['x'] - bomb_width//2, bomb['y'] - bomb_height//2, 
                                        bomb_width, bomb_height))
+                    pygame.draw.ellipse(self.screen, (40, 40, 40), 
+                                      (bomb['x'] - bomb_width//2, bomb['y'] - bomb_height//2, 
+                                       bomb_width, bomb_height), 1)
                     
-                    # Small fins at top
-                    pygame.draw.polygon(self.screen, (80, 80, 80), [
-                        (screen_x - bomb_width//2 - 2, bomb['y'] - bomb_height//2),
-                        (screen_x - bomb_width//2, bomb['y'] - bomb_height//2 + 3),
-                        (screen_x - bomb_width//2 + 2, bomb['y'] - bomb_height//2)
+                    # Nose cone
+                    nose_points = [
+                        (bomb['x'] - bomb_width//2, bomb['y'] + bomb_height//2 - 2),
+                        (bomb['x'] + bomb_width//2, bomb['y'] + bomb_height//2 - 2),
+                        (bomb['x'], bomb['y'] + bomb_height//2 + bomb_width//2)
+                    ]
+                    pygame.draw.polygon(self.screen, (50, 50, 50), nose_points)
+                    
+                    # Fins
+                    fin_height = int(5 * self.scale)
+                    # Left fin
+                    pygame.draw.polygon(self.screen, (70, 70, 70), [
+                        (bomb['x'] - bomb_width//2, bomb['y'] - bomb_height//2),
+                        (bomb['x'] - bomb_width//2 - 3, bomb['y'] - bomb_height//2 - fin_height),
+                        (bomb['x'] - bomb_width//2, bomb['y'] - bomb_height//2 + 2)
                     ])
-                    pygame.draw.polygon(self.screen, (80, 80, 80), [
-                        (screen_x + bomb_width//2 + 2, bomb['y'] - bomb_height//2),
-                        (screen_x + bomb_width//2, bomb['y'] - bomb_height//2 + 3),
-                        (screen_x + bomb_width//2 - 2, bomb['y'] - bomb_height//2)
+                    # Right fin
+                    pygame.draw.polygon(self.screen, (70, 70, 70), [
+                        (bomb['x'] + bomb_width//2, bomb['y'] - bomb_height//2),
+                        (bomb['x'] + bomb_width//2 + 3, bomb['y'] - bomb_height//2 - fin_height),
+                        (bomb['x'] + bomb_width//2, bomb['y'] - bomb_height//2 + 2)
                     ])
                     
                     # Check if bomb hit ground
-                    if bomb['y'] >= bomb['target_y']:
+                    if bomb['y'] >= config.HEIGHT - 50:
                         bomb['exploded'] = True
-                        # Create unique explosion for each bomb
-                        explosion_id = len(self.explosion_animations)
-                        bomb['explosion_id'] = explosion_id
                         
-                        # IMPORTANT: Only NOW do we trigger fire and explosion
-                        # This ensures fire only appears when bomb actually hits
-                        
-                        # Add explosion animations at the world position
-                        for layer in range(2):
-                            self.explosion_animations.append({
-                                'x': screen_x + random.randint(-10, 10),
-                                'y': bomb['target_y'],
-                                'world_x': bomb['world_x'] + random.randint(-10, 10),
-                                'start_time': pygame.time.get_ticks() + layer * 100,
-                                'duration': 900,
-                                'layer': layer,
-                                'scale': 0.8 + layer * 0.3 + random.uniform(-0.2, 0.2),
-                                'explosion_id': explosion_id,
-                                'creation_parallax_offset': self.parallax_offset
-                            })
-                        
-                        # Create fire zone at bomb impact location in WORLD coordinates
-                        self.permanent_fire_zones.append({
-                            'x': screen_x,  # Current screen position
-                            'y': bomb['target_y'],
-                            'world_x': bomb['world_x'],  # World position
-                            'original_x': bomb['world_x'],
-                            'parallax_offset': self.parallax_offset,
-                            'particles': [],
+                        # Create fire zone at impact location
+                        world_x = bomb['world_x']
+                        self.fire_zones.append({
+                            'world_x': world_x,
+                            'y': config.HEIGHT - 50,
+                            'width': 100,
                             'spawn_timer': 0,
-                            'start_delay': 0,  # Fire starts immediately on impact
-                            'width': 100
+                            'intensity': 1.0
                         })
                         
-                        # Create initial particles for immediate effect
-                        zone_width = 100
-                        for _ in range(20):
-                            x_offset = random.randint(-zone_width//2, zone_width//2)
-                            self.permanent_fire_zones[-1]['particles'].append({
-                                'x': screen_x + x_offset,
-                                'y': bomb['target_y'] + random.randint(-5, 5),
-                                'vx': random.uniform(-0.5, 0.5),
-                                'vy': random.uniform(-4, -2),
-                                'size': random.randint(15, 30),
-                                'life': random.randint(50, 70),
-                                'type': 'flame',
-                                'flicker': random.randint(0, 10)
-                            })
-                            
-                        # Only play sound once for first explosion
-                        if not self.intro_sound_played:
+                        # Play bomb sound occasionally
+                        if random.random() < 0.3:  # 30% chance per bomb
                             if hasattr(self.assets, 'sounds') and 'bomb' in self.assets.sounds:
                                 self.assets.sounds['bomb'].play()
-                                self.intro_sound_played = True
+                                
+                        # Create explosion effect
+                        for _ in range(30):
+                            self.bomb_explosions.append({
+                                'x': bomb['x'],
+                                'y': config.HEIGHT - 50,
+                                'vx': random.uniform(-8, 8),
+                                'vy': random.uniform(-15, -5),
+                                'size': random.randint(15, 30),
+                                'life': 40,
+                                'color': random.choice([(255, 200, 0), (255, 150, 0), (255, 100, 0), (255, 50, 0)])
+                            })
+                        
+                        bombs_to_remove.append(bomb)
+                        
+            # Remove exploded bombs
+            for bomb in bombs_to_remove:
+                self.falling_bombs.remove(bomb)
+        
+        # Once jet is done, create additional fire zones to fill the entire scrollable area
+        if jet_progress >= 0.9 and not hasattr(self, '_extra_fire_zones_created'):
+            self._extra_fire_zones_created = True
+            
+            # Create fire zones extending far to the left and right
+            # This ensures fire appears when scrolling
+            for offset in range(-3000, 3000, 100):  # Cover a wide area
+                world_x = offset + self.parallax_offset * 0.6
+                self.fire_zones.append({
+                    'world_x': world_x,
+                    'y': config.HEIGHT - 50,
+                    'width': 100,
+                    'spawn_timer': random.randint(0, 10),  # Stagger the spawning
+                    'intensity': 1.0
+                })
+                    
         else:
             # Fallback triangle jet
             pygame.draw.polygon(self.screen, (100, 100, 120), [
-                (jet_x + 40, jet_y),      # Point facing right
+                (jet_x + 40, jet_y),
                 (jet_x, jet_y - 10),
                 (jet_x, jet_y + 10)
             ])
-                
-    def _create_fire_particles(self):
-        """Initialize explosion tracking."""
-        self.triggered_explosions = set()
-        self.explosion_animations = []
-        
-    def _spawn_continuous_fire(self, current_time):
-        """Only maintains existing fire zones, doesn't create new ones."""
-        # This method now only handles cleanup of old fire zones
-        # Fire zones are ONLY created when bombs actually hit the ground
-        
-        # Calculate current parallax offset
-        current_parallax_offset = self.parallax_offset
-        ground_speed = 0.6  # Ground layer scroll speed
-        
-        # Clean up old fire zones that are way off the left side of the screen
-        screen_left_world = current_parallax_offset * ground_speed - 500
-        self.permanent_fire_zones = [f for f in self.permanent_fire_zones 
-                                     if f['original_x'] > screen_left_world]
-                
-    def _draw_fire_effect(self, current_time):
-        """Draw explosion animations using explosion frames."""
-        if not hasattr(self.assets, 'explosion_frames') or not self.assets.explosion_frames:
-            return
-        
-        # Draw explosions
-        for explosion in self.explosion_animations[:]:
-            elapsed = current_time - explosion['start_time']
-            if elapsed >= 0 and elapsed < explosion['duration']:
-                # Calculate which frame to show
-                frame_progress = elapsed / explosion['duration']
-                frame_index = int(frame_progress * len(self.assets.explosion_frames))
-                frame_index = min(frame_index, len(self.assets.explosion_frames) - 1)
-                
-                explosion_frame = self.assets.explosion_frames[frame_index]
-                
-                # Scale explosion
-                explosion_size = int(120 * explosion['scale'] * self.scale)
-                scaled_explosion = pygame.transform.scale(explosion_frame, 
-                                                        (explosion_size, explosion_size))
-                
-                # Calculate screen position based on parallax movement
-                parallax_delta = self.parallax_offset - explosion['creation_parallax_offset']
-                screen_x = explosion['x'] - parallax_delta * 0.6
-                
-                # Position explosion
-                x = screen_x - explosion_size // 2
-                y = explosion['y'] - explosion_size // 2
-                
-                # Only draw if on screen
-                if -explosion_size < x < config.WIDTH:
-                    self.screen.blit(scaled_explosion, (x, y))
-            elif elapsed >= explosion['duration']:
-                self.explosion_animations.remove(explosion)
-                
-    def _draw_permanent_fires(self, current_time):
-        """Draw permanent fire zones that scroll with background."""
-        # Calculate how much the parallax has moved since each fire was created
-        current_parallax_offset = self.parallax_offset
-        
-        for fire_zone in self.permanent_fire_zones:
-            # Calculate current position based on parallax movement
-            # Fire should move with the ground layer speed (0.6)
-            parallax_delta = current_parallax_offset - fire_zone['parallax_offset']
-            fire_zone['x'] = fire_zone['original_x'] - parallax_delta * 0.6
             
-            # Only process fire zones that are visible on screen
-            if fire_zone['x'] < -200 or fire_zone['x'] > config.WIDTH + 200:
-                continue  # Skip off-screen fire zones
+    def _update_and_draw_fire_system(self, current_time):
+        """Update and draw the entire fire system."""
+        # Update fire zones - only process visible ones for performance
+        visible_buffer = 100  # Tighter buffer so fire appears closer to edge
+        
+        for zone in self.fire_zones:
+            # Calculate screen position based on parallax
+            screen_x = zone['world_x'] - self.parallax_offset * 0.6
             
-            # Check if this fire should start yet
-            if 'start_delay' in fire_zone and fire_zone['start_delay'] > 0:
-                fire_zone['start_delay'] -= 1
-                continue  # Skip this fire until delay is over
+            # Initialize fade-in state if needed
+            if 'fade_in' not in zone:
+                zone['fade_in'] = 0.0  # Start completely faded out
+                zone['was_visible'] = False
+            
+            # Check if zone is potentially visible
+            zone_visible = -visible_buffer < screen_x < config.WIDTH + visible_buffer
+            
+            # If zone just became visible, start fade-in
+            if zone_visible and not zone['was_visible']:
+                zone['fade_in'] = 0.0
+                zone['was_visible'] = True
+            elif not zone_visible:
+                zone['was_visible'] = False
+                continue
+            
+            # Gradually increase fade-in
+            if zone['fade_in'] < 1.0:
+                zone['fade_in'] = min(1.0, zone['fade_in'] + 0.02)  # Fade in over ~50 frames
+            
+            zone['spawn_timer'] += 1
+            
+            # Spawn new particles continuously - but scale by fade-in
+            if zone['spawn_timer'] > 2:
+                zone['spawn_timer'] = 0
                 
-            # Spawn new particles more frequently for denser fire
-            fire_zone['spawn_timer'] += 1
-            if fire_zone['spawn_timer'] > 2:  # Even more frequent spawning
-                fire_zone['spawn_timer'] = 0
-                
-                # Add more particles across the width of the fire zone
-                zone_width = fire_zone.get('width', 50)
-                for _ in range(random.randint(4, 6)):  # More particles per spawn
-                    # Spread particles across the entire width
-                    x_offset = random.randint(-zone_width//2, zone_width//2)
-                    fire_zone['particles'].append({
-                        'x': fire_zone['x'] + x_offset,
-                        'y': fire_zone['y'] + random.randint(-5, 5),
-                        'vx': random.uniform(-0.5, 0.5),  # Less horizontal movement
-                        'vy': random.uniform(-3, -1),
-                        'size': random.randint(10, 25),
-                        'life': random.randint(40, 60),
-                        'type': random.choice(['flame', 'flame', 'ember']),  # More flames
-                        'flicker': random.randint(0, 10)
-                    })
+                # Spawn fewer particles when fading in
+                num_particles = int(random.randint(5, 8) * zone['fade_in'])
+                if num_particles > 0:
+                    # Spawn multiple particles across zone width
+                    for _ in range(num_particles):
+                        x_offset = random.randint(-zone['width']//2, zone['width']//2)
+                        
+                        # Start particles with smaller size and shorter life when fading in
+                        size_multiplier = 0.5 + 0.5 * zone['fade_in']
+                        life_multiplier = 0.6 + 0.4 * zone['fade_in']
+                        
+                        self.fire_particles.append({
+                            'x': screen_x + x_offset,
+                            'y': zone['y'] + random.randint(-10, 10),
+                            'vx': random.uniform(-1, 1),
+                            'vy': random.uniform(-5, -2) * (0.5 + 0.5 * zone['fade_in']),  # Slower rise when fading in
+                            'size': random.randint(int(15 * size_multiplier), int(30 * size_multiplier)),
+                            'life': random.randint(int(60 * life_multiplier), int(90 * life_multiplier)),
+                            'type': random.choice(['flame', 'flame', 'ember']),
+                            'flicker': random.randint(0, 10),
+                            'opacity_modifier': zone['fade_in']  # Store the fade-in value
+                        })
                     
-            # Update and draw particles
-            for particle in fire_zone['particles'][:]:
-                particle['x'] += particle['vx']
-                particle['y'] += particle['vy']
-                particle['life'] -= 1
-                particle['flicker'] += 1
+        # Update and draw particles
+        remaining_particles = []
+        for particle in self.fire_particles:
+            particle['x'] += particle['vx']
+            particle['y'] += particle['vy']
+            particle['life'] -= 1
+            particle['flicker'] += 1
+            
+            if particle['type'] == 'flame':
+                particle['size'] *= 0.97
+                particle['vy'] -= 0.15
+            elif particle['type'] == 'ember':
+                particle['size'] *= 0.95
+                particle['vx'] += random.uniform(-0.2, 0.2)
+            
+            # Gradually increase opacity modifier if it's less than 1
+            if 'opacity_modifier' in particle and particle['opacity_modifier'] < 1.0:
+                particle['opacity_modifier'] = min(1.0, particle['opacity_modifier'] + 0.02)
+            elif 'opacity_modifier' not in particle:
+                particle['opacity_modifier'] = 1.0
+            
+            if particle['life'] > 0 and particle['size'] > 1:
+                # Draw particle
+                life_ratio = particle['life'] / 60
                 
                 if particle['type'] == 'flame':
-                    particle['size'] *= 0.97  # Flames shrink slower
-                    particle['vy'] -= 0.1  # Flames rise
+                    self._draw_16bit_fire(particle, life_ratio)
                 elif particle['type'] == 'ember':
-                    particle['size'] *= 0.95
-                    particle['vx'] += random.uniform(-0.2, 0.2)  # Embers drift
-                else:  # smoke
-                    particle['size'] *= 1.02  # Smoke expands
-                    particle['vy'] -= 0.05  # Smoke rises slowly
-                
-                if particle['life'] > 0 and particle['size'] > 1 and particle['size'] < 100:  # Limit smoke size
-                    # Choose color based on type and life
-                    life_ratio = particle['life'] / 50
+                    self._draw_pixel_ember(particle, life_ratio)
                     
-                    if particle['type'] == 'flame':
-                        # Draw 16-bit style fire
-                        self._draw_16bit_fire(particle, life_ratio)
-                    elif particle['type'] == 'ember':
-                        # Draw pixel ember
-                        self._draw_pixel_ember(particle, life_ratio)
-                    else:  # smoke
-                        # Draw pixelated smoke
-                        self._draw_pixel_smoke(particle, life_ratio)
-                else:
-                    fire_zone['particles'].remove(particle)
-                    
-            # Limit particles per zone for performance
-            if len(fire_zone['particles']) > 80:  # Increased limit for better coverage
-                fire_zone['particles'] = fire_zone['particles'][-80:]
+                remaining_particles.append(particle)
                 
+        self.fire_particles = remaining_particles
+        
+        # Update and draw explosion particles
+        remaining_explosions = []
+        for exp in self.bomb_explosions:
+            exp['x'] += exp['vx']
+            exp['y'] += exp['vy']
+            exp['vy'] += 0.5  # Gravity
+            exp['life'] -= 1
+            exp['size'] *= 0.95
+            
+            if exp['life'] > 0 and exp['size'] > 1:
+                pygame.draw.circle(self.screen, exp['color'], 
+                                 (int(exp['x']), int(exp['y'])), int(exp['size']))
+                remaining_explosions.append(exp)
+                
+        self.bomb_explosions = remaining_explosions
+        
+        # Keep reasonable particle limits
+        if len(self.fire_particles) > 500:
+            self.fire_particles = self.fire_particles[-500:]
+            
     def _draw_16bit_fire(self, particle, life_ratio):
         """Draw 16-bit style fire particle."""
         x, y = int(particle['x']), int(particle['y'])
         size = int(particle['size'])
         flicker = particle['flicker']
         
+        # Get opacity modifier
+        opacity = particle.get('opacity_modifier', 1.0)
+        
         # Create fire shape using rectangles for that pixel art look
         if life_ratio > 0.7:
             # Hot white/yellow core
-            core_color = (255, 255, 200) if flicker % 4 < 2 else (255, 255, 150)
+            base_color = (255, 255, 200) if flicker % 4 < 2 else (255, 255, 150)
+            core_color = tuple(int(c * opacity) for c in base_color)
             # Draw diamond shape core
             for i in range(size // 3):
                 w = size // 3 - i
@@ -1290,7 +1259,8 @@ class Renderer:
                                    
         # Middle orange layer
         if life_ratio > 0.4:
-            mid_color = (255, 150, 0) if flicker % 3 < 2 else (255, 180, 0)
+            base_color = (255, 150, 0) if flicker % 3 < 2 else (255, 180, 0)
+            mid_color = tuple(int(c * opacity) for c in base_color)
             mid_size = int(size * 0.8)
             # Draw larger diamond
             for i in range(mid_size // 2):
@@ -1302,7 +1272,8 @@ class Renderer:
                                    (x - w, y + i - size // 6, w * 2, 1))
                                    
         # Outer red layer
-        outer_color = (200, 50, 0) if flicker % 5 < 3 else (180, 30, 0)
+        base_color = (200, 50, 0) if flicker % 5 < 3 else (180, 30, 0)
+        outer_color = tuple(int(c * opacity) for c in base_color)
         # Draw flickering outer flames
         flame_height = int(size * 1.2)
         for i in range(0, flame_height, 2):  # Draw every other line for performance
@@ -1317,39 +1288,27 @@ class Renderer:
         x, y = int(particle['x']), int(particle['y'])
         size = max(2, int(particle['size'] * 0.4))
         
+        # Get opacity modifier
+        opacity = particle.get('opacity_modifier', 1.0)
+        
         # Ember colors based on heat
         if life_ratio > 0.7:
-            color = (255, 200, 100)
+            base_color = (255, 200, 100)
         elif life_ratio > 0.4:
-            color = (255, 100, 0)
+            base_color = (255, 100, 0)
         else:
-            color = (150, 50, 0)
+            base_color = (150, 50, 0)
+            
+        color = tuple(int(c * opacity) for c in base_color)
             
         # Draw small pixel squares
         pygame.draw.rect(self.screen, color, (x - size//2, y - size//2, size, size))
         
         # Add glow effect with neighboring pixels
         if life_ratio > 0.5 and size > 2:
-            glow_color = tuple(c // 2 for c in color)
+            glow_base = tuple(c // 2 for c in base_color)
+            glow_color = tuple(int(c * opacity) for c in glow_base)
             pygame.draw.rect(self.screen, glow_color, (x - size//2 - 1, y - size//2, 1, size))
             pygame.draw.rect(self.screen, glow_color, (x + size//2, y - size//2, 1, size))
             pygame.draw.rect(self.screen, glow_color, (x - size//2, y - size//2 - 1, size, 1))
             pygame.draw.rect(self.screen, glow_color, (x - size//2, y + size//2, size, 1))
-            
-    def _draw_pixel_smoke(self, particle, life_ratio):
-        """Draw pixelated smoke."""
-        x, y = int(particle['x']), int(particle['y'])
-        size = int(particle['size'])
-        
-        # Smoke gets more transparent as it ages
-        gray_value = int(80 * life_ratio)
-        color = (gray_value, gray_value, gray_value)
-        
-        # Draw smoke as dithered pattern
-        block_size = 3
-        for i in range(0, size, block_size * 2):
-            for j in range(0, size, block_size * 2):
-                # Checkerboard pattern for transparency effect
-                if (i + j) % (block_size * 4) == 0:
-                    pygame.draw.rect(self.screen, color,
-                                   (x - size//2 + i, y - size//2 + j, block_size, block_size))
