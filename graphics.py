@@ -657,13 +657,12 @@ class Renderer:
             time_since_start = current_time - self.intro_start_time
             
             # Draw permanent fires FIRST before overlay so they appear in background
-            if self.intro_jet_triggered:
+            if self.permanent_fire_zones:  # Only draw if we have fire zones
                 self._draw_permanent_fires(current_time)
             
             # Trigger jet at 5 seconds
             if time_since_start > 5000 and not self.intro_jet_triggered:
                 self.intro_jet_triggered = True
-                self.intro_fire_start = current_time + 1000  # Fire starts 1 second after jet appears
                 # Reset bomb progress tracker
                 if hasattr(self, '_last_bomb_progress'):
                     delattr(self, '_last_bomb_progress')
@@ -675,18 +674,12 @@ class Renderer:
             if self.intro_jet_triggered and time_since_start < 9000:  # Show jet for 4 seconds
                 self._draw_intro_jet_sequence(time_since_start - 5000)
             
-            # Handle fire effect
-            if current_time >= self.intro_fire_start and self.intro_fire_start > 0:
-                if not self.intro_fire_active:
-                    self.intro_fire_active = True
-                    self._create_fire_particles()
-                    # Initialize continuous fire spawning
-                    self.last_fire_spawn_x = -200  # Start from left edge
-                
-                # Draw fire continuously (no time limit)
+            # Draw fire effect only if we have explosions
+            if self.explosion_animations:
                 self._draw_fire_effect(current_time)
-                
-                # Continuously spawn new fire zones to fill the screen
+            
+            # Continuously spawn new fire to fill screen
+            if self.permanent_fire_zones:
                 self._spawn_continuous_fire(current_time)
             
             # Title
@@ -1024,28 +1017,27 @@ class Renderer:
             # Drop bombs continuously at regular intervals
             if 0.1 < jet_progress < 0.9:
                 # Calculate bomb drop interval based on desired coverage
-                # We want bombs every 60-80 pixels for continuous fire
                 bomb_interval_px = 70  # pixels between bombs
-                jet_speed_px_per_progress = (config.WIDTH + 400) / 1.0  # pixels per progress unit
+                jet_speed_px_per_progress = (config.WIDTH + 400) / 1.0
                 bomb_interval_progress = bomb_interval_px / jet_speed_px_per_progress
                 
-                # Check if we should drop a bomb based on progress
-                # Use modulo to drop bombs at regular intervals
                 if not hasattr(self, '_last_bomb_progress'):
                     self._last_bomb_progress = 0.1
                     
                 if jet_progress - self._last_bomb_progress >= bomb_interval_progress:
                     self._last_bomb_progress = jet_progress
                     
-                    # Drop a bomb exactly at jet position
+                    # Store the current parallax offset when dropping the bomb
                     self.napalm_bombs.append({
                         'x': jet_x + jet_width // 2,
                         'y': jet_y + jet_height,
-                        'vy': 2,  # Consistent falling speed
-                        'target_y': config.HEIGHT - 50,  # Consistent ground level
+                        'world_x': jet_x + jet_width // 2 + self.parallax_offset * 0.6,  # World position
+                        'vy': 2,
+                        'target_y': config.HEIGHT - 50,
                         'exploded': False,
                         'explosion_id': None,
-                        'drop_time': elapsed_time  # Track when bomb was dropped
+                        'drop_time': elapsed_time,
+                        'drop_parallax_offset': self.parallax_offset  # Store parallax when dropped
                     })
             
             # Update and draw falling bombs
@@ -1055,25 +1047,29 @@ class Renderer:
                     bomb['y'] += bomb['vy']
                     bomb['vy'] += 0.5  # Gravity
                     
+                    # Calculate screen position based on parallax movement
+                    parallax_delta = self.parallax_offset - bomb['drop_parallax_offset']
+                    screen_x = bomb['x'] - parallax_delta * 0.6
+                    
                     # Draw small bomb
                     bomb_width = int(6 * self.scale)
                     bomb_height = int(12 * self.scale)
                     
                     # Simple bomb shape - dark gray ellipse
                     pygame.draw.ellipse(self.screen, (60, 60, 60), 
-                                      (bomb['x'] - bomb_width//2, bomb['y'] - bomb_height//2, 
+                                      (screen_x - bomb_width//2, bomb['y'] - bomb_height//2, 
                                        bomb_width, bomb_height))
                     
                     # Small fins at top
                     pygame.draw.polygon(self.screen, (80, 80, 80), [
-                        (bomb['x'] - bomb_width//2 - 2, bomb['y'] - bomb_height//2),
-                        (bomb['x'] - bomb_width//2, bomb['y'] - bomb_height//2 + 3),
-                        (bomb['x'] - bomb_width//2 + 2, bomb['y'] - bomb_height//2)
+                        (screen_x - bomb_width//2 - 2, bomb['y'] - bomb_height//2),
+                        (screen_x - bomb_width//2, bomb['y'] - bomb_height//2 + 3),
+                        (screen_x - bomb_width//2 + 2, bomb['y'] - bomb_height//2)
                     ])
                     pygame.draw.polygon(self.screen, (80, 80, 80), [
-                        (bomb['x'] + bomb_width//2 + 2, bomb['y'] - bomb_height//2),
-                        (bomb['x'] + bomb_width//2, bomb['y'] - bomb_height//2 + 3),
-                        (bomb['x'] + bomb_width//2 - 2, bomb['y'] - bomb_height//2)
+                        (screen_x + bomb_width//2 + 2, bomb['y'] - bomb_height//2),
+                        (screen_x + bomb_width//2, bomb['y'] - bomb_height//2 + 3),
+                        (screen_x + bomb_width//2 - 2, bomb['y'] - bomb_height//2)
                     ])
                     
                     # Check if bomb hit ground
@@ -1083,37 +1079,42 @@ class Renderer:
                         explosion_id = len(self.explosion_animations)
                         bomb['explosion_id'] = explosion_id
                         
-                        # Add explosion animations - larger and more varied
-                        for layer in range(2):  # Reduced layers for performance
+                        # IMPORTANT: Only NOW do we trigger fire and explosion
+                        # This ensures fire only appears when bomb actually hits
+                        
+                        # Add explosion animations at the world position
+                        for layer in range(2):
                             self.explosion_animations.append({
-                                'x': bomb['x'] + random.randint(-10, 10),
-                                'y': bomb['target_y'],  # At ground level
-                                'start_time': pygame.time.get_ticks() + layer * 100,  # Stagger explosions
-                                'duration': 900,  # Longer duration
+                                'x': screen_x + random.randint(-10, 10),
+                                'y': bomb['target_y'],
+                                'world_x': bomb['world_x'] + random.randint(-10, 10),
+                                'start_time': pygame.time.get_ticks() + layer * 100,
+                                'duration': 900,
                                 'layer': layer,
-                                'scale': 0.8 + layer * 0.3 + random.uniform(-0.2, 0.2),  # More size variation
-                                'explosion_id': explosion_id
+                                'scale': 0.8 + layer * 0.3 + random.uniform(-0.2, 0.2),
+                                'explosion_id': explosion_id,
+                                'creation_parallax_offset': self.parallax_offset
                             })
                         
-                        # Create fire zone at bomb impact location
-                        # Store the original X position and calculate offset based on parallax
+                        # Create fire zone at bomb impact location in WORLD coordinates
                         self.permanent_fire_zones.append({
-                            'x': bomb['x'],
+                            'x': screen_x,  # Current screen position
                             'y': bomb['target_y'],
-                            'original_x': bomb['x'],  # Store original position
-                            'parallax_offset': self.parallax_offset,  # Store parallax offset when created
+                            'world_x': bomb['world_x'],  # World position
+                            'original_x': bomb['world_x'],
+                            'parallax_offset': self.parallax_offset,
                             'particles': [],
                             'spawn_timer': 0,
-                            'start_delay': 0,  # Start immediately after explosion
-                            'width': 100  # Width of fire zone for continuous coverage
+                            'start_delay': 0,  # Fire starts immediately on impact
+                            'width': 100
                         })
                         
-                        # Also create some initial particles immediately for continuous effect
+                        # Create initial particles for immediate effect
                         zone_width = 100
-                        for _ in range(20):  # More initial particles
+                        for _ in range(20):
                             x_offset = random.randint(-zone_width//2, zone_width//2)
                             self.permanent_fire_zones[-1]['particles'].append({
-                                'x': bomb['x'] + x_offset,
+                                'x': screen_x + x_offset,
                                 'y': bomb['target_y'] + random.randint(-5, 5),
                                 'vx': random.uniform(-0.5, 0.5),
                                 'vy': random.uniform(-4, -2),
@@ -1122,6 +1123,12 @@ class Renderer:
                                 'type': 'flame',
                                 'flicker': random.randint(0, 10)
                             })
+                            
+                        # Only play sound once for first explosion
+                        if not self.intro_sound_played:
+                            if hasattr(self.assets, 'sounds') and 'bomb' in self.assets.sounds:
+                                self.assets.sounds['bomb'].play()
+                                self.intro_sound_played = True
         else:
             # Fallback triangle jet
             pygame.draw.polygon(self.screen, (100, 100, 120), [
@@ -1136,55 +1143,15 @@ class Renderer:
         self.explosion_animations = []
         
     def _spawn_continuous_fire(self, current_time):
-        """Continuously spawn fire zones to fill the screen as it scrolls."""
-        # Calculate the rightmost edge of the screen in world coordinates
+        """Only maintains existing fire zones, doesn't create new ones."""
+        # This method now only handles cleanup of old fire zones
+        # Fire zones are ONLY created when bombs actually hit the ground
+        
+        # Calculate current parallax offset
         current_parallax_offset = self.parallax_offset
         ground_speed = 0.6  # Ground layer scroll speed
         
-        # Calculate the screen edges in world space
-        screen_right_world = current_parallax_offset * ground_speed + config.WIDTH
-        
-        # Spawn fire zones every 80 pixels to ensure overlap
-        fire_spacing = 80
-        
-        # Check if we need to spawn new fire zones
-        if not hasattr(self, 'last_fire_spawn_x'):
-            self.last_fire_spawn_x = -200
-            
-        # Spawn fire zones from the last spawn position to beyond the right edge
-        while self.last_fire_spawn_x < screen_right_world + 200:  # Spawn a bit beyond screen edge
-            # Create a new fire zone
-            fire_zone = {
-                'x': self.last_fire_spawn_x,
-                'y': config.HEIGHT - 50,  # Ground level
-                'original_x': self.last_fire_spawn_x,
-                'parallax_offset': current_parallax_offset,
-                'particles': [],
-                'spawn_timer': 0,
-                'start_delay': 0,
-                'width': 100  # Wide zones for overlap
-            }
-            
-            # Add initial particles for immediate effect
-            zone_width = 100
-            for _ in range(15):  # Good amount of initial particles
-                x_offset = random.randint(-zone_width//2, zone_width//2)
-                fire_zone['particles'].append({
-                    'x': self.last_fire_spawn_x + x_offset,
-                    'y': config.HEIGHT - 50 + random.randint(-5, 5),
-                    'vx': random.uniform(-0.5, 0.5),
-                    'vy': random.uniform(-4, -2),
-                    'size': random.randint(15, 30),
-                    'life': random.randint(50, 70),
-                    'type': 'flame',
-                    'flicker': random.randint(0, 10)
-                })
-            
-            self.permanent_fire_zones.append(fire_zone)
-            self.last_fire_spawn_x += fire_spacing
-            
-        # Also clean up old fire zones more aggressively to manage memory
-        # Remove zones that are way off the left side of the screen
+        # Clean up old fire zones that are way off the left side of the screen
         screen_left_world = current_parallax_offset * ground_speed - 500
         self.permanent_fire_zones = [f for f in self.permanent_fire_zones 
                                      if f['original_x'] > screen_left_world]
@@ -1193,24 +1160,11 @@ class Renderer:
         """Draw explosion animations using explosion frames."""
         if not hasattr(self.assets, 'explosion_frames') or not self.assets.explosion_frames:
             return
-            
-        # Play explosion sound only once at the very beginning
-        if not self.intro_sound_played and self.explosion_animations:
-            # Check if any explosion has actually started
-            any_started = False
-            for exp in self.explosion_animations:
-                if current_time >= exp['start_time']:
-                    any_started = True
-                    break
-                    
-            if any_started and hasattr(self.assets, 'sounds') and 'bomb' in self.assets.sounds:
-                self.assets.sounds['bomb'].play()
-                self.intro_sound_played = True
-            
+        
         # Draw explosions
         for explosion in self.explosion_animations[:]:
             elapsed = current_time - explosion['start_time']
-            if elapsed >= 0 and elapsed < explosion['duration']:  # Only draw if started
+            if elapsed >= 0 and elapsed < explosion['duration']:
                 # Calculate which frame to show
                 frame_progress = elapsed / explosion['duration']
                 frame_index = int(frame_progress * len(self.assets.explosion_frames))
@@ -1218,19 +1172,23 @@ class Renderer:
                 
                 explosion_frame = self.assets.explosion_frames[frame_index]
                 
-                # Scale explosion based on layer - bigger for ground explosions
-                explosion_size = int(120 * explosion['scale'] * self.scale)  # Increased from 80
+                # Scale explosion
+                explosion_size = int(120 * explosion['scale'] * self.scale)
                 scaled_explosion = pygame.transform.scale(explosion_frame, 
                                                         (explosion_size, explosion_size))
                 
-                # Position explosion at ground level
-                x = explosion['x'] - explosion_size // 2
+                # Calculate screen position based on parallax movement
+                parallax_delta = self.parallax_offset - explosion['creation_parallax_offset']
+                screen_x = explosion['x'] - parallax_delta * 0.6
+                
+                # Position explosion
+                x = screen_x - explosion_size // 2
                 y = explosion['y'] - explosion_size // 2
                 
-                # Draw with full opacity
-                self.screen.blit(scaled_explosion, (x, y))
+                # Only draw if on screen
+                if -explosion_size < x < config.WIDTH:
+                    self.screen.blit(scaled_explosion, (x, y))
             elif elapsed >= explosion['duration']:
-                # Remove explosion when it ends
                 self.explosion_animations.remove(explosion)
                 
     def _draw_permanent_fires(self, current_time):
