@@ -664,6 +664,9 @@ class Renderer:
             if time_since_start > 5000 and not self.intro_jet_triggered:
                 self.intro_jet_triggered = True
                 self.intro_fire_start = current_time + 1000  # Fire starts 1 second after jet appears
+                # Reset bomb progress tracker
+                if hasattr(self, '_last_bomb_progress'):
+                    delattr(self, '_last_bomb_progress')
                 # Play jet sound if available
                 if hasattr(self.assets, 'sounds') and 'jet_flyby' in self.assets.sounds:
                     self.assets.sounds['jet_flyby'].play()
@@ -677,9 +680,14 @@ class Renderer:
                 if not self.intro_fire_active:
                     self.intro_fire_active = True
                     self._create_fire_particles()
+                    # Initialize continuous fire spawning
+                    self.last_fire_spawn_x = -200  # Start from left edge
                 
                 # Draw fire continuously (no time limit)
                 self._draw_fire_effect(current_time)
+                
+                # Continuously spawn new fire zones to fill the screen
+                self._spawn_continuous_fire(current_time)
             
             # Title
             text = self.pixel_fonts['huge'].render("CHECKMATE PROTOCOL", True, config.WHITE)
@@ -1013,18 +1021,31 @@ class Renderer:
             
             self.screen.blit(flipped_jet, (jet_x, jet_y))
             
-            # Drop MORE bombs periodically
-            if 0.1 < jet_progress < 0.9 and random.random() < 0.25:  # Increased to 25% chance
-                # Drop 2-3 bombs at once for carpet bombing effect
-                num_bombs = random.randint(2, 3)
-                for i in range(num_bombs):
+            # Drop bombs continuously at regular intervals
+            if 0.1 < jet_progress < 0.9:
+                # Calculate bomb drop interval based on desired coverage
+                # We want bombs every 60-80 pixels for continuous fire
+                bomb_interval_px = 70  # pixels between bombs
+                jet_speed_px_per_progress = (config.WIDTH + 400) / 1.0  # pixels per progress unit
+                bomb_interval_progress = bomb_interval_px / jet_speed_px_per_progress
+                
+                # Check if we should drop a bomb based on progress
+                # Use modulo to drop bombs at regular intervals
+                if not hasattr(self, '_last_bomb_progress'):
+                    self._last_bomb_progress = 0.1
+                    
+                if jet_progress - self._last_bomb_progress >= bomb_interval_progress:
+                    self._last_bomb_progress = jet_progress
+                    
+                    # Drop a bomb exactly at jet position
                     self.napalm_bombs.append({
-                        'x': jet_x + jet_width // 2 + random.randint(-30, 30),
+                        'x': jet_x + jet_width // 2,
                         'y': jet_y + jet_height,
-                        'vy': random.uniform(0, 2),  # Varying initial speeds
-                        'target_y': config.HEIGHT - 50 + random.randint(-20, 0),  # More ground level
+                        'vy': 2,  # Consistent falling speed
+                        'target_y': config.HEIGHT - 50,  # Consistent ground level
                         'exploded': False,
-                        'explosion_id': None  # Track which explosion this bomb creates
+                        'explosion_id': None,
+                        'drop_time': elapsed_time  # Track when bomb was dropped
                     })
             
             # Update and draw falling bombs
@@ -1075,23 +1096,29 @@ class Renderer:
                             })
                         
                         # Create fire zone at bomb impact location
+                        # Store the original X position and calculate offset based on parallax
                         self.permanent_fire_zones.append({
                             'x': bomb['x'],
                             'y': bomb['target_y'],
+                            'original_x': bomb['x'],  # Store original position
+                            'parallax_offset': self.parallax_offset,  # Store parallax offset when created
                             'particles': [],
                             'spawn_timer': 0,
-                            'start_delay': 0  # Start immediately after explosion
+                            'start_delay': 0,  # Start immediately after explosion
+                            'width': 100  # Width of fire zone for continuous coverage
                         })
                         
-                        # Also create some initial particles immediately
-                        for _ in range(10):
+                        # Also create some initial particles immediately for continuous effect
+                        zone_width = 100
+                        for _ in range(20):  # More initial particles
+                            x_offset = random.randint(-zone_width//2, zone_width//2)
                             self.permanent_fire_zones[-1]['particles'].append({
-                                'x': bomb['x'] + random.randint(-20, 20),
+                                'x': bomb['x'] + x_offset,
                                 'y': bomb['target_y'] + random.randint(-5, 5),
-                                'vx': random.uniform(-1, 1),
+                                'vx': random.uniform(-0.5, 0.5),
                                 'vy': random.uniform(-4, -2),
-                                'size': random.randint(12, 25),
-                                'life': random.randint(40, 60),
+                                'size': random.randint(15, 30),
+                                'life': random.randint(50, 70),
                                 'type': 'flame',
                                 'flicker': random.randint(0, 10)
                             })
@@ -1107,6 +1134,60 @@ class Renderer:
         """Initialize explosion tracking."""
         self.triggered_explosions = set()
         self.explosion_animations = []
+        
+    def _spawn_continuous_fire(self, current_time):
+        """Continuously spawn fire zones to fill the screen as it scrolls."""
+        # Calculate the rightmost edge of the screen in world coordinates
+        current_parallax_offset = self.parallax_offset
+        ground_speed = 0.6  # Ground layer scroll speed
+        
+        # Calculate the screen edges in world space
+        screen_right_world = current_parallax_offset * ground_speed + config.WIDTH
+        
+        # Spawn fire zones every 80 pixels to ensure overlap
+        fire_spacing = 80
+        
+        # Check if we need to spawn new fire zones
+        if not hasattr(self, 'last_fire_spawn_x'):
+            self.last_fire_spawn_x = -200
+            
+        # Spawn fire zones from the last spawn position to beyond the right edge
+        while self.last_fire_spawn_x < screen_right_world + 200:  # Spawn a bit beyond screen edge
+            # Create a new fire zone
+            fire_zone = {
+                'x': self.last_fire_spawn_x,
+                'y': config.HEIGHT - 50,  # Ground level
+                'original_x': self.last_fire_spawn_x,
+                'parallax_offset': current_parallax_offset,
+                'particles': [],
+                'spawn_timer': 0,
+                'start_delay': 0,
+                'width': 100  # Wide zones for overlap
+            }
+            
+            # Add initial particles for immediate effect
+            zone_width = 100
+            for _ in range(15):  # Good amount of initial particles
+                x_offset = random.randint(-zone_width//2, zone_width//2)
+                fire_zone['particles'].append({
+                    'x': self.last_fire_spawn_x + x_offset,
+                    'y': config.HEIGHT - 50 + random.randint(-5, 5),
+                    'vx': random.uniform(-0.5, 0.5),
+                    'vy': random.uniform(-4, -2),
+                    'size': random.randint(15, 30),
+                    'life': random.randint(50, 70),
+                    'type': 'flame',
+                    'flicker': random.randint(0, 10)
+                })
+            
+            self.permanent_fire_zones.append(fire_zone)
+            self.last_fire_spawn_x += fire_spacing
+            
+        # Also clean up old fire zones more aggressively to manage memory
+        # Remove zones that are way off the left side of the screen
+        screen_left_world = current_parallax_offset * ground_speed - 500
+        self.permanent_fire_zones = [f for f in self.permanent_fire_zones 
+                                     if f['original_x'] > screen_left_world]
                 
     def _draw_fire_effect(self, current_time):
         """Draw explosion animations using explosion frames."""
@@ -1154,35 +1235,43 @@ class Renderer:
                 
     def _draw_permanent_fires(self, current_time):
         """Draw permanent fire zones that scroll with background."""
-        # Remove fire zones that have scrolled way off the left
-        self.permanent_fire_zones = [f for f in self.permanent_fire_zones if f['x'] > -300]
-        
-        # Debug: print number of fire zones
-        if len(self.permanent_fire_zones) > 0 and random.random() < 0.01:  # Only print occasionally
-            print(f"Fire zones: {len(self.permanent_fire_zones)}, Total particles: {sum(len(f['particles']) for f in self.permanent_fire_zones)}")
+        # Calculate how much the parallax has moved since each fire was created
+        current_parallax_offset = self.parallax_offset
         
         for fire_zone in self.permanent_fire_zones:
+            # Calculate current position based on parallax movement
+            # Fire should move with the ground layer speed (0.6)
+            parallax_delta = current_parallax_offset - fire_zone['parallax_offset']
+            fire_zone['x'] = fire_zone['original_x'] - parallax_delta * 0.6
+            
+            # Only process fire zones that are visible on screen
+            if fire_zone['x'] < -200 or fire_zone['x'] > config.WIDTH + 200:
+                continue  # Skip off-screen fire zones
+            
             # Check if this fire should start yet
             if 'start_delay' in fire_zone and fire_zone['start_delay'] > 0:
                 fire_zone['start_delay'] -= 1
                 continue  # Skip this fire until delay is over
                 
-            # Spawn new particles periodically - INCREASED RATE BACK
+            # Spawn new particles more frequently for denser fire
             fire_zone['spawn_timer'] += 1
-            if fire_zone['spawn_timer'] > 3:  # Balanced between 2 and 4
+            if fire_zone['spawn_timer'] > 2:  # Even more frequent spawning
                 fire_zone['spawn_timer'] = 0
                 
-                # Add 3-4 new particles (balanced amount)
-                for _ in range(random.randint(3, 4)):
+                # Add more particles across the width of the fire zone
+                zone_width = fire_zone.get('width', 50)
+                for _ in range(random.randint(4, 6)):  # More particles per spawn
+                    # Spread particles across the entire width
+                    x_offset = random.randint(-zone_width//2, zone_width//2)
                     fire_zone['particles'].append({
-                        'x': fire_zone['x'] + random.randint(-25, 25),
+                        'x': fire_zone['x'] + x_offset,
                         'y': fire_zone['y'] + random.randint(-5, 5),
-                        'vx': random.uniform(-1, 1),
+                        'vx': random.uniform(-0.5, 0.5),  # Less horizontal movement
                         'vy': random.uniform(-3, -1),
-                        'size': random.randint(8, 20),
-                        'life': random.randint(30, 50),
-                        'type': random.choice(['flame', 'ember', 'smoke']),
-                        'flicker': random.randint(0, 10)  # For animation
+                        'size': random.randint(10, 25),
+                        'life': random.randint(40, 60),
+                        'type': random.choice(['flame', 'flame', 'ember']),  # More flames
+                        'flicker': random.randint(0, 10)
                     })
                     
             # Update and draw particles
@@ -1219,8 +1308,8 @@ class Renderer:
                     fire_zone['particles'].remove(particle)
                     
             # Limit particles per zone for performance
-            if len(fire_zone['particles']) > 60:  # Balanced limit
-                fire_zone['particles'] = fire_zone['particles'][-60:]
+            if len(fire_zone['particles']) > 80:  # Increased limit for better coverage
+                fire_zone['particles'] = fire_zone['particles'][-80:]
                 
     def _draw_16bit_fire(self, particle, life_ratio):
         """Draw 16-bit style fire particle."""
