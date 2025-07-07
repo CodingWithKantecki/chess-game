@@ -33,6 +33,10 @@ class Renderer:
         self.bomb_explosions = []  # Explosion animations
         self.last_parallax_offset = 0
         
+        # Falling chess pieces system
+        self.falling_chess_pieces = []  # Chess pieces falling from trees
+        self.chess_pieces_enabled = False  # Enable after bombs drop
+        
     def update_scale(self, scale):
         """Update scale factor for fullscreen mode."""
         self.scale = scale
@@ -83,7 +87,7 @@ class Renderer:
         
         return fonts
         
-    def draw_parallax_background(self, brightness=1.0):
+    def draw_parallax_background(self, brightness=1.0, draw_chess_callback=None):
         """Draw scrolling background - OPTIMIZED."""
         # Fill screen with dark color first
         self.screen.fill((20, 20, 30))
@@ -123,6 +127,105 @@ class Renderer:
             if not layer.get("image"):
                 print(f"WARNING: Layer {i} has no image!")
                 continue
+                
+            offset = self.parallax_offset * layer["speed"]
+            
+            # For fullscreen, we need to scale the layers to fill the height
+            if self.scale != 1.0:
+                # Scale to fill screen height
+                aspect = layer["image"].get_width() / layer["image"].get_height()
+                new_h = config.HEIGHT
+                new_w = int(new_h * aspect)
+                scaled_img = pygame.transform.scale(layer["image"], (new_w, new_h))
+                layer_width = new_w
+            else:
+                scaled_img = layer["image"]
+                layer_width = layer.get("width", layer["image"].get_width())
+            
+            # Draw chess pieces AFTER background layers but BEFORE the ground layer
+            # Layer 0 is typically the ground/front layer, so draw chess before it
+            if i == len(layers_to_draw) - 1 and draw_chess_callback:
+                draw_chess_callback()
+            
+            # Draw layer across the screen
+            x = -(offset % layer_width)
+            positions_drawn = 0
+            while x < config.WIDTH:
+                self.screen.blit(scaled_img, (x, 0))
+                x += layer_width
+                positions_drawn += 1
+            layers_drawn += 1
+                
+        # Brightness overlay - ALWAYS APPLY THIS
+        if brightness < 1.0:
+            overlay = pygame.Surface((config.WIDTH, config.HEIGHT))
+            overlay.fill(config.BLACK)
+            overlay.set_alpha(int((1.0 - brightness) * 255))
+            self.screen.blit(overlay, (0, 0))
+        elif brightness > 1.0:
+            overlay = pygame.Surface((config.WIDTH, config.HEIGHT))
+            overlay.fill(config.WHITE)
+            overlay.set_alpha(int((brightness - 1.0) * 128))
+            self.screen.blit(overlay, (0, 0))
+            
+    def draw_parallax_background(self, brightness=1.0):
+        """Draw scrolling background - OPTIMIZED."""
+        # Fill screen with dark color first
+        self.screen.fill((20, 20, 30))
+        
+        # Debug: Check if parallax layers exist and have content
+        if not hasattr(self.assets, 'parallax_layers') or not self.assets.parallax_layers:
+            print("WARNING: No parallax layers found in assets!")
+            # Draw a simple gradient background as fallback
+            for y in range(0, config.HEIGHT, 10):
+                color_val = int(30 + (y / config.HEIGHT) * 20)
+                pygame.draw.rect(self.screen, (color_val, color_val, color_val + 10), 
+                               (0, y, config.WIDTH, 10))
+            
+            # Apply brightness overlay
+            if brightness < 1.0:
+                overlay = pygame.Surface((config.WIDTH, config.HEIGHT))
+                overlay.fill(config.BLACK)
+                overlay.set_alpha(int((1.0 - brightness) * 255))
+                self.screen.blit(overlay, (0, 0))
+            return
+            
+        # Calculate parallax movement delta
+        parallax_delta = self.parallax_offset - self.last_parallax_offset
+        self.last_parallax_offset = self.parallax_offset
+        
+        # Slower scroll speed for better performance
+        self.parallax_offset += 0.3
+        
+        # Skip some layers in fullscreen for performance
+        layers_to_draw = self.assets.parallax_layers
+        if self.scale > 1.5 and len(self.assets.parallax_layers) > 6:  # Only skip if we have many layers
+            layers_to_draw = self.assets.parallax_layers[::2]
+        
+        # Draw layers with chess pieces at appropriate depths
+        layers_drawn = 0
+        for i, layer in enumerate(layers_to_draw):
+            if not layer.get("image"):
+                print(f"WARNING: Layer {i} has no image!")
+                continue
+            
+            # Determine which chess pieces to draw at this layer depth
+            # Layers 0-3: far background (no chess pieces)
+            # Layers 4-7: middle ground (draw chess pieces here)
+            # Layers 8-11: foreground/trees (in front of chess pieces)
+            
+            if i == 4 and self.chess_pieces_enabled:
+                # Draw far chess pieces (layer 0.3)
+                self._draw_chess_pieces_at_layer(0.3)
+            elif i == 5 and self.chess_pieces_enabled:
+                # Draw mid-far chess pieces (layer 0.5)
+                self._draw_chess_pieces_at_layer(0.5)
+            elif i == 6 and self.chess_pieces_enabled:
+                # Draw middle chess pieces (layer 0.7)
+                self._draw_chess_pieces_at_layer(0.7)
+            elif i == 7 and self.chess_pieces_enabled:
+                # Draw near chess pieces (layer 0.9)
+                self._draw_chess_pieces_at_layer(0.9)
                 
             offset = self.parallax_offset * layer["speed"]
             
@@ -654,7 +757,10 @@ class Renderer:
             current_time = pygame.time.get_ticks()
             time_since_start = current_time - self.intro_start_time
             
-            # Draw fire effects BEFORE overlay so they appear in background
+            # Note: Chess pieces are now drawn inside draw_parallax_background
+            # between the background layers and ground layer
+            
+            # Draw fire effects AFTER background (so fire is in front)
             self._update_and_draw_fire_system(current_time)
             
             # Trigger jet at 5 seconds
@@ -663,6 +769,10 @@ class Renderer:
                 # Play jet sound if available
                 if hasattr(self.assets, 'sounds') and 'jet_flyby' in self.assets.sounds:
                     self.assets.sounds['jet_flyby'].play()
+            
+            # Update chess pieces physics BEFORE drawing
+            if self.chess_pieces_enabled:
+                self._update_chess_pieces()
             
             # Draw jet flyby with bombs
             if self.intro_jet_triggered and time_since_start < 9000:  # Show jet for 4 seconds
@@ -1080,17 +1190,24 @@ class Renderer:
                             if hasattr(self.assets, 'sounds') and 'bomb' in self.assets.sounds:
                                 self.assets.sounds['bomb'].play()
                                 
-                        # Create explosion effect
-                        for _ in range(30):
+                        # Create explosion effect - SIMPLER
+                        for _ in range(20):  # Fewer particles
+                            angle = random.uniform(0, 2 * math.pi)
+                            speed = random.uniform(2, 8)  # Slower speed
                             self.bomb_explosions.append({
                                 'x': bomb['x'],
                                 'y': config.HEIGHT - 50,
-                                'vx': random.uniform(-8, 8),
-                                'vy': random.uniform(-15, -5),
-                                'size': random.randint(15, 30),
-                                'life': 40,
-                                'color': random.choice([(255, 200, 0), (255, 150, 0), (255, 100, 0), (255, 50, 0)])
+                                'vx': math.cos(angle) * speed,
+                                'vy': math.sin(angle) * speed - 5,  # Slight upward bias
+                                'size': random.randint(4, 12),  # Smaller sizes
+                                'life': random.randint(20, 40),  # Shorter life
+                                'color': random.choice([(255, 200, 0), (255, 150, 0), (255, 100, 0)])
                             })
+                        
+                        # Enable chess pieces falling after first bomb
+                        if not self.chess_pieces_enabled:
+                            self.chess_pieces_enabled = True
+                            self._spawn_initial_chess_pieces()
                         
                         bombs_to_remove.append(bomb)
                         
@@ -1114,14 +1231,6 @@ class Renderer:
                     'intensity': 1.0
                 })
                     
-        else:
-            # Fallback triangle jet
-            pygame.draw.polygon(self.screen, (100, 100, 120), [
-                (jet_x + 40, jet_y),
-                (jet_x, jet_y - 10),
-                (jet_x, jet_y + 10)
-            ])
-            
     def _update_and_draw_fire_system(self, current_time):
         """Update and draw the entire fire system."""
         # Update fire zones - only process visible ones for performance
@@ -1214,21 +1323,27 @@ class Renderer:
                 
         self.fire_particles = remaining_particles
         
-        # Update and draw explosion particles
+        # Update and draw explosion particles - SIMPLER
         remaining_explosions = []
         for exp in self.bomb_explosions:
             exp['x'] += exp['vx']
             exp['y'] += exp['vy']
             exp['vy'] += 0.5  # Gravity
             exp['life'] -= 1
-            exp['size'] *= 0.95
+            exp['size'] *= 0.95  # Gradual shrink
+            exp['vx'] *= 0.96  # Slight air resistance
             
             if exp['life'] > 0 and exp['size'] > 1:
-                pygame.draw.circle(self.screen, exp['color'], 
+                # Simple fading circle
+                life_ratio = exp['life'] / 30
+                color = tuple(max(0, min(255, int(c * life_ratio))) for c in exp['color'])
+                pygame.draw.circle(self.screen, color, 
                                  (int(exp['x']), int(exp['y'])), int(exp['size']))
                 remaining_explosions.append(exp)
                 
         self.bomb_explosions = remaining_explosions
+        
+        # Note: Chess pieces are drawn in draw_menu now, not here
         
         # Keep reasonable particle limits
         if len(self.fire_particles) > 500:
@@ -1312,3 +1427,194 @@ class Renderer:
             pygame.draw.rect(self.screen, glow_color, (x + size//2, y - size//2, 1, size))
             pygame.draw.rect(self.screen, glow_color, (x - size//2, y - size//2 - 1, size, 1))
             pygame.draw.rect(self.screen, glow_color, (x - size//2, y + size//2, size, 1))
+            
+    def _draw_chess_pieces_at_layer(self, target_layer):
+        """Draw only chess pieces at a specific layer depth."""
+        for piece in self.falling_chess_pieces:
+            # Only draw pieces at this specific layer
+            if abs(piece['layer'] - target_layer) > 0.01:
+                continue
+            
+            # Calculate screen position
+            screen_x = piece['world_x'] - self.parallax_offset * (0.6 * piece['layer'])
+            
+            # Add swaying motion
+            sway_x = math.sin(piece['swing']) * piece['swing_amplitude'] * piece['layer']
+            screen_x += sway_x
+            
+            # Skip if off screen horizontally
+            if screen_x < -100 or screen_x > config.WIDTH + 100:
+                continue
+            
+            # Skip if fallen off bottom
+            if piece['y'] > config.HEIGHT + 100:
+                continue
+                
+            # Draw the piece
+            if piece['piece'] in self.assets.pieces:
+                # Calculate size based on distance
+                base_size = int(50 * self.scale * piece['size_scale'])
+                
+                # Get and scale the piece image
+                original = self.assets.pieces[piece['piece']]
+                scaled = pygame.transform.scale(original, (base_size, base_size))
+                
+                # Rotate the piece
+                rotated = pygame.transform.rotate(scaled, piece['rotation'])
+                
+                # Apply transparency based on distance and fade-in
+                distance_alpha = int(255 * (0.6 + 0.4 * piece['layer']))
+                fade_alpha = piece.get('opacity', 255)
+                final_alpha = min(distance_alpha, fade_alpha)
+                rotated.set_alpha(final_alpha)
+                
+                # Draw with rotation center adjustment
+                rect = rotated.get_rect(center=(int(screen_x), int(piece['y'])))
+                self.screen.blit(rotated, rect)
+            
+    def _spawn_initial_chess_pieces(self):
+        """Spawn initial wave of chess pieces falling from trees."""
+        # Spawn pieces across the visible area and beyond
+        for i in range(50):  # Much more initial pieces (was 20)
+            self._spawn_chess_piece()
+            
+    def _spawn_chess_piece(self):
+        """Spawn a single chess piece at a random position."""
+        # Chess piece types
+        piece_types = ['wP', 'wN', 'wB', 'wR', 'wQ', 'wK', 'bP', 'bN', 'bB', 'bR', 'bQ', 'bK']
+        
+        # Calculate spawn position in world space
+        world_x = self.parallax_offset * 0.6 + random.randint(-config.WIDTH, config.WIDTH * 2)
+        
+        # Different layers for parallax effect - only use specific depths
+        layer = random.choice([0.3, 0.5, 0.7, 0.9])  # Removed 1.0 to keep pieces behind trees
+        
+        # Spawn from tree canopy height (middle of screen) instead of above screen
+        # Trees are roughly in the middle third of the screen
+        tree_top = config.HEIGHT * 0.2  # Top of tree canopy
+        tree_bottom = config.HEIGHT * 0.6  # Bottom of tree canopy
+        spawn_y = random.uniform(tree_top, tree_bottom)
+        
+        self.falling_chess_pieces.append({
+            'world_x': world_x,
+            'y': spawn_y,  # Start at tree height
+            'vy': random.uniform(0.5, 2) * layer,  # Slower initial fall speed
+            'vx': random.uniform(-1, 1),  # More horizontal drift
+            'rotation': random.uniform(0, 360),
+            'rotation_speed': random.uniform(-8, 8),  # Faster rotation
+            'piece': random.choice(piece_types),
+            'layer': layer,  # Distance from camera
+            'size_scale': 0.3 + 0.7 * layer,  # Smaller when further away
+            'swing': random.uniform(0, 2 * math.pi),  # For swaying motion
+            'swing_speed': random.uniform(0.02, 0.08),  # More varied sway
+            'swing_amplitude': random.uniform(10, 40),  # Bigger sway
+            'opacity': 0  # Start invisible for fade-in effect
+        })
+        
+    def _update_chess_pieces(self):
+        """Update chess pieces physics and spawning without drawing."""
+        # Spawn new pieces more frequently
+        if random.random() < 0.08:  # 8% chance each frame
+            self._spawn_chess_piece()
+            # Sometimes spawn multiple at once for clusters
+            if random.random() < 0.3:  # 30% chance of cluster
+                for _ in range(random.randint(2, 5)):
+                    self._spawn_chess_piece()
+        
+        # Update all pieces physics
+        remaining_pieces = []
+        for piece in self.falling_chess_pieces:
+            # Update position
+            piece['y'] += piece['vy']
+            piece['world_x'] += piece['vx']
+            piece['rotation'] += piece['rotation_speed']
+            piece['swing'] += piece['swing_speed']
+            
+            # Fade in effect
+            if 'opacity' in piece and piece['opacity'] < 255:
+                piece['opacity'] = min(255, piece['opacity'] + 10)
+            
+            # Accelerate falling
+            piece['vy'] += 0.1  # Gravity
+            
+            # Keep piece if it hasn't fallen too far off screen
+            if piece['y'] <= config.HEIGHT + 200:
+                remaining_pieces.append(piece)
+                
+        self.falling_chess_pieces = remaining_pieces
+        
+        # Limit max pieces for performance
+        if len(self.falling_chess_pieces) > 200:
+            self.falling_chess_pieces = self.falling_chess_pieces[-200:]
+            
+    def _update_and_draw_chess_pieces(self):
+        """Update and draw all falling chess pieces."""
+        remaining_pieces = []
+        
+        # Spawn new pieces more frequently
+        if random.random() < 0.08:  # 8% chance each frame
+            self._spawn_chess_piece()
+            # Sometimes spawn multiple at once for clusters
+            if random.random() < 0.3:  # 30% chance of cluster
+                for _ in range(random.randint(2, 5)):
+                    self._spawn_chess_piece()
+        
+        for piece in self.falling_chess_pieces:
+            # Update position
+            piece['y'] += piece['vy']
+            piece['world_x'] += piece['vx']
+            piece['rotation'] += piece['rotation_speed']
+            piece['swing'] += piece['swing_speed']
+            
+            # Fade in effect
+            if 'opacity' in piece and piece['opacity'] < 255:
+                piece['opacity'] = min(255, piece['opacity'] + 10)
+            
+            # Accelerate falling
+            piece['vy'] += 0.1  # Gravity
+            
+            # Calculate screen position
+            screen_x = piece['world_x'] - self.parallax_offset * (0.6 * piece['layer'])
+            
+            # Add swaying motion
+            sway_x = math.sin(piece['swing']) * piece['swing_amplitude'] * piece['layer']
+            screen_x += sway_x
+            
+            # Skip if off screen horizontally
+            if screen_x < -100 or screen_x > config.WIDTH + 100:
+                remaining_pieces.append(piece)
+                continue
+            
+            # Remove if fallen off bottom
+            if piece['y'] > config.HEIGHT + 100:
+                continue
+                
+            # Draw the piece
+            if piece['piece'] in self.assets.pieces:
+                # Calculate size based on distance
+                base_size = int(50 * self.scale * piece['size_scale'])
+                
+                # Get and scale the piece image
+                original = self.assets.pieces[piece['piece']]
+                scaled = pygame.transform.scale(original, (base_size, base_size))
+                
+                # Rotate the piece
+                rotated = pygame.transform.rotate(scaled, piece['rotation'])
+                
+                # Apply transparency based on distance and fade-in
+                distance_alpha = int(255 * (0.6 + 0.4 * piece['layer']))
+                fade_alpha = piece.get('opacity', 255)
+                final_alpha = min(distance_alpha, fade_alpha)
+                rotated.set_alpha(final_alpha)
+                
+                # Draw with rotation center adjustment
+                rect = rotated.get_rect(center=(int(screen_x), int(piece['y'])))
+                self.screen.blit(rotated, rect)
+                
+            remaining_pieces.append(piece)
+            
+        self.falling_chess_pieces = remaining_pieces
+        
+        # Limit max pieces for performance
+        if len(self.falling_chess_pieces) > 200:  # Allow more pieces
+            self.falling_chess_pieces = self.falling_chess_pieces[-200:]
