@@ -258,23 +258,44 @@ class PowerupSystem:
         return False
         
     def _get_gun_targets(self, row, col, board):
-        """Get valid targets for gun based on piece movement."""
+        """Get valid targets for gun - any enemy piece in line of sight."""
         piece = board.get_piece(row, col)
         if not piece:
             return []
             
-        # Get all squares the piece can move to
-        valid_moves = board.get_valid_moves(row, col)
-        
-        # Filter for enemy pieces
         targets = []
         enemy_color = 'b' if piece[0] == 'w' else 'w'
         
-        for move_row, move_col in valid_moves:
-            target = board.get_piece(move_row, move_col)
-            if target and target[0] == enemy_color:
-                targets.append((move_row, move_col))
+        # Check all 8 directions for line of sight
+        directions = [
+            (-1, 0),  # North
+            (1, 0),   # South
+            (0, -1),  # West
+            (0, 1),   # East
+            (-1, -1), # Northwest
+            (-1, 1),  # Northeast
+            (1, -1),  # Southwest
+            (1, 1)    # Southeast
+        ]
+        
+        for dr, dc in directions:
+            # Check each square in this direction until we hit something
+            for distance in range(1, 8):
+                check_row = row + dr * distance
+                check_col = col + dc * distance
                 
+                # Stop if we go off the board
+                if not (0 <= check_row < 8 and 0 <= check_col < 8):
+                    break
+                    
+                target = board.get_piece(check_row, check_col)
+                if target:
+                    # Found a piece - if it's an enemy and not a king, it's a valid target
+                    if target[0] == enemy_color and target[1] != 'K':
+                        targets.append((check_row, check_col))
+                    # Stop looking in this direction (can't shoot through pieces)
+                    break
+                    
         return targets
         
     def _handle_chopper_click(self, row, col, board):

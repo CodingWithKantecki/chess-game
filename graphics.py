@@ -24,7 +24,7 @@ class Renderer:
         
         # Intro sequence state
         self.intro_start_time = pygame.time.get_ticks()
-        self.intro_jet_triggered = False
+        self.intro_jet_triggered = True  # Changed from False - start immediately
         self.intro_sound_played = False
         
         # Fire system - COMPLETELY REDESIGNED
@@ -88,87 +88,6 @@ class Renderer:
         return fonts
         
     def draw_parallax_background(self, brightness=1.0, draw_chess_callback=None):
-        """Draw scrolling background - OPTIMIZED."""
-        # Fill screen with dark color first
-        self.screen.fill((20, 20, 30))
-        
-        # Debug: Check if parallax layers exist and have content
-        if not hasattr(self.assets, 'parallax_layers') or not self.assets.parallax_layers:
-            print("WARNING: No parallax layers found in assets!")
-            # Draw a simple gradient background as fallback
-            for y in range(0, config.HEIGHT, 10):
-                color_val = int(30 + (y / config.HEIGHT) * 20)
-                pygame.draw.rect(self.screen, (color_val, color_val, color_val + 10), 
-                               (0, y, config.WIDTH, 10))
-            
-            # Apply brightness overlay
-            if brightness < 1.0:
-                overlay = pygame.Surface((config.WIDTH, config.HEIGHT))
-                overlay.fill(config.BLACK)
-                overlay.set_alpha(int((1.0 - brightness) * 255))
-                self.screen.blit(overlay, (0, 0))
-            return
-            
-        # Calculate parallax movement delta
-        parallax_delta = self.parallax_offset - self.last_parallax_offset
-        self.last_parallax_offset = self.parallax_offset
-        
-        # Slower scroll speed for better performance
-        self.parallax_offset += 0.3
-        
-        # Skip some layers in fullscreen for performance
-        layers_to_draw = self.assets.parallax_layers
-        if self.scale > 1.5 and len(self.assets.parallax_layers) > 6:  # Only skip if we have many layers
-            layers_to_draw = self.assets.parallax_layers[::2]
-        
-        # Draw each layer directly to screen
-        layers_drawn = 0
-        for i, layer in enumerate(layers_to_draw):
-            if not layer.get("image"):
-                print(f"WARNING: Layer {i} has no image!")
-                continue
-                
-            offset = self.parallax_offset * layer["speed"]
-            
-            # For fullscreen, we need to scale the layers to fill the height
-            if self.scale != 1.0:
-                # Scale to fill screen height
-                aspect = layer["image"].get_width() / layer["image"].get_height()
-                new_h = config.HEIGHT
-                new_w = int(new_h * aspect)
-                scaled_img = pygame.transform.scale(layer["image"], (new_w, new_h))
-                layer_width = new_w
-            else:
-                scaled_img = layer["image"]
-                layer_width = layer.get("width", layer["image"].get_width())
-            
-            # Draw chess pieces AFTER background layers but BEFORE the ground layer
-            # Layer 0 is typically the ground/front layer, so draw chess before it
-            if i == len(layers_to_draw) - 1 and draw_chess_callback:
-                draw_chess_callback()
-            
-            # Draw layer across the screen
-            x = -(offset % layer_width)
-            positions_drawn = 0
-            while x < config.WIDTH:
-                self.screen.blit(scaled_img, (x, 0))
-                x += layer_width
-                positions_drawn += 1
-            layers_drawn += 1
-                
-        # Brightness overlay - ALWAYS APPLY THIS
-        if brightness < 1.0:
-            overlay = pygame.Surface((config.WIDTH, config.HEIGHT))
-            overlay.fill(config.BLACK)
-            overlay.set_alpha(int((1.0 - brightness) * 255))
-            self.screen.blit(overlay, (0, 0))
-        elif brightness > 1.0:
-            overlay = pygame.Surface((config.WIDTH, config.HEIGHT))
-            overlay.fill(config.WHITE)
-            overlay.set_alpha(int((brightness - 1.0) * 128))
-            self.screen.blit(overlay, (0, 0))
-            
-    def draw_parallax_background(self, brightness=1.0):
         """Draw scrolling background - OPTIMIZED."""
         # Fill screen with dark color first
         self.screen.fill((20, 20, 30))
@@ -465,9 +384,10 @@ class Renderer:
         rect = text.get_rect(center=(config.WIDTH // 2, board_top // 2))
         self.screen.blit(text, rect)
         
-        # Show AI difficulty if playing against AI
+        # Show AI difficulty and ELO if playing against AI
         if ai and difficulty:
-            diff_text = f"VS {config.AI_DIFFICULTY_NAMES[difficulty]} AI"
+            elo_rating = config.AI_DIFFICULTY_ELO.get(difficulty, 1200)
+            diff_text = f"VS {config.AI_DIFFICULTY_NAMES[difficulty]} AI (ELO: {elo_rating})"
             text = self.pixel_fonts['small'].render(diff_text, True, config.AI_DIFFICULTY_COLORS[difficulty])
             rect = text.get_rect(center=(config.WIDTH // 2, board_top // 2 + 25 * self.scale))
             self.screen.blit(text, rect)
@@ -697,25 +617,24 @@ class Renderer:
             pygame.draw.rect(self.screen, hover_color if is_hover else color, button, border_radius=10)
             pygame.draw.rect(self.screen, border_color, button, 3, border_radius=10)
             
-            # Button text - REMOVED THE EMOJI
+            # Button text - REMOVED ELO from button text
             text = config.AI_DIFFICULTY_NAMES[difficulty]
-            # No longer adding lock emoji or any prefix for locked difficulties
             text_surface = self.pixel_fonts['large'].render(text, True, config.WHITE)
             text_rect = text_surface.get_rect(center=button.center)
             self.screen.blit(text_surface, text_rect)
             
-            # Difficulty description
+            # Difficulty description with ELO
             descriptions = {
-                "easy": "Beginner friendly",
-                "medium": "Casual player",
-                "hard": "Experienced player",
-                "very_hard": "Expert level"
+                "easy": f"Beginner friendly (ELO: {config.AI_DIFFICULTY_ELO['easy']})",
+                "medium": f"Casual player (ELO: {config.AI_DIFFICULTY_ELO['medium']})", 
+                "hard": f"Experienced player (ELO: {config.AI_DIFFICULTY_ELO['hard']})",
+                "very_hard": f"Expert level (ELO: {config.AI_DIFFICULTY_ELO['very_hard']})"
             }
             
             if is_unlocked:
-                # Check if this is the next level to beat
+                # Check if this is the next level to beat - but NOT for very_hard
                 difficulty_index = config.AI_DIFFICULTIES.index(difficulty)
-                if difficulty_index > 0 and difficulty_index == len(unlocked) - 1:
+                if difficulty_index > 0 and difficulty_index == len(unlocked) - 1 and difficulty != "very_hard":
                     desc_text = "★ BEAT THIS TO UNLOCK NEXT ★"
                     desc_color = (255, 215, 0)  # Gold
                 else:
@@ -753,53 +672,99 @@ class Renderer:
             game_center_y = config.HEIGHT // 2
         
         if screen_type == config.SCREEN_START:
-            # Check for intro jet sequence (5 seconds after load)
+            # Check for intro jet sequence - NOW IMMEDIATE
             current_time = pygame.time.get_ticks()
             time_since_start = current_time - self.intro_start_time
             
-            # Note: Chess pieces are now drawn inside draw_parallax_background
-            # between the background layers and ground layer
+            # Initialize high flying jets list if not exists
+            if not hasattr(self, 'high_flying_jets'):
+                self.high_flying_jets = []
+                self.next_high_jet_spawn = current_time + random.randint(15000, 30000)  # First jet in 15-30 seconds
+            
+            # Spawn occasional high flying jets
+            if current_time >= self.next_high_jet_spawn:
+                # Create a high flying jet
+                self.high_flying_jets.append({
+                    'x': -100,  # Start off-screen left
+                    'y': random.randint(50, 150),  # High in the sky
+                    'speed': random.uniform(2, 4),  # Slower speed for high altitude
+                    'scale': random.uniform(0.15, 0.25)  # Smaller for distance
+                })
+                # Schedule next jet
+                self.next_high_jet_spawn = current_time + random.randint(20000, 40000)  # Every 20-40 seconds
+            
+            # Update and draw high flying jets
+            jets_to_remove = []
+            for jet in self.high_flying_jets:
+                jet['x'] += jet['speed']
+                
+                # Draw the jet if we have jet frames
+                if hasattr(self.assets, 'jet_frames') and self.assets.jet_frames:
+                    frame_index = int((current_time / 200) % len(self.assets.jet_frames))
+                    jet_frame = self.assets.jet_frames[frame_index]
+                    
+                    jet_width = int(jet_frame.get_width() * jet['scale'])
+                    jet_height = int(jet_frame.get_height() * jet['scale'])
+                    scaled_jet = pygame.transform.scale(jet_frame, (jet_width, jet_height))
+                    
+                    # Flip the jet so it faces right when flying left to right
+                    flipped_jet = pygame.transform.flip(scaled_jet, True, False)
+                    
+                    # Make it slightly transparent for distance
+                    flipped_jet.set_alpha(180)
+                    
+                    self.screen.blit(flipped_jet, (int(jet['x']), int(jet['y'])))
+                
+                # Remove if off screen
+                if jet['x'] > config.WIDTH + 100:
+                    jets_to_remove.append(jet)
+            
+            for jet in jets_to_remove:
+                self.high_flying_jets.remove(jet)
             
             # Draw fire effects AFTER background (so fire is in front)
             self._update_and_draw_fire_system(current_time)
-            
-            # Trigger jet at 5 seconds
-            if time_since_start > 5000 and not self.intro_jet_triggered:
-                self.intro_jet_triggered = True
-                # Play jet sound if available
-                if hasattr(self.assets, 'sounds') and 'jet_flyby' in self.assets.sounds:
-                    self.assets.sounds['jet_flyby'].play()
             
             # Update chess pieces physics BEFORE drawing
             if self.chess_pieces_enabled:
                 self._update_chess_pieces()
             
-            # Draw jet flyby with bombs
-            if self.intro_jet_triggered and time_since_start < 9000:  # Show jet for 4 seconds
-                self._draw_intro_jet_with_bombs(time_since_start - 5000)
+            # Draw jet flyby with bombs - NOW FROM THE START
+            if self.intro_jet_triggered and time_since_start < 4000:  # Show jet for 4 seconds
+                self._draw_intro_jet_with_bombs(time_since_start)
                 
             # Title
             text = self.pixel_fonts['huge'].render("CHECKMATE PROTOCOL", True, config.WHITE)
             rect = text.get_rect(center=(game_center_x, game_center_y - 150 * config.SCALE))
             self.screen.blit(text, rect)
             
-            # Subtitle
-            text = self.pixel_fonts['medium'].render("CREATED BY THOMAS KANTECKI", True, (200, 200, 200))
-            rect = text.get_rect(center=(game_center_x, game_center_y - 90 * config.SCALE))
-            self.screen.blit(text, rect)
+            # Beta badge (displayed at top-right corner of title)
+            if hasattr(self.assets, 'beta_badge') and self.assets.beta_badge:
+                # Scale the beta badge appropriately
+                badge_height = int(60 * config.SCALE)  # Adjust size as needed
+                aspect_ratio = self.assets.beta_badge.get_width() / self.assets.beta_badge.get_height()
+                badge_width = int(badge_height * aspect_ratio)
+                scaled_badge = pygame.transform.scale(self.assets.beta_badge, (badge_width, badge_height))
+                
+                # Position it at the top-right of the title
+                badge_x = rect.right + int(10 * config.SCALE)  # Small gap from title
+                badge_y = rect.top - int(10 * config.SCALE)  # Slightly above title
+                
+                self.screen.blit(scaled_badge, (badge_x, badge_y))
             
             # Buttons
             self._draw_button(buttons['play'], "PLAY GAME", (70, 150, 70), (100, 200, 100), mouse_pos)
+            self._draw_button(buttons['beta'], "BETA TEST INFO", (150, 150, 70), (200, 200, 100), mouse_pos)
             self._draw_button(buttons['credits'], "CREDITS", (70, 70, 150), (100, 100, 200), mouse_pos)
             
         elif screen_type == config.SCREEN_CREDITS:
             # Title
             text = self.pixel_fonts['huge'].render("CREDITS", True, config.WHITE)
-            rect = text.get_rect(center=(game_center_x, config.GAME_OFFSET_Y + 80 * config.SCALE))
+            rect = text.get_rect(center=(game_center_x, config.GAME_OFFSET_Y + 60 * config.SCALE))  # Moved up
             self.screen.blit(text, rect)
             
-            # Credits
-            y = config.GAME_OFFSET_Y + 180 * config.SCALE
+            # Credits - adjusted spacing and positioning
+            y = config.GAME_OFFSET_Y + 140 * config.SCALE  # Start higher
             credits = [
                 ("GAME DESIGN & DEVELOPMENT", "header", (255, 200, 100)),
                 ("THOMAS KANTECKI", "text", (200, 200, 200)),
@@ -826,8 +791,50 @@ class Renderer:
                         surface = self.pixel_fonts['small'].render(text, True, color)
                     rect = surface.get_rect(center=(game_center_x, y))
                     self.screen.blit(surface, rect)
-                y += 35 * config.SCALE
+                y += 28 * config.SCALE  # Reduced spacing from 35 to 28
                 
+            # Back button
+            self._draw_button(buttons['back'], "BACK", (150, 70, 70), (200, 100, 100), mouse_pos)
+            
+        elif screen_type == config.SCREEN_BETA:
+            # Title
+            text = self.pixel_fonts['huge'].render("BETA TEST", True, config.WHITE)
+            rect = text.get_rect(center=(game_center_x, config.GAME_OFFSET_Y + 80 * config.SCALE))
+            self.screen.blit(text, rect)
+            
+            # Beta test information
+            y = config.GAME_OFFSET_Y + 160 * config.SCALE
+            beta_text = [
+                "Welcome to the Checkmate Protocol Beta!",
+                "",
+                "This is an early test version of the game.",
+                "The full game will include a complete story mode",
+                "after the beta testing phase is completed.",
+                "",
+                "Please help us improve by:",
+                "• Playing through all difficulty levels",
+                "• Testing different powerups and strategies",
+                "• Trying to find bugs or exploits",
+                "• Providing feedback on game mechanics",
+                "",
+                "Your feedback is invaluable for making",
+                "Checkmate Protocol the best it can be!",
+                "",
+                "Thank you for being a beta tester!"
+            ]
+            
+            for line in beta_text:
+                if line:
+                    if line.startswith("Welcome") or line.startswith("Thank you"):
+                        text_surface = self.pixel_fonts['medium'].render(line, True, (255, 215, 0))
+                    elif line.startswith("•"):
+                        text_surface = self.pixel_fonts['small'].render(line, True, (150, 200, 150))
+                    else:
+                        text_surface = self.pixel_fonts['small'].render(line, True, (200, 200, 200))
+                    rect = text_surface.get_rect(center=(game_center_x, y))
+                    self.screen.blit(text_surface, rect)
+                y += 30 * config.SCALE
+            
             # Back button
             self._draw_button(buttons['back'], "BACK", (150, 70, 70), (200, 100, 100), mouse_pos)
             
@@ -1184,11 +1191,6 @@ class Renderer:
                             'spawn_timer': 0,
                             'intensity': 1.0
                         })
-                        
-                        # Play bomb sound occasionally
-                        if random.random() < 0.3:  # 30% chance per bomb
-                            if hasattr(self.assets, 'sounds') and 'bomb' in self.assets.sounds:
-                                self.assets.sounds['bomb'].play()
                                 
                         # Create explosion effect - SIMPLER
                         for _ in range(20):  # Fewer particles
@@ -1545,76 +1547,4 @@ class Renderer:
         
         # Limit max pieces for performance
         if len(self.falling_chess_pieces) > 200:
-            self.falling_chess_pieces = self.falling_chess_pieces[-200:]
-            
-    def _update_and_draw_chess_pieces(self):
-        """Update and draw all falling chess pieces."""
-        remaining_pieces = []
-        
-        # Spawn new pieces more frequently
-        if random.random() < 0.08:  # 8% chance each frame
-            self._spawn_chess_piece()
-            # Sometimes spawn multiple at once for clusters
-            if random.random() < 0.3:  # 30% chance of cluster
-                for _ in range(random.randint(2, 5)):
-                    self._spawn_chess_piece()
-        
-        for piece in self.falling_chess_pieces:
-            # Update position
-            piece['y'] += piece['vy']
-            piece['world_x'] += piece['vx']
-            piece['rotation'] += piece['rotation_speed']
-            piece['swing'] += piece['swing_speed']
-            
-            # Fade in effect
-            if 'opacity' in piece and piece['opacity'] < 255:
-                piece['opacity'] = min(255, piece['opacity'] + 10)
-            
-            # Accelerate falling
-            piece['vy'] += 0.1  # Gravity
-            
-            # Calculate screen position
-            screen_x = piece['world_x'] - self.parallax_offset * (0.6 * piece['layer'])
-            
-            # Add swaying motion
-            sway_x = math.sin(piece['swing']) * piece['swing_amplitude'] * piece['layer']
-            screen_x += sway_x
-            
-            # Skip if off screen horizontally
-            if screen_x < -100 or screen_x > config.WIDTH + 100:
-                remaining_pieces.append(piece)
-                continue
-            
-            # Remove if fallen off bottom
-            if piece['y'] > config.HEIGHT + 100:
-                continue
-                
-            # Draw the piece
-            if piece['piece'] in self.assets.pieces:
-                # Calculate size based on distance
-                base_size = int(50 * self.scale * piece['size_scale'])
-                
-                # Get and scale the piece image
-                original = self.assets.pieces[piece['piece']]
-                scaled = pygame.transform.scale(original, (base_size, base_size))
-                
-                # Rotate the piece
-                rotated = pygame.transform.rotate(scaled, piece['rotation'])
-                
-                # Apply transparency based on distance and fade-in
-                distance_alpha = int(255 * (0.6 + 0.4 * piece['layer']))
-                fade_alpha = piece.get('opacity', 255)
-                final_alpha = min(distance_alpha, fade_alpha)
-                rotated.set_alpha(final_alpha)
-                
-                # Draw with rotation center adjustment
-                rect = rotated.get_rect(center=(int(screen_x), int(piece['y'])))
-                self.screen.blit(rotated, rect)
-                
-            remaining_pieces.append(piece)
-            
-        self.falling_chess_pieces = remaining_pieces
-        
-        # Limit max pieces for performance
-        if len(self.falling_chess_pieces) > 200:  # Allow more pieces
             self.falling_chess_pieces = self.falling_chess_pieces[-200:]

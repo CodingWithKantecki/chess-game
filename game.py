@@ -164,13 +164,19 @@ class ChessGame:
         # Menu buttons - centered in game area
         self.play_button = pygame.Rect(
             center_x - int(100 * config.SCALE), 
-            center_y - int(30 * config.SCALE), 
+            center_y - int(60 * config.SCALE), 
+            int(200 * config.SCALE), 
+            int(60 * config.SCALE)
+        )
+        self.beta_button = pygame.Rect(
+            center_x - int(100 * config.SCALE), 
+            center_y + int(20 * config.SCALE), 
             int(200 * config.SCALE), 
             int(60 * config.SCALE)
         )
         self.credits_button = pygame.Rect(
             center_x - int(100 * config.SCALE), 
-            center_y + int(50 * config.SCALE), 
+            center_y + int(100 * config.SCALE), 
             int(200 * config.SCALE), 
             int(60 * config.SCALE)
         )
@@ -196,6 +202,81 @@ class ChessGame:
                 int(300 * config.SCALE), 
                 button_height
             )
+            
+    def _handle_ai_powerup(self, powerup_key, action):
+        """Handle AI powerup usage."""
+        # Deduct points
+        self.powerup_system.points["black"] -= self.powerup_system.powerups[powerup_key]["cost"]
+        
+        if action["type"] == "shield":
+            # AI shields a piece
+            row, col = action["target"]
+            self.powerup_system.shielded_pieces[(row, col)] = 3
+            self.powerup_system._create_shield_effect(row, col, self.board)
+            
+        elif action["type"] == "gun":
+            # AI shoots a piece
+            shooter_pos = action["shooter"]
+            target_pos = action["target"]
+            self.powerup_system._create_gun_effect(shooter_pos, target_pos, self.board)
+            
+            # Destroy target
+            target = self.board.get_piece(*target_pos)
+            if target and target[1] != 'K' and target_pos not in self.powerup_system.shielded_pieces:
+                self.board.set_piece(target_pos[0], target_pos[1], "")
+                
+        elif action["type"] == "airstrike":
+            # AI airstrikes an area
+            row, col = action["target"]
+            self.powerup_system._create_airstrike_effect(row, col, self.board)
+            
+            # Schedule destruction
+            current_time = pygame.time.get_ticks()
+            self.powerup_system.animations.append({
+                "type": "delayed_destruction",
+                "row": row,
+                "col": col,
+                "start_time": current_time + 900,
+                "duration": 1,
+                "board": self.board
+            })
+            
+        elif action["type"] == "paratroopers":
+            # AI drops paratroopers
+            for target in action["targets"]:
+                row, col = target
+                self.powerup_system._create_paratrooper_effect(row, col, self.board)
+                
+                # Schedule pawn placement
+                current_time = pygame.time.get_ticks()
+                self.powerup_system.animations.append({
+                    "type": "delayed_pawn_placement",
+                    "row": row,
+                    "col": col,
+                    "pawn": "bP",  # Black pawn
+                    "start_time": current_time + 1500,
+                    "duration": 1,
+                    "board": self.board
+                })
+                
+        elif action["type"] == "chopper" and action.get("confirm"):
+            # AI uses chopper gunner
+            # For now, we'll just destroy all white pieces (except king)
+            # In a full implementation, you might want a different AI chopper mode
+            for row in range(8):
+                for col in range(8):
+                    piece = self.board.get_piece(row, col)
+                    if piece and piece[0] == 'w' and piece[1] != 'K':
+                        if not self.powerup_system.is_piece_shielded(row, col):
+                            self.board.set_piece(row, col, "")
+                            
+            # Add explosion effects
+            current_time = pygame.time.get_ticks()
+            self.powerup_system.start_screen_shake(20, 1000)
+            
+        # Play sound effect
+        if 'capture' in self.assets.sounds:
+            self.assets.sounds['capture'].play()
             
     def toggle_fullscreen(self):
         """Toggle between fullscreen and windowed mode."""
@@ -324,6 +405,8 @@ class ChessGame:
         if self.current_screen == config.SCREEN_START:
             if self.play_button.collidepoint(pos):
                 self.start_fade(config.SCREEN_START, config.SCREEN_DIFFICULTY)
+            elif self.beta_button.collidepoint(pos):
+                self.start_fade(config.SCREEN_START, config.SCREEN_BETA)
             elif self.credits_button.collidepoint(pos):
                 self.start_fade(config.SCREEN_START, config.SCREEN_CREDITS)
                 
@@ -370,6 +453,10 @@ class ChessGame:
         elif self.current_screen == config.SCREEN_CREDITS:
             if self.back_button.collidepoint(pos):
                 self.start_fade(config.SCREEN_CREDITS, config.SCREEN_START)
+                
+        elif self.current_screen == config.SCREEN_BETA:
+            if self.back_button.collidepoint(pos):
+                self.start_fade(config.SCREEN_BETA, config.SCREEN_START)
                 
         elif self.current_screen == config.SCREEN_GAME:
             # Check Arms Dealer button
@@ -525,7 +612,7 @@ class ChessGame:
         elif self.current_screen == config.SCREEN_DIFFICULTY:
             if key == pygame.K_ESCAPE:
                 self.start_fade(config.SCREEN_DIFFICULTY, config.SCREEN_START)
-        elif self.current_screen in [config.SCREEN_START, config.SCREEN_CREDITS, config.SCREEN_ARMS_DEALER]:
+        elif self.current_screen in [config.SCREEN_START, config.SCREEN_CREDITS, config.SCREEN_ARMS_DEALER, config.SCREEN_BETA]:
             if key == pygame.K_ESCAPE and self.fullscreen:
                 self.toggle_fullscreen()
                 
@@ -590,6 +677,16 @@ class ChessGame:
                     
                     # Make move when done thinking
                     if not self.ai.is_thinking():
+                        # First check if AI wants to use a powerup
+                        ai_powerup = self.ai.should_use_powerup(self.board, self.powerup_system)
+                        if ai_powerup:
+                            powerup_action = self.ai.execute_powerup(self.board, self.powerup_system, ai_powerup)
+                            if powerup_action:
+                                self._handle_ai_powerup(ai_powerup, powerup_action)
+                                self.ai.start_thinking = None
+                                return  # Skip normal move if powerup was used
+                        
+                        # Otherwise make a normal move
                         ai_move = self.ai.get_move(self.board)
                         if ai_move:
                             from_pos, to_pos = ai_move
@@ -673,7 +770,8 @@ class ChessGame:
         """Draw specific screen."""
         if screen_type == config.SCREEN_START:
             buttons = {
-                'play': self.play_button, 
+                'play': self.play_button,
+                'beta': self.beta_button, 
                 'credits': self.credits_button
             }
             self.renderer.draw_menu(config.SCREEN_START, buttons, self.mouse_pos)
@@ -692,6 +790,11 @@ class ChessGame:
         elif screen_type == config.SCREEN_CREDITS:
             buttons = {'back': self.back_button}
             self.renderer.draw_menu(config.SCREEN_CREDITS, buttons, self.mouse_pos)
+            self.draw_volume_sliders()
+            
+        elif screen_type == config.SCREEN_BETA:
+            buttons = {'back': self.back_button}
+            self.renderer.draw_menu(config.SCREEN_BETA, buttons, self.mouse_pos)
             self.draw_volume_sliders()
             
         elif screen_type == config.SCREEN_GAME:

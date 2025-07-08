@@ -76,8 +76,9 @@ SCREEN_DIFFICULTY = "difficulty"
 SCREEN_GAME = "game"
 SCREEN_CREDITS = "credits"
 SCREEN_ARMS_DEALER = "arms_dealer"
+SCREEN_BETA = "beta"
 
-# AI Difficulty levels - REMOVED GRANDMASTER
+# AI Difficulty levels with ELO ratings
 AI_DIFFICULTIES = ["easy", "medium", "hard", "very_hard"]
 AI_DIFFICULTY_NAMES = {
     "easy": "EASY",
@@ -90,6 +91,12 @@ AI_DIFFICULTY_COLORS = {
     "medium": (200, 200, 100),
     "hard": (200, 150, 100),
     "very_hard": (200, 100, 100)
+}
+AI_DIFFICULTY_ELO = {
+    "easy": 800,
+    "medium": 1200,
+    "hard": 1600,
+    "very_hard": 2000
 }
 
 # Currency rewards for winning

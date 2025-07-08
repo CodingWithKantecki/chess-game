@@ -23,6 +23,7 @@ class AssetManager:
         self.cockpit_view = None  # Store cockpit view for chopper gunner
         self.chopper_activation_overlay = None  # Store chopper activation overlay
         self.airstrike_sequence = []  # Store helicopter takeoff sequence
+        self.beta_badge = None  # Store beta badge image
         
     def load_all(self):
         """Load all game assets."""
@@ -39,6 +40,7 @@ class AssetManager:
         self.load_cockpit_view()
         self.load_chopper_activation_overlay()
         self.load_airstrike_sequence()
+        self.load_beta_badge()
         print("Assets loaded!")
         
     def load_pieces(self):
@@ -382,3 +384,15 @@ class AssetManager:
                 print(f"✗ {filename} not found")
                 
         print(f"Loaded {len(self.airstrike_sequence)}/2 airstrike sequence images")
+        
+    def load_beta_badge(self):
+        """Load beta badge image."""
+        beta_path = os.path.join(ASSETS_DIR, "beta.png")
+        if os.path.exists(beta_path):
+            try:
+                self.beta_badge = pygame.image.load(beta_path).convert_alpha()
+                print("✓ Loaded beta badge")
+            except Exception as e:
+                print(f"✗ Error loading beta badge: {str(e)}")
+        else:
+            print("✗ Beta badge not found")

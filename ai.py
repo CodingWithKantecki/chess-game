@@ -1,22 +1,49 @@
 """
-Chess AI Bot System
-Different difficulty levels from Easy to Very Hard
+Chess AI Bot System - Enhanced with Powerup Usage and ELO Ratings
+Different difficulty levels from Easy to Very Hard with ELO-based play strength
 """
 
 import random
 import pygame
 import time
+import math
 from config import *
 
 class ChessAI:
     def __init__(self, difficulty="medium"):
         self.difficulty = difficulty
+        
+        # ELO ratings for each difficulty level
+        self.elo_ratings = {
+            "easy": 800,      # Beginner
+            "medium": 1200,   # Casual player
+            "hard": 1600,     # Club player
+            "very_hard": 2000 # Expert
+        }
+        
+        # Get the ELO rating for this difficulty
+        self.elo = self.elo_ratings[difficulty]
+        
+        # Thinking time based on ELO (higher rated players think longer)
         self.thinking_time = {
             "easy": 500,      # 0.5 seconds
             "medium": 1000,   # 1 second
             "hard": 1500,     # 1.5 seconds
             "very_hard": 2000 # 2 seconds
         }
+        
+        # Powerup usage probability based on ELO
+        # Higher rated players use powerups more strategically
+        self.powerup_usage_chance = {
+            "easy": 0.1,      # 10% chance per turn
+            "medium": 0.2,    # 20% chance per turn
+            "hard": 0.3,      # 30% chance per turn
+            "very_hard": 0.4  # 40% chance per turn
+        }
+        
+        # Strategic weights for powerup selection based on ELO
+        self.powerup_weights = self._calculate_powerup_weights()
+        
         self.start_thinking = None
         
         # Piece values for evaluation
@@ -108,6 +135,45 @@ class ChessAI:
             [-50,-30,-30,-30,-30,-30,-30,-50]
         ]
         
+    def _calculate_powerup_weights(self):
+        """Calculate strategic weights for powerup selection based on ELO."""
+        if self.elo < 1000:  # Easy
+            # Random powerup usage, no strategy
+            return {
+                "shield": 1.0,
+                "gun": 1.0,
+                "airstrike": 1.0,
+                "paratroopers": 1.0,
+                "chopper": 1.0
+            }
+        elif self.elo < 1400:  # Medium
+            # Prefer defensive and simple offensive powerups
+            return {
+                "shield": 2.0,
+                "gun": 1.5,
+                "airstrike": 1.0,
+                "paratroopers": 0.5,
+                "chopper": 0.3
+            }
+        elif self.elo < 1800:  # Hard
+            # Strategic use based on game state
+            return {
+                "shield": 1.5,
+                "gun": 2.0,
+                "airstrike": 1.5,
+                "paratroopers": 1.0,
+                "chopper": 0.5
+            }
+        else:  # Very Hard
+            # Highly strategic, saves powerful powerups
+            return {
+                "shield": 1.0,
+                "gun": 2.5,
+                "airstrike": 2.0,
+                "paratroopers": 1.5,
+                "chopper": 1.0  # Will use when advantageous
+            }
+            
     def start_turn(self):
         """Start the AI's thinking timer."""
         self.start_thinking = pygame.time.get_ticks()
@@ -119,116 +185,379 @@ class ChessAI:
         elapsed = pygame.time.get_ticks() - self.start_thinking
         return elapsed < self.thinking_time[self.difficulty]
         
+    def should_use_powerup(self, board, powerup_system):
+        """Decide if AI should use a powerup this turn."""
+        # Check if it's AI's turn
+        if board.current_turn != "black":
+            return None
+            
+        # Random chance based on difficulty
+        if random.random() > self.powerup_usage_chance[self.difficulty]:
+            return None
+            
+        # Get available powerups
+        available_powerups = []
+        for powerup_key in powerup_system.powerups:
+            if powerup_system.can_afford_powerup("black", powerup_key):
+                available_powerups.append(powerup_key)
+                
+        if not available_powerups:
+            return None
+            
+        # Select powerup based on strategic weights and game state
+        selected_powerup = self._select_best_powerup(board, powerup_system, available_powerups)
+        
+        return selected_powerup
+        
+    def _select_best_powerup(self, board, powerup_system, available_powerups):
+        """Select the best powerup based on game state and AI strategy."""
+        # Evaluate game state
+        material_balance = self._evaluate_material_balance(board)
+        is_losing = material_balance < -200  # AI is down significant material
+        is_winning = material_balance > 200   # AI is up significant material
+        
+        # Adjust weights based on game state
+        adjusted_weights = {}
+        for powerup in available_powerups:
+            weight = self.powerup_weights.get(powerup, 1.0)
+            
+            # Strategic adjustments based on ELO
+            if self.elo >= 1600:  # Hard and Very Hard
+                if powerup == "shield" and is_losing:
+                    weight *= 2.0  # Protect valuable pieces when losing
+                elif powerup == "gun" and self._has_good_gun_target(board, powerup_system):
+                    weight *= 3.0  # High priority if can eliminate valuable piece
+                elif powerup == "airstrike" and self._has_good_airstrike_target(board):
+                    weight *= 2.5  # Good for clearing clustered pieces
+                elif powerup == "paratroopers" and is_winning:
+                    weight *= 2.0  # Press advantage with more pieces
+                elif powerup == "chopper" and is_losing and powerup_system.points["black"] >= 25:
+                    weight *= 5.0  # Desperation move when losing badly
+                    
+            adjusted_weights[powerup] = weight
+            
+        # Weighted random selection
+        total_weight = sum(adjusted_weights.values())
+        if total_weight == 0:
+            return random.choice(available_powerups)
+            
+        r = random.uniform(0, total_weight)
+        cumulative = 0
+        for powerup, weight in adjusted_weights.items():
+            cumulative += weight
+            if r <= cumulative:
+                return powerup
+                
+        return available_powerups[-1]  # Fallback
+        
+    def _evaluate_material_balance(self, board):
+        """Evaluate material balance from AI's perspective (positive = AI advantage)."""
+        white_material = 0
+        black_material = 0
+        
+        for row in range(8):
+            for col in range(8):
+                piece = board.get_piece(row, col)
+                if piece:
+                    value = self.piece_values.get(piece[1], 0)
+                    if piece[0] == 'w':
+                        white_material += value
+                    else:
+                        black_material += value
+                        
+        return black_material - white_material
+        
+    def _has_good_gun_target(self, board, powerup_system):
+        """Check if there's a valuable enemy piece that can be shot."""
+        # Find all black pieces that could shoot
+        for row in range(8):
+            for col in range(8):
+                piece = board.get_piece(row, col)
+                if piece and piece[0] == 'b':
+                    # Check potential gun targets from this position
+                    targets = self._get_gun_targets_for_ai(row, col, board)
+                    for target_row, target_col in targets:
+                        target_piece = board.get_piece(target_row, target_col)
+                        if target_piece and target_piece[1] in ['Q', 'R']:
+                            return True  # Can shoot queen or rook
+        return False
+        
+    def _get_gun_targets_for_ai(self, row, col, board):
+        """Get valid gun targets for AI (same as player logic)."""
+        targets = []
+        
+        # Check all 8 directions for line of sight
+        directions = [
+            (-1, 0), (1, 0), (0, -1), (0, 1),  # Cardinal
+            (-1, -1), (-1, 1), (1, -1), (1, 1)  # Diagonal
+        ]
+        
+        for dr, dc in directions:
+            for distance in range(1, 8):
+                check_row = row + dr * distance
+                check_col = col + dc * distance
+                
+                if not (0 <= check_row < 8 and 0 <= check_col < 8):
+                    break
+                    
+                target = board.get_piece(check_row, check_col)
+                if target:
+                    if target[0] == 'w' and target[1] != 'K':
+                        targets.append((check_row, check_col))
+                    break  # Can't shoot through pieces
+                    
+        return targets
+        
+    def _has_good_airstrike_target(self, board):
+        """Check if there's a good 3x3 area to airstrike."""
+        best_value = 0
+        
+        for center_row in range(8):
+            for center_col in range(8):
+                value = 0
+                for dr in range(-1, 2):
+                    for dc in range(-1, 2):
+                        r, c = center_row + dr, center_col + dc
+                        if 0 <= r < 8 and 0 <= c < 8:
+                            piece = board.get_piece(r, c)
+                            if piece and piece[0] == 'w' and piece[1] != 'K':
+                                value += self.piece_values.get(piece[1], 0)
+                                
+                if value > best_value:
+                    best_value = value
+                    
+        return best_value >= 500  # Worth it if can destroy 500+ points of material
+        
+    def execute_powerup(self, board, powerup_system, powerup_key):
+        """Execute the selected powerup for AI."""
+        if powerup_key == "shield":
+            return self._execute_shield(board, powerup_system)
+        elif powerup_key == "gun":
+            return self._execute_gun(board, powerup_system)
+        elif powerup_key == "airstrike":
+            return self._execute_airstrike(board, powerup_system)
+        elif powerup_key == "paratroopers":
+            return self._execute_paratroopers(board, powerup_system)
+        elif powerup_key == "chopper":
+            return self._execute_chopper(board, powerup_system)
+            
+        return None
+        
+    def _execute_shield(self, board, powerup_system):
+        """AI uses shield powerup."""
+        # Find most valuable unshielded piece
+        best_piece = None
+        best_value = 0
+        
+        for row in range(8):
+            for col in range(8):
+                piece = board.get_piece(row, col)
+                if piece and piece[0] == 'b' and not powerup_system.is_piece_shielded(row, col):
+                    value = self.piece_values.get(piece[1], 0)
+                    
+                    # Prioritize pieces under attack if ELO >= 1400
+                    if self.elo >= 1400 and self._square_is_attacked(board, row, col, 'w'):
+                        value *= 2
+                        
+                    if value > best_value:
+                        best_value = value
+                        best_piece = (row, col)
+                        
+        if best_piece:
+            return {
+                "type": "shield",
+                "target": best_piece
+            }
+            
+        return None
+        
+    def _execute_gun(self, board, powerup_system):
+        """AI uses gun powerup."""
+        best_shot = None
+        best_value = 0
+        
+        # Check all black pieces for shooting opportunities
+        for row in range(8):
+            for col in range(8):
+                piece = board.get_piece(row, col)
+                if piece and piece[0] == 'b':
+                    targets = self._get_gun_targets_for_ai(row, col, board)
+                    for target_row, target_col in targets:
+                        target_piece = board.get_piece(target_row, target_col)
+                        if target_piece:
+                            value = self.piece_values.get(target_piece[1], 0)
+                            if value > best_value:
+                                best_value = value
+                                best_shot = {
+                                    "shooter": (row, col),
+                                    "target": (target_row, target_col)
+                                }
+                                
+        if best_shot:
+            return {
+                "type": "gun",
+                "shooter": best_shot["shooter"],
+                "target": best_shot["target"]
+            }
+            
+        return None
+        
+    def _execute_airstrike(self, board, powerup_system):
+        """AI uses airstrike powerup."""
+        best_target = None
+        best_value = 0
+        
+        for center_row in range(8):
+            for center_col in range(8):
+                value = 0
+                hits = []
+                
+                for dr in range(-1, 2):
+                    for dc in range(-1, 2):
+                        r, c = center_row + dr, center_col + dc
+                        if 0 <= r < 8 and 0 <= c < 8:
+                            piece = board.get_piece(r, c)
+                            if piece:
+                                if piece[0] == 'w' and piece[1] != 'K':
+                                    value += self.piece_values.get(piece[1], 0)
+                                    hits.append((r, c))
+                                elif piece[0] == 'b':
+                                    value -= self.piece_values.get(piece[1], 0) * 0.5  # Penalty for friendly fire
+                                    
+                if value > best_value:
+                    best_value = value
+                    best_target = (center_row, center_col)
+                    
+        if best_target and best_value > 0:
+            return {
+                "type": "airstrike",
+                "target": best_target
+            }
+            
+        return None
+        
+    def _execute_paratroopers(self, board, powerup_system):
+        """AI uses paratroopers powerup."""
+        # Find 3 strategic empty squares
+        empty_squares = []
+        for row in range(8):
+            for col in range(8):
+                if board.get_piece(row, col) == "":
+                    empty_squares.append((row, col))
+                    
+        if len(empty_squares) < 3:
+            return None
+            
+        # Prioritize squares based on strategy
+        scored_squares = []
+        for row, col in empty_squares:
+            score = 0
+            
+            # Prefer advanced positions
+            if row <= 3:  # Closer to white's side
+                score += 10
+                
+            # Prefer central squares
+            if 2 <= col <= 5:
+                score += 5
+                
+            # Check if can immediately threaten pieces
+            # Pawn attacks diagonally
+            for dc in [-1, 1]:
+                attack_row = row + 1  # Black pawns move down
+                attack_col = col + dc
+                if 0 <= attack_row < 8 and 0 <= attack_col < 8:
+                    target = board.get_piece(attack_row, attack_col)
+                    if target and target[0] == 'w':
+                        score += self.piece_values.get(target[1], 0) / 100
+                        
+            scored_squares.append((score, row, col))
+            
+        # Sort by score and pick top 3
+        scored_squares.sort(reverse=True)
+        targets = [(row, col) for _, row, col in scored_squares[:3]]
+        
+        return {
+            "type": "paratroopers",
+            "targets": targets
+        }
+        
+    def _execute_chopper(self, board, powerup_system):
+        """AI uses chopper gunner powerup."""
+        # Only use if it's advantageous
+        material_balance = self._evaluate_material_balance(board)
+        
+        # Count enemy pieces (excluding king)
+        enemy_pieces = 0
+        for row in range(8):
+            for col in range(8):
+                piece = board.get_piece(row, col)
+                if piece and piece[0] == 'w' and piece[1] != 'K':
+                    enemy_pieces += 1
+                    
+        # Use chopper if losing badly or if can eliminate many pieces
+        if material_balance < -500 or enemy_pieces >= 8:
+            return {
+                "type": "chopper",
+                "confirm": True
+            }
+            
+        return None
+        
     def get_move(self, board):
-        """Get the AI's move based on difficulty."""
-        if self.difficulty == "easy":
-            return self._get_easy_move(board)
-        elif self.difficulty == "medium":
-            return self._get_medium_move(board)
-        elif self.difficulty == "hard":
-            return self._get_hard_move(board)
-        else:  # very_hard
-            return self._get_very_hard_move(board)
+        """Get the AI's move based on difficulty and ELO rating."""
+        # Use ELO to determine search depth and move quality
+        if self.elo < 1000:
+            return self._get_elo_based_move(board, random_error_rate=0.3)
+        elif self.elo < 1400:
+            return self._get_elo_based_move(board, random_error_rate=0.15)
+        elif self.elo < 1800:
+            return self._get_elo_based_move(board, random_error_rate=0.05)
+        else:
+            return self._get_elo_based_move(board, random_error_rate=0.01)
             
-    def _get_easy_move(self, board):
-        """Easy AI - Makes random legal moves, sometimes blunders."""
+    def _get_elo_based_move(self, board, random_error_rate):
+        """Get move with ELO-based strength and random errors."""
         moves = self._get_all_legal_moves(board)
         if not moves:
             return None
             
-        # 30% chance to make a bad move (if possible)
-        if random.random() < 0.3:
-            bad_moves = self._filter_bad_moves(board, moves)
-            if bad_moves:
-                return random.choice(bad_moves)
-                
-        return random.choice(moves)
-        
-    def _get_medium_move(self, board):
-        """Medium AI - Captures when possible, avoids obvious blunders."""
-        moves = self._get_all_legal_moves(board)
-        if not moves:
-            return None
+        # Random error (blunder) based on ELO
+        if random.random() < random_error_rate:
+            # Make a random move (blunder)
+            return random.choice(moves)
             
-        # Check for checkmate moves first
-        for move in moves:
-            if self._move_gives_checkmate(board, move):
-                return move
-                
-        # Prioritize captures
-        capture_moves = self._get_capture_moves(board, moves)
-        if capture_moves:
-            # Choose the best capture (highest value piece)
-            return self._choose_best_capture(board, capture_moves)
-            
-        # Check for moves that put opponent in check
-        check_moves = []
-        for move in moves:
-            if self._move_gives_check(board, move):
-                check_moves.append(move)
-                
-        if check_moves:
-            return random.choice(check_moves)
-            
-        # Avoid moves that lose pieces
-        safe_moves = self._filter_safe_moves(board, moves)
-        if safe_moves:
-            # Prefer center control
-            center_moves = []
-            for move in safe_moves:
-                to_row, to_col = move[1]
-                if 2 <= to_row <= 5 and 2 <= to_col <= 5:
-                    center_moves.append(move)
-            
-            if center_moves:
-                return random.choice(center_moves)
-            return random.choice(safe_moves)
-            
-        return random.choice(moves)
-        
-    def _get_hard_move(self, board):
-        """Hard AI - Good tactics, protects pieces, controls center."""
-        moves = self._get_all_legal_moves(board)
-        if not moves:
-            return None
+        # Calculate search depth based on ELO
+        if self.elo < 1000:
+            depth = 1
+        elif self.elo < 1400:
+            depth = 2
+        elif self.elo < 1800:
+            depth = 3
+        else:
+            depth = 4
             
         # Always check for immediate checkmate
         for move in moves:
             if self._move_gives_checkmate(board, move):
                 return move
                 
-        # Use minimax with depth 2
+        # Use minimax with ELO-based depth
         best_move = None
         best_score = -999999
         
-        for move in moves:
-            score = self._minimax(board, 2, -999999, 999999, False, move)
-            if score > best_score:
-                best_score = score
-                best_move = move
-                
-        return best_move
+        # Add some randomness to move ordering for lower ELO
+        if self.elo < 1400:
+            random.shuffle(moves)
+        else:
+            moves = self._order_moves(board, moves)
         
-    def _get_very_hard_move(self, board):
-        """Very Hard AI - Strong tactics and strategy."""
-        moves = self._get_all_legal_moves(board)
-        if not moves:
-            return None
+        for move in moves:
+            score = self._minimax(board, depth, -999999, 999999, False, move)
             
-        # Always check for immediate checkmate
-        for move in moves:
-            if self._move_gives_checkmate(board, move):
-                return move
-                
-        # Order moves for better search
-        moves = self._order_moves(board, moves)
-        
-        # Use minimax with depth 3
-        best_move = None
-        best_score = -999999
-        
-        for move in moves:
-            score = self._minimax(board, 3, -999999, 999999, False, move)
+            # Add small random factor for move variety
+            score += random.uniform(-10, 10) * (2000 - self.elo) / 1000
+            
             if score > best_score:
                 best_score = score
                 best_move = move
@@ -353,7 +682,7 @@ class ChessAI:
         return score
         
     def _evaluate_board(self, board):
-        """Evaluate board position."""
+        """Evaluate board position with ELO-based accuracy."""
         white_score = 0
         black_score = 0
         white_pieces = 0
@@ -379,34 +708,35 @@ class ChessAI:
                     else:
                         black_pieces += 1
                         
-                # Position bonus based on piece type
-                if piece_type == 'P':
-                    if piece_color == 'w':
-                        value += self.pawn_table[row][col]
-                    else:
-                        value += self.pawn_table[7-row][col]
-                elif piece_type == 'N':
-                    value += self.knight_table[row][col]
-                elif piece_type == 'B':
-                    value += self.bishop_table[row][col]
-                elif piece_type == 'R':
-                    value += self.rook_table[row][col]
-                elif piece_type == 'Q':
-                    value += self.queen_table[row][col]
-                elif piece_type == 'K':
-                    # Use endgame table if few pieces left
-                    total_pieces = white_pieces + black_pieces
-                    if total_pieces <= 6:  # Endgame
+                # Position bonus based on piece type (only for higher ELO)
+                if self.elo >= 1200:
+                    if piece_type == 'P':
                         if piece_color == 'w':
-                            value += self.king_endgame_table[row][col]
+                            value += self.pawn_table[row][col]
                         else:
-                            value += self.king_endgame_table[7-row][col]
-                    else:  # Middle/Opening
-                        if piece_color == 'w':
-                            value += self.king_table[row][col]
-                        else:
-                            value += self.king_table[7-row][col]
-                            
+                            value += self.pawn_table[7-row][col]
+                    elif piece_type == 'N':
+                        value += self.knight_table[row][col]
+                    elif piece_type == 'B':
+                        value += self.bishop_table[row][col]
+                    elif piece_type == 'R':
+                        value += self.rook_table[row][col]
+                    elif piece_type == 'Q':
+                        value += self.queen_table[row][col]
+                    elif piece_type == 'K':
+                        # Use endgame table if few pieces left
+                        total_pieces = white_pieces + black_pieces
+                        if total_pieces <= 6:  # Endgame
+                            if piece_color == 'w':
+                                value += self.king_endgame_table[row][col]
+                            else:
+                                value += self.king_endgame_table[7-row][col]
+                        else:  # Middle/Opening
+                            if piece_color == 'w':
+                                value += self.king_table[row][col]
+                            else:
+                                value += self.king_table[7-row][col]
+                                
                 # Add to appropriate score
                 if piece_color == 'w':
                     white_score += value
@@ -489,86 +819,6 @@ class ChessAI:
                 other_moves.append(move)
                 
         return capture_moves + other_moves
-        
-    def _get_capture_moves(self, board, moves):
-        """Filter moves that capture opponent pieces."""
-        captures = []
-        for move in moves:
-            to_row, to_col = move[1]
-            target = board.get_piece(to_row, to_col)
-            if target and target[0] == 'w':
-                captures.append(move)
-        return captures
-        
-    def _choose_best_capture(self, board, capture_moves):
-        """Choose capture of highest value piece."""
-        best_move = None
-        best_value = -1
-        
-        for move in capture_moves:
-            from_row, from_col = move[0]
-            to_row, to_col = move[1]
-            
-            attacker = board.get_piece(from_row, from_col)
-            target = board.get_piece(to_row, to_col)
-            
-            if target:
-                # MVV-LVA: Most Valuable Victim - Least Valuable Attacker
-                target_value = self.piece_values[target[1]]
-                attacker_value = self.piece_values[attacker[1]]
-                
-                # Prefer capturing with less valuable pieces
-                capture_score = target_value * 10 - attacker_value
-                
-                if capture_score > best_value:
-                    best_value = capture_score
-                    best_move = move
-                    
-        return best_move or capture_moves[0]
-        
-    def _filter_safe_moves(self, board, moves):
-        """Filter out moves that would lose pieces."""
-        safe = []
-        for move in moves:
-            if not self._move_loses_piece(board, move):
-                safe.append(move)
-        return safe if safe else moves
-        
-    def _filter_bad_moves(self, board, moves):
-        """Find moves that lose pieces (for easy AI to blunder)."""
-        bad = []
-        for move in moves:
-            if self._move_loses_piece(board, move):
-                bad.append(move)
-        return bad
-        
-    def _move_loses_piece(self, board, move):
-        """Check if a move would result in losing the piece."""
-        from_row, from_col = move[0]
-        to_row, to_col = move[1]
-        
-        piece = board.get_piece(from_row, from_col)
-        original_target = board.get_piece(to_row, to_col)
-        
-        # Make move
-        board.set_piece(to_row, to_col, piece)
-        board.set_piece(from_row, from_col, "")
-        
-        # Check if piece can be captured
-        is_attacked = self._square_is_attacked(board, to_row, to_col, 'w')
-        
-        # Undo move
-        board.set_piece(from_row, from_col, piece)
-        board.set_piece(to_row, to_col, original_target)
-        
-        # If we're capturing something valuable, it might be worth it
-        if original_target and is_attacked:
-            our_value = self.piece_values[piece[1]]
-            their_value = self.piece_values[original_target[1]]
-            if their_value >= our_value:
-                return False  # Good trade
-                
-        return is_attacked
         
     def _square_is_attacked(self, board, row, col, by_color):
         """Check if a square is attacked by given color."""
