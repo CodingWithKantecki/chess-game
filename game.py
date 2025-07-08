@@ -1,5 +1,5 @@
 """
-Main Game Class - Enhanced with Powerup System and Arms Dealer
+Main Game Class - Enhanced with Settings Menu and Fixed Shop Navigation
 """
 
 import pygame
@@ -54,6 +54,9 @@ class ChessGame:
         self.mouse_pos = (0, 0)
         self.selected_difficulty = None
         
+        # Settings state
+        self.settings = self.load_settings()
+        
         # Arms dealer
         self.shop_buttons = {}
         self.arms_dealer_game_button = None
@@ -71,9 +74,9 @@ class ChessGame:
         # UI elements - will be updated for scaling
         self.update_ui_positions()
         
-        # Volume control - NOW WITH SEPARATE MUSIC AND SFX
-        self.music_volume = 0.25  # Default music volume at 25%
-        self.sfx_volume = 0.7     # Default sound effects volume at 70%
+        # Volume control
+        self.music_volume = self.settings.get("music_volume", 0.25)
+        self.sfx_volume = self.settings.get("sfx_volume", 0.7)
         self.dragging_music_slider = False
         self.dragging_sfx_slider = False
         pygame.mixer.music.set_volume(self.music_volume)
@@ -93,8 +96,53 @@ class ChessGame:
         # Victory reward tracking
         self.victory_reward = 0
         
+        # Store game state when entering shop mid-game
+        self.stored_game_state = None
+        
         # Start music
         pygame.mixer.music.play(-1)
+        
+    def load_settings(self):
+        """Load saved settings."""
+        import json
+        import os
+        
+        settings_file = "chess_settings.json"
+        default_settings = {
+            "music_volume": 0.25,
+            "sfx_volume": 0.7,
+            "animations": True,
+            "show_valid_moves": True,
+            "auto_queen": False,
+            "board_theme": 0,
+            "piece_theme": 0,
+            "show_captured": True,
+            "show_timer": False
+        }
+        
+        if os.path.exists(settings_file):
+            try:
+                with open(settings_file, 'r') as f:
+                    loaded = json.load(f)
+                    # Merge with defaults to ensure all keys exist
+                    for key, value in default_settings.items():
+                        if key not in loaded:
+                            loaded[key] = value
+                    return loaded
+            except:
+                return default_settings
+        return default_settings
+        
+    def save_settings(self):
+        """Save current settings."""
+        import json
+        
+        # Update settings with current values
+        self.settings["music_volume"] = self.music_volume
+        self.settings["sfx_volume"] = self.sfx_volume
+        
+        with open("chess_settings.json", 'w') as f:
+            json.dump(self.settings, f)
             
     def update_ui_positions(self):
         """Update UI element positions based on current scale."""
@@ -164,19 +212,25 @@ class ChessGame:
         # Menu buttons - centered in game area
         self.play_button = pygame.Rect(
             center_x - int(100 * config.SCALE), 
-            center_y - int(60 * config.SCALE), 
+            center_y - int(80 * config.SCALE), 
+            int(200 * config.SCALE), 
+            int(60 * config.SCALE)
+        )
+        self.settings_button = pygame.Rect(
+            center_x - int(100 * config.SCALE), 
+            center_y, 
             int(200 * config.SCALE), 
             int(60 * config.SCALE)
         )
         self.beta_button = pygame.Rect(
             center_x - int(100 * config.SCALE), 
-            center_y + int(20 * config.SCALE), 
+            center_y + int(80 * config.SCALE), 
             int(200 * config.SCALE), 
             int(60 * config.SCALE)
         )
         self.credits_button = pygame.Rect(
             center_x - int(100 * config.SCALE), 
-            center_y + int(100 * config.SCALE), 
+            center_y + int(160 * config.SCALE), 
             int(200 * config.SCALE), 
             int(60 * config.SCALE)
         )
@@ -186,6 +240,39 @@ class ChessGame:
             int(200 * config.SCALE), 
             int(50 * config.SCALE)
         )
+        
+        # Settings menu elements
+        self.settings_elements = {}
+        
+        # Toggle switches positioning
+        toggle_y = center_y - int(160 * config.SCALE)
+        toggle_spacing = int(50 * config.SCALE)
+        
+        settings_options = [
+            ("animations", "Animations"),
+            ("show_valid_moves", "Show Valid Moves"),
+            ("auto_queen", "Auto-Promote to Queen"),
+            ("show_captured", "Show Captured Pieces"),
+            ("show_timer", "Show Move Timer")
+        ]
+        
+        for i, (key, label) in enumerate(settings_options):
+            y = toggle_y + i * toggle_spacing
+            self.settings_elements[key] = {
+                "rect": pygame.Rect(center_x + int(120 * config.SCALE), y, 
+                                   int(60 * config.SCALE), int(30 * config.SCALE)),
+                "label": label
+            }
+        
+        # Board theme selector
+        self.settings_elements["board_theme"] = {
+            "rect": pygame.Rect(center_x - int(50 * config.SCALE), 
+                               center_y + int(120 * config.SCALE), 
+                               int(100 * config.SCALE), int(40 * config.SCALE)),
+            "label": "Board Theme",
+            "options": ["Classic", "Wood", "Metal", "Marble"],
+            "current": self.settings.get("board_theme", 0)
+        }
         
         # Difficulty buttons
         self.difficulty_buttons = {}
@@ -202,6 +289,57 @@ class ChessGame:
                 int(300 * config.SCALE), 
                 button_height
             )
+            
+    def store_game_state(self):
+        """Store the current game state before entering shop."""
+        self.stored_game_state = {
+            "board": [row[:] for row in self.board.board],  # Deep copy of board
+            "current_turn": self.board.current_turn,
+            "captured_pieces": {
+                "white": self.board.captured_pieces["white"][:],
+                "black": self.board.captured_pieces["black"][:]
+            },
+            "powerup_points": {
+                "white": self.powerup_system.points["white"],
+                "black": self.powerup_system.points["black"]
+            },
+            "shielded_pieces": dict(self.powerup_system.shielded_pieces),
+            "game_over": self.board.game_over,
+            "winner": self.board.winner,
+            "ai": self.ai,
+            "selected_difficulty": self.selected_difficulty
+        }
+        
+    def restore_game_state(self):
+        """Restore the game state after returning from shop."""
+        if self.stored_game_state:
+            # Restore board state
+            self.board.board = [row[:] for row in self.stored_game_state["board"]]
+            self.board.current_turn = self.stored_game_state["current_turn"]
+            self.board.captured_pieces = {
+                "white": self.stored_game_state["captured_pieces"]["white"][:],
+                "black": self.stored_game_state["captured_pieces"]["black"][:]
+            }
+            self.board.game_over = self.stored_game_state["game_over"]
+            self.board.winner = self.stored_game_state["winner"]
+            
+            # Restore powerup state
+            self.powerup_system.points = dict(self.stored_game_state["powerup_points"])
+            self.powerup_system.shielded_pieces = dict(self.stored_game_state["shielded_pieces"])
+            
+            # Restore AI
+            self.ai = self.stored_game_state["ai"]
+            self.selected_difficulty = self.stored_game_state["selected_difficulty"]
+            
+            # Clear stored state
+            self.stored_game_state = None
+            
+            # Clear any active animations or selections
+            self.board.selected_piece = None
+            self.board.valid_moves = []
+            self.board.animating = False
+            self.board.dragging = False
+            self.board.promoting = False
             
     def _handle_ai_powerup(self, powerup_key, action):
         """Handle AI powerup usage."""
@@ -262,7 +400,6 @@ class ChessGame:
         elif action["type"] == "chopper" and action.get("confirm"):
             # AI uses chopper gunner
             # For now, we'll just destroy all white pieces (except king)
-            # In a full implementation, you might want a different AI chopper mode
             for row in range(8):
                 for col in range(8):
                     piece = self.board.get_piece(row, col)
@@ -360,8 +497,10 @@ class ChessGame:
                         self.chopper_mode.handle_release()
                     elif self.dragging_music_slider:
                         self.dragging_music_slider = False
+                        self.save_settings()  # Save when slider is released
                     elif self.dragging_sfx_slider:
                         self.dragging_sfx_slider = False
+                        self.save_settings()  # Save when slider is released
                     else:
                         self.handle_release(event.pos)
                     
@@ -405,10 +544,31 @@ class ChessGame:
         if self.current_screen == config.SCREEN_START:
             if self.play_button.collidepoint(pos):
                 self.start_fade(config.SCREEN_START, config.SCREEN_DIFFICULTY)
+            elif self.settings_button.collidepoint(pos):
+                self.start_fade(config.SCREEN_START, config.SCREEN_SETTINGS)
             elif self.beta_button.collidepoint(pos):
                 self.start_fade(config.SCREEN_START, config.SCREEN_BETA)
             elif self.credits_button.collidepoint(pos):
                 self.start_fade(config.SCREEN_START, config.SCREEN_CREDITS)
+                
+        elif self.current_screen == config.SCREEN_SETTINGS:
+            # Handle settings clicks
+            for key, element in self.settings_elements.items():
+                if element["rect"].collidepoint(pos):
+                    if key in ["animations", "show_valid_moves", "auto_queen", "show_captured", "show_timer"]:
+                        # Toggle boolean settings
+                        self.settings[key] = not self.settings.get(key, True)
+                        self.save_settings()
+                    elif key == "board_theme":
+                        # Cycle through board themes
+                        current = element.get("current", 0)
+                        element["current"] = (current + 1) % len(element["options"])
+                        self.settings[key] = element["current"]
+                        self.save_settings()
+                        
+            # Back button
+            if self.back_button.collidepoint(pos):
+                self.start_fade(config.SCREEN_SETTINGS, config.SCREEN_START)
                 
         elif self.current_screen == config.SCREEN_ARMS_DEALER:
             # Check purchase buttons
@@ -429,9 +589,15 @@ class ChessGame:
             if hasattr(self.renderer, 'tariq_rect') and self.renderer.tariq_rect.collidepoint(pos):
                 self.tariq_dialogue_index = (self.tariq_dialogue_index + 1) % len(self.tariq_dialogues)
             
-            # Back button
+            # Back button - restore game state instead of starting new game
             if self.back_button.collidepoint(pos):
-                self.start_fade(config.SCREEN_ARMS_DEALER, config.SCREEN_GAME)
+                if self.stored_game_state:
+                    # Restore the game state
+                    self.restore_game_state()
+                    self.start_fade(config.SCREEN_ARMS_DEALER, config.SCREEN_GAME)
+                else:
+                    # No stored state, go to main menu
+                    self.start_fade(config.SCREEN_ARMS_DEALER, config.SCREEN_START)
                 
         elif self.current_screen == config.SCREEN_DIFFICULTY:
             # Load progress to check unlocked difficulties
@@ -461,6 +627,8 @@ class ChessGame:
         elif self.current_screen == config.SCREEN_GAME:
             # Check Arms Dealer button
             if self.arms_dealer_game_button and self.arms_dealer_game_button.collidepoint(pos):
+                # Store current game state before going to shop
+                self.store_game_state()
                 self.start_fade(config.SCREEN_GAME, config.SCREEN_ARMS_DEALER)
                 return
                 
@@ -487,7 +655,11 @@ class ChessGame:
             if self.board.promoting:
                 for rect, piece_type in self.promotion_rects:
                     if rect.collidepoint(pos):
-                        self.board.promote_pawn(piece_type)
+                        # Check if auto-queen is enabled
+                        if self.settings.get("auto_queen", False):
+                            self.board.promote_pawn("Q")
+                        else:
+                            self.board.promote_pawn(piece_type)
                         if 'capture' in self.assets.sounds:
                             self.assets.sounds['capture'].play()
                         return
@@ -497,7 +669,8 @@ class ChessGame:
                 row, col = self.board.get_square_from_pos(pos)
                 if row >= 0 and col >= 0 and self.board.is_valid_selection(row, col):
                     self.board.selected_piece = (row, col)
-                    self.board.valid_moves = self.board.get_valid_moves(row, col)
+                    if self.settings.get("show_valid_moves", True):
+                        self.board.valid_moves = self.board.get_valid_moves(row, col)
                     self.board.dragging = True
                     self.board.drag_piece = self.board.get_piece(row, col)
                     self.board.drag_start = (row, col)
@@ -519,14 +692,24 @@ class ChessGame:
         if (row, col) in self.board.valid_moves:
             # Make move
             from_row, from_col = self.board.selected_piece
-            self.board.start_move(from_row, from_col, row, col)
+            if self.settings.get("animations", True):
+                self.board.start_move(from_row, from_col, row, col)
+            else:
+                # Skip animation
+                self.board.animation_from = (from_row, from_col)
+                self.board.animation_to = (row, col)
+                self.board.animation_piece = self.board.get_piece(from_row, from_col)
+                captured = self.board.complete_move()
+                if captured and 'capture' in self.assets.sounds:
+                    self.assets.sounds['capture'].play()
             self.board.selected_piece = None
             self.board.valid_moves = []
         else:
             # Check if selecting new piece
             if row >= 0 and col >= 0 and self.board.is_valid_selection(row, col):
                 self.board.selected_piece = (row, col)
-                self.board.valid_moves = self.board.get_valid_moves(row, col)
+                if self.settings.get("show_valid_moves", True):
+                    self.board.valid_moves = self.board.get_valid_moves(row, col)
             else:
                 self.board.selected_piece = None
                 self.board.valid_moves = []
@@ -612,7 +795,7 @@ class ChessGame:
         elif self.current_screen == config.SCREEN_DIFFICULTY:
             if key == pygame.K_ESCAPE:
                 self.start_fade(config.SCREEN_DIFFICULTY, config.SCREEN_START)
-        elif self.current_screen in [config.SCREEN_START, config.SCREEN_CREDITS, config.SCREEN_ARMS_DEALER, config.SCREEN_BETA]:
+        elif self.current_screen in [config.SCREEN_START, config.SCREEN_CREDITS, config.SCREEN_ARMS_DEALER, config.SCREEN_BETA, config.SCREEN_SETTINGS]:
             if key == pygame.K_ESCAPE and self.fullscreen:
                 self.toggle_fullscreen()
                 
@@ -632,7 +815,8 @@ class ChessGame:
             if current_time - self.fade_start >= config.FADE_DURATION:
                 self.fade_active = False
                 self.current_screen = self.fade_to
-                if self.fade_to == config.SCREEN_GAME:
+                if self.fade_to == config.SCREEN_GAME and not self.stored_game_state:
+                    # Only reset if we're not returning from shop
                     self.board.reset()
                     self.powerup_system = PowerupSystem()  # Reset powerup system
                     self.powerup_system.assets = self.assets  # Pass assets reference
@@ -658,7 +842,7 @@ class ChessGame:
             self.powerup_system.update_effects(current_time)
             
             # Check animation complete
-            if self.board.animating:
+            if self.board.animating and self.settings.get("animations", True):
                 if current_time - self.board.animation_start >= config.MOVE_ANIMATION_DURATION:
                     captured = self.board.complete_move()
                     # Play capture sound immediately when capture happens
@@ -667,6 +851,10 @@ class ChessGame:
                             self.assets.sounds['capture'].play()
                         except Exception as e:
                             print(f"Error playing capture sound: {e}")
+                        
+            # Check for auto-promotion
+            if self.board.promoting and self.settings.get("auto_queen", False):
+                self.board.promote_pawn("Q")
                         
             # AI turn
             if self.board.current_turn == "black" and not self.board.game_over and not self.board.animating:
@@ -690,7 +878,16 @@ class ChessGame:
                         ai_move = self.ai.get_move(self.board)
                         if ai_move:
                             from_pos, to_pos = ai_move
-                            self.board.start_move(from_pos[0], from_pos[1], to_pos[0], to_pos[1])
+                            if self.settings.get("animations", True):
+                                self.board.start_move(from_pos[0], from_pos[1], to_pos[0], to_pos[1])
+                            else:
+                                # Skip animation for AI moves too
+                                self.board.animation_from = from_pos
+                                self.board.animation_to = to_pos
+                                self.board.animation_piece = self.board.get_piece(from_pos[0], from_pos[1])
+                                captured = self.board.complete_move()
+                                if captured and 'capture' in self.assets.sounds:
+                                    self.assets.sounds['capture'].play()
                         self.ai.start_thinking = None
                         
             # Check for player victory and unlock next difficulty
@@ -771,10 +968,16 @@ class ChessGame:
         if screen_type == config.SCREEN_START:
             buttons = {
                 'play': self.play_button,
+                'settings': self.settings_button,
                 'beta': self.beta_button, 
                 'credits': self.credits_button
             }
             self.renderer.draw_menu(config.SCREEN_START, buttons, self.mouse_pos)
+            self.draw_volume_sliders()
+            
+        elif screen_type == config.SCREEN_SETTINGS:
+            self.renderer.draw_settings_menu(self.settings, self.settings_elements, 
+                                            self.back_button, self.mouse_pos)
             self.draw_volume_sliders()
             
         elif screen_type == config.SCREEN_ARMS_DEALER:
@@ -806,13 +1009,14 @@ class ChessGame:
             self.renderer.draw_pieces(self.board, self.mouse_pos)
             
             # Game elements
-            if not self.board.game_over:
+            if not self.board.game_over and self.settings.get("show_valid_moves", True):
                 self.renderer.draw_highlights(self.board)
                 self.renderer.draw_check_indicator(self.board)
                 
             # UI with AI info (modified to not include mute button)
             self.renderer.draw_ui(self.board, None, False, self.mouse_pos, 
-                                 self.ai, self.selected_difficulty)
+                                 self.ai, self.selected_difficulty,
+                                 show_captured=self.settings.get("show_captured", True))
             self.draw_volume_sliders()
             
             # Add Arms Dealer button in game
@@ -828,7 +1032,7 @@ class ChessGame:
             self.powerup_renderer.draw_powerup_targeting(self.board, self.mouse_pos)
             
             # Overlays
-            if self.board.promoting:
+            if self.board.promoting and not self.settings.get("auto_queen", False):
                 self.promotion_rects = self.renderer.draw_promotion_menu(self.board, self.mouse_pos)
             
             # Pass selected difficulty and victory reward to renderer

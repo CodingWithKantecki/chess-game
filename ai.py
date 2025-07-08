@@ -27,18 +27,18 @@ class ChessAI:
         # Thinking time based on ELO (higher rated players think longer)
         self.thinking_time = {
             "easy": 500,      # 0.5 seconds
-            "medium": 1000,   # 1 second
-            "hard": 1500,     # 1.5 seconds
-            "very_hard": 2000 # 2 seconds
+            "medium": 800,    # 0.8 seconds
+            "hard": 1200,     # 1.2 seconds
+            "very_hard": 1500 # 1.5 seconds (reduced from 2000)
         }
         
         # Powerup usage probability based on ELO
         # Higher rated players use powerups more strategically
         self.powerup_usage_chance = {
-            "easy": 0.1,      # 10% chance per turn
-            "medium": 0.2,    # 20% chance per turn
-            "hard": 0.3,      # 30% chance per turn
-            "very_hard": 0.4  # 40% chance per turn
+            "easy": 0.05,      # 5% chance per turn (rarely uses)
+            "medium": 0.15,    # 15% chance per turn
+            "hard": 0.25,      # 25% chance per turn
+            "very_hard": 0.35  # 35% chance per turn (strategic use)
         }
         
         # Strategic weights for powerup selection based on ELO
@@ -535,7 +535,7 @@ class ChessAI:
         elif self.elo < 1800:
             depth = 3
         else:
-            depth = 4
+            depth = 3  # Limit to 3 for Very Hard to prevent lag
             
         # Always check for immediate checkmate
         for move in moves:

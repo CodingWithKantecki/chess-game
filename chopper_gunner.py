@@ -437,6 +437,9 @@ class ChopperGunnerMode:
         if hit_piece:
             self.hit_piece(hit_piece)
             
+        # Check for hitting jets
+        self.check_jet_hit(self.crosshair_x, self.crosshair_y)
+            
     def create_bullet_impact(self, x, y):
         """Create small impact effects where bullets land."""
         # Create 3-5 small sparks/fragments
@@ -484,6 +487,82 @@ class ChopperGunnerMode:
                         abs(y - piece_y) < piece_size // 2):
                         return (row, col)
         return None
+        
+    def check_jet_hit(self, x, y):
+        """Check if crosshair is over a jet."""
+        for jet in self.fighter_jets[:]:  # Copy list to allow removal during iteration
+            # Calculate jet bounds (simple rectangle check)
+            jet_width = 150 * (1.0 - (jet["altitude"] / 300.0))  # Size based on altitude
+            jet_height = 150 * (1.0 - (jet["altitude"] / 300.0))
+            
+            # Check if crosshair is within jet bounds
+            if (abs(x - jet["x"]) < jet_width // 2 and 
+                abs(y - jet["y"]) < jet_height // 2):
+                # Hit! Create explosion
+                self.create_jet_explosion(jet["x"], jet["y"])
+                # Remove the jet
+                self.fighter_jets.remove(jet)
+                # Award bonus ammo
+                self.ammo += 10
+                # Play explosion sound if available
+                if 'bomb' in self.assets.sounds:
+                    self.assets.sounds['bomb'].play()
+                return True
+        return False
+        
+    def create_jet_explosion(self, x, y):
+        """Create explosion effect for destroyed jet."""
+        # Create large explosion
+        self.explosions.append({
+            "x": x,
+            "y": y,
+            "timer": 40,  # Longer duration
+            "particles": self.create_jet_explosion_particles(x, y)
+        })
+        
+        # Add camera shake
+        self.camera_shake["intensity"] = 12
+        
+    def create_jet_explosion_particles(self, x, y):
+        """Create explosion particles for jet destruction."""
+        particles = []
+        # More particles for bigger explosion
+        for _ in range(40):
+            angle = random.uniform(0, 2 * math.pi)
+            speed = random.uniform(3, 12)
+            particles.append({
+                "x": x,
+                "y": y,
+                "vx": math.cos(angle) * speed,
+                "vy": math.sin(angle) * speed,
+                "life": 40,
+                "color": random.choice([
+                    (255, 200, 0),
+                    (255, 150, 0),
+                    (255, 100, 0),
+                    (255, 50, 0),
+                    (200, 50, 0),
+                    (150, 30, 0)
+                ])
+            })
+        # Add some debris particles
+        for _ in range(10):
+            angle = random.uniform(0, 2 * math.pi)
+            speed = random.uniform(5, 15)
+            particles.append({
+                "x": x,
+                "y": y,
+                "vx": math.cos(angle) * speed,
+                "vy": math.sin(angle) * speed - 3,  # Upward bias
+                "life": 50,
+                "size": random.randint(3, 8),
+                "color": random.choice([
+                    (80, 80, 80),   # Grey metal
+                    (60, 60, 60),   # Dark metal
+                    (100, 100, 100) # Light metal
+                ])
+            })
+        return particles
         
     def hit_piece(self, pos):
         """Hit a piece at given position."""

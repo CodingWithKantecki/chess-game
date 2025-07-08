@@ -77,6 +77,7 @@ SCREEN_GAME = "game"
 SCREEN_CREDITS = "credits"
 SCREEN_ARMS_DEALER = "arms_dealer"
 SCREEN_BETA = "beta"
+SCREEN_SETTINGS = "settings"
 
 # AI Difficulty levels with ELO ratings
 AI_DIFFICULTIES = ["easy", "medium", "hard", "very_hard"]
