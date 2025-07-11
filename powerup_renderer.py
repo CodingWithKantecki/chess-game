@@ -12,33 +12,18 @@ class PowerupRenderer:
         self.screen = screen
         self.renderer = renderer  # Reference to main renderer for fonts
         self.powerup_system = powerup_system
-        self.scale = 1.0
         self.explosion_frames_scaled = {}  # Cache for scaled explosion frames
-        
-    def update_scale(self, scale):
-        """Update scale factor for fullscreen mode."""
-        self.scale = scale
         
     def draw_powerup_menu(self, board, mouse_pos):
         """Draw the powerup menu on the right side of the screen."""
         # Calculate menu position (right side of board)
-        board_size_scaled = int(BOARD_SIZE * self.scale)
-        
-        # Account for the board's border which adds extra width
-        # The board has borders on all sides that we need to account for
-        board_border_scaled = int((BOARD_BORDER_LEFT + BOARD_BORDER_RIGHT) * self.scale)
-        
-        # In fullscreen, we need even more spacing
-        if self.scale > 1.0:  # Fullscreen mode
-            extra_spacing = int(60 * self.scale)  # Increased to 60 pixels
-        else:
-            extra_spacing = int(20 * self.scale)  # Normal gap in windowed mode
+        extra_spacing = 20  # Normal gap in windowed mode
             
         # Add the border width to ensure we're past the entire board
-        menu_x = BOARD_OFFSET_X + board_size_scaled + extra_spacing
-        menu_y = BOARD_OFFSET_Y + int(36 * self.scale)  # Move down by the board border size (36 pixels)
-        menu_width = int(POWERUP_MENU_WIDTH * self.scale)
-        menu_height = board_size_scaled - int(72 * self.scale)  # Subtract top and bottom borders (36 + 36)
+        menu_x = BOARD_OFFSET_X + BOARD_SIZE + extra_spacing
+        menu_y = BOARD_OFFSET_Y + 36  # Move down by the board border size
+        menu_width = POWERUP_MENU_WIDTH
+        menu_height = BOARD_SIZE - 72  # Subtract top and bottom borders
         
         # Store position for click handling
         self.powerup_system.menu_x = menu_x
@@ -49,23 +34,22 @@ class PowerupRenderer:
         # Draw menu background - solid black background first
         # Draw a completely opaque black rectangle first
         black_bg = pygame.Surface((menu_width, menu_height))
-        black_bg.fill((0, 0, 0))  # Solid black, no alpha
+        black_bg.fill((0, 0, 0))
         self.screen.blit(black_bg, (menu_x, menu_y))
         
         # Then add a slight transparency overlay for consistency
         overlay = pygame.Surface((menu_width, menu_height), pygame.SRCALPHA)
-        overlay.fill((0, 0, 0, 50))  # Slight transparency for depth
+        overlay.fill((0, 0, 0, 50))
         self.screen.blit(overlay, (menu_x, menu_y))
         
-        # Draw border (with brighter color for visibility)
+        # Draw border
         pygame.draw.rect(self.screen, (100, 100, 120), 
                         (menu_x, menu_y, menu_width, menu_height), 3)
         
-        # Title - with green cyberpunk color
+        # Title
         title_text = "POWERUPS"
         title_surface = self.renderer.pixel_fonts['large'].render(title_text, True, (0, 255, 0))
-        title_rect = title_surface.get_rect(centerx=menu_x + menu_width // 2, 
-                                           y=menu_y + int(20 * self.scale))
+        title_rect = title_surface.get_rect(centerx=menu_x + menu_width // 2, y=menu_y + 20)
         self.screen.blit(title_surface, title_rect)
         
         # Player points
@@ -73,15 +57,13 @@ class PowerupRenderer:
         points = self.powerup_system.points[player]
         points_text = f"POINTS: {points}"
         points_surface = self.renderer.pixel_fonts['medium'].render(points_text, True, (255, 204, 0))
-        points_rect = points_surface.get_rect(centerx=menu_x + menu_width // 2, 
-                                             y=menu_y + int(60 * self.scale))
+        points_rect = points_surface.get_rect(centerx=menu_x + menu_width // 2, y=menu_y + 60)
         self.screen.blit(points_surface, points_rect)
         
         # Show whose turn it is
         turn_text = f"({player.upper()}'S TURN)"
         turn_surface = self.renderer.pixel_fonts['tiny'].render(turn_text, True, (150, 150, 150))
-        turn_rect = turn_surface.get_rect(centerx=menu_x + menu_width // 2, 
-                                         y=menu_y + int(85 * self.scale))
+        turn_rect = turn_surface.get_rect(centerx=menu_x + menu_width // 2, y=menu_y + 85)
         self.screen.blit(turn_surface, turn_rect)
         
         # Get unlocked powerups
@@ -96,10 +78,10 @@ class PowerupRenderer:
         self.powerup_system.button_rects = {}
         
         # Draw powerup buttons
-        button_y = menu_y + int(120 * self.scale)
-        button_height = int(70 * self.scale)  # Reduced from 80
-        button_spacing = int(15 * self.scale)  # Reduced from 20
-        button_margin = int(20 * self.scale)
+        button_y = menu_y + 120
+        button_height = 70
+        button_spacing = 15
+        button_margin = 20
         button_width = menu_width - 2 * button_margin
         
         # If no powerups unlocked, show message
@@ -130,13 +112,13 @@ class PowerupRenderer:
             
             # Choose button color - DARKER COLORS
             if is_active:
-                button_color = (60, 60, 80)  # Slightly brighter when active
+                button_color = (60, 60, 80)
             elif is_hover:
-                button_color = (50, 50, 65)  # Slightly lighter when hovering
+                button_color = (50, 50, 65)
             elif can_afford:
-                button_color = (40, 40, 50)  # Dark but visible when available
+                button_color = (40, 40, 50)
             else:
-                button_color = (20, 20, 25)  # Very dark when disabled
+                button_color = (20, 20, 25)
                 
             # Draw button
             pygame.draw.rect(self.screen, button_color, button_rect, border_radius=10)
@@ -157,8 +139,8 @@ class PowerupRenderer:
             
             # Draw icon
             if key == "gun" and hasattr(self.renderer, 'assets') and hasattr(self.renderer.assets, 'revolver_image') and self.renderer.assets.revolver_image:
-                # Use the actual revolver image for gun powerup - SMALLER SIZE
-                icon_size = int(25 * self.scale)  # Reduced from 30
+                # Use the actual revolver image for gun powerup
+                icon_size = 25
                 scaled_revolver = pygame.transform.scale(self.renderer.assets.revolver_image, (icon_size, icon_size))
                 
                 # Apply grayscale effect if can't afford
@@ -172,17 +154,16 @@ class PowerupRenderer:
                             gray_surface.set_at((x, y), (gray, gray, gray, a))
                     scaled_revolver = gray_surface
                 
-                icon_rect = scaled_revolver.get_rect(centerx=button_rect.centerx, 
-                                                   y=button_rect.y + int(12 * self.scale))  # Adjusted position
+                icon_rect = scaled_revolver.get_rect(centerx=button_rect.centerx, y=button_rect.y + 12)
                 self.screen.blit(scaled_revolver, icon_rect)
             elif key == "chopper":
                 # Draw helicopter icon
                 self._draw_helicopter_icon(button_rect, can_afford)
             else:
                 # Draw custom icons for other powerups
-                icon_size = int(30 * self.scale)
+                icon_size = 30
                 icon_surface = pygame.Surface((icon_size, icon_size), pygame.SRCALPHA)
-                icon_surface.fill((0, 0, 0, 0))  # Transparent background
+                icon_surface.fill((0, 0, 0, 0))
                 
                 if key == "airstrike":
                     # Draw missile icon
@@ -198,23 +179,20 @@ class PowerupRenderer:
                     icon_color = WHITE if can_afford else (80, 80, 80)
                     icon_surface = self.renderer.pixel_fonts['large'].render(powerup["icon"], True, icon_color)
                 
-                icon_rect = icon_surface.get_rect(centerx=button_rect.centerx, 
-                                                 y=button_rect.y + int(10 * self.scale))
+                icon_rect = icon_surface.get_rect(centerx=button_rect.centerx, y=button_rect.y + 10)
                 self.screen.blit(icon_surface, icon_rect)
             
-            # Draw name - with glow effect if available
+            # Draw name
             name_color = (0, 255, 0) if can_afford else (80, 80, 80)
             name_surface = self.renderer.pixel_fonts['small'].render(powerup["name"], True, name_color)
-            name_rect = name_surface.get_rect(centerx=button_rect.centerx, 
-                                             y=button_rect.y + int(35 * self.scale))
+            name_rect = name_surface.get_rect(centerx=button_rect.centerx, y=button_rect.y + 35)
             self.screen.blit(name_surface, name_rect)
             
             # Draw cost
             cost_text = f"Cost: {powerup['cost']}"
             cost_color = (255, 204, 0) if can_afford else (80, 80, 80)
             cost_surface = self.renderer.pixel_fonts['tiny'].render(cost_text, True, cost_color)
-            cost_rect = cost_surface.get_rect(centerx=button_rect.centerx, 
-                                             y=button_rect.y + int(55 * self.scale))
+            cost_rect = cost_surface.get_rect(centerx=button_rect.centerx, y=button_rect.y + 55)
             self.screen.blit(cost_surface, cost_rect)
             
             button_y += button_height + button_spacing
@@ -224,14 +202,14 @@ class PowerupRenderer:
             instruction_text = self._get_instruction_text()
             inst_surface = self.renderer.pixel_fonts['small'].render(instruction_text, True, (255, 255, 150))
             inst_rect = inst_surface.get_rect(centerx=menu_x + menu_width // 2, 
-                                             bottom=menu_y + menu_height - int(20 * self.scale))
+                                             bottom=menu_y + menu_height - 20)
             self.screen.blit(inst_surface, inst_rect)
             
             # Cancel instruction
             cancel_text = "ESC to cancel"
             cancel_surface = self.renderer.pixel_fonts['tiny'].render(cancel_text, True, (200, 100, 100))
             cancel_rect = cancel_surface.get_rect(centerx=menu_x + menu_width // 2, 
-                                                bottom=menu_y + menu_height - int(40 * self.scale))
+                                                bottom=menu_y + menu_height - 40)
             self.screen.blit(cancel_surface, cancel_rect)
             
     def _draw_helicopter_icon(self, button_rect, enabled):
@@ -241,25 +219,25 @@ class PowerupRenderer:
         
         # Calculate center position
         center_x = button_rect.centerx
-        center_y = button_rect.y + int(22 * self.scale)
+        center_y = button_rect.y + 22
         
         # Main body
-        body_width = int(20 * self.scale)
-        body_height = int(12 * self.scale)
+        body_width = 20
+        body_height = 12
         body_rect = pygame.Rect(center_x - body_width // 2, center_y - body_height // 2, 
                                body_width, body_height)
         pygame.draw.ellipse(self.screen, color, body_rect)
         pygame.draw.ellipse(self.screen, darker_color, body_rect, 1)
         
         # Tail
-        tail_width = int(15 * self.scale)
-        tail_height = int(4 * self.scale)
+        tail_width = 15
+        tail_height = 4
         pygame.draw.rect(self.screen, color, 
                         (center_x + body_width // 2 - 2, center_y - tail_height // 2, 
                          tail_width, tail_height))
         
         # Main rotor (animated)
-        rotor_length = int(25 * self.scale)
+        rotor_length = 25
         rotor_angle = (pygame.time.get_ticks() // 20) % 360
         for i in range(2):
             angle = rotor_angle + i * 180
@@ -271,7 +249,7 @@ class PowerupRenderer:
             
         # Tail rotor
         tail_rotor_x = center_x + body_width // 2 + tail_width - 3
-        pygame.draw.circle(self.screen, darker_color, (tail_rotor_x, center_y), int(4 * self.scale), 1)
+        pygame.draw.circle(self.screen, darker_color, (tail_rotor_x, center_y), 4, 1)
         
         # Landing skids
         skid_y = center_y + body_height // 2 + 2
@@ -284,9 +262,9 @@ class PowerupRenderer:
         color = (255, 100, 100) if enabled else (80, 80, 80)
         darker_color = tuple(c // 2 for c in color)
         
-        # Horizontal missile - smaller and cleaner
-        missile_length = int(size * 0.7)  # Reduced size
-        missile_height = int(size * 0.25)  # Thinner profile
+        # Horizontal missile
+        missile_length = int(size * 0.7)
+        missile_height = int(size * 0.25)
         
         # Center the missile
         missile_x = (size - missile_length) // 2
@@ -303,11 +281,11 @@ class PowerupRenderer:
                         (body_x, missile_y + 1), 
                         (body_x + body_width, missile_y + 1), 1)
         
-        # Draw nose cone (pointed front)
+        # Draw nose cone
         nose_points = [
-            (missile_x, missile_y + missile_height // 2),  # Tip
-            (body_x, missile_y),  # Top
-            (body_x, missile_y + missile_height)  # Bottom
+            (missile_x, missile_y + missile_height // 2),
+            (body_x, missile_y),
+            (body_x, missile_y + missile_height)
         ]
         pygame.draw.polygon(surface, color, nose_points)
         
@@ -342,7 +320,7 @@ class PowerupRenderer:
         darker_color = tuple(int(c * 0.7) for c in color)
         lighter_color = tuple(min(255, int(c * 1.3)) for c in color)
         
-        # Shield shape - cleaner, more geometric
+        # Shield shape
         width = int(size * 0.6)
         height = int(size * 0.7)
         x = (size - width) // 2
@@ -382,7 +360,6 @@ class PowerupRenderer:
         canopy_y = size // 5
         
         # Draw canopy as filled semi-circle
-        # First draw a filled circle
         canopy_center_x = size // 2
         canopy_center_y = canopy_y + canopy_height // 2
         
@@ -403,7 +380,7 @@ class PowerupRenderer:
             segment_color = color if i % 2 == 0 else darker_color
             pygame.draw.polygon(surface, segment_color, points)
         
-        # Draw strings (cleaner lines)
+        # Draw strings
         string_end_y = size - size // 3
         string_end_x = size // 2
         
@@ -414,7 +391,7 @@ class PowerupRenderer:
                            (string_x, canopy_y + canopy_height), 
                            (string_end_x, string_end_y), 1)
         
-        # Draw simplified person/cargo as a small rectangle
+        # Draw simplified person/cargo
         cargo_size = size // 8
         pygame.draw.rect(surface, color, 
                         (string_end_x - cargo_size // 2, string_end_y, 
@@ -442,8 +419,6 @@ class PowerupRenderer:
         if row < 0 or col < 0:
             return
             
-        square_size_scaled = int(SQUARE_SIZE * self.scale)
-        
         # Draw 3x3 grid
         for dr in range(-1, 2):
             for dc in range(-1, 2):
@@ -453,19 +428,18 @@ class PowerupRenderer:
                     x, y = board.get_square_pos(target_row, target_col)
                     
                     # Draw targeting square
-                    target_surface = pygame.Surface((square_size_scaled, square_size_scaled), pygame.SRCALPHA)
+                    target_surface = pygame.Surface((SQUARE_SIZE, SQUARE_SIZE), pygame.SRCALPHA)
                     target_surface.fill((255, 0, 0, 60))
                     self.screen.blit(target_surface, (x, y))
                     
                     # Draw border
                     pygame.draw.rect(self.screen, (255, 0, 0), 
-                                   (x, y, square_size_scaled, square_size_scaled), 2)
+                                   (x, y, SQUARE_SIZE, SQUARE_SIZE), 2)
                                    
     def _draw_shield_targeting(self, board, mouse_pos):
         """Highlight valid pieces for shield."""
         player = self.powerup_system.powerup_state["player"]
         player_color = 'w' if player == "white" else 'b'
-        square_size_scaled = int(SQUARE_SIZE * self.scale)
         
         # Highlight all player's pieces
         for row in range(8):
@@ -479,7 +453,7 @@ class PowerupRenderer:
                     is_hover = (row == mouse_row and col == mouse_col)
                     
                     # Draw highlight
-                    highlight_surface = pygame.Surface((square_size_scaled, square_size_scaled), pygame.SRCALPHA)
+                    highlight_surface = pygame.Surface((SQUARE_SIZE, SQUARE_SIZE), pygame.SRCALPHA)
                     if is_hover:
                         highlight_surface.fill((100, 200, 255, 100))
                     else:
@@ -488,7 +462,7 @@ class PowerupRenderer:
                     
                     if is_hover:
                         pygame.draw.rect(self.screen, (100, 200, 255), 
-                                       (x, y, square_size_scaled, square_size_scaled), 3)
+                                       (x, y, SQUARE_SIZE, SQUARE_SIZE), 3)
                                        
     def _draw_gun_targeting(self, board, mouse_pos):
         """Draw gun targeting based on phase."""
@@ -497,7 +471,6 @@ class PowerupRenderer:
             self._draw_shield_targeting(board, mouse_pos)
         else:
             # Show valid targets and draw gun on shooter
-            square_size_scaled = int(SQUARE_SIZE * self.scale)
             valid_targets = self.powerup_system.powerup_state["data"].get("valid_targets", [])
             
             # Draw the revolver on the shooter piece
@@ -506,13 +479,13 @@ class PowerupRenderer:
             
             # Draw the revolver if image is loaded
             if hasattr(self.renderer, 'assets') and hasattr(self.renderer.assets, 'revolver_image') and self.renderer.assets.revolver_image:
-                # Scale the revolver to about 40% of square size
-                revolver_size = int(square_size_scaled * 0.4)
+                # Scale the revolver
+                revolver_size = int(SQUARE_SIZE * 0.4)
                 scaled_revolver = pygame.transform.scale(self.renderer.assets.revolver_image, (revolver_size, revolver_size))
                 
                 # Position it at the top-right of the piece
-                revolver_x = shooter_x + square_size_scaled - revolver_size - int(5 * self.scale)
-                revolver_y = shooter_y + int(5 * self.scale)
+                revolver_x = shooter_x + SQUARE_SIZE - revolver_size - 5
+                revolver_y = shooter_y + 5
                 
                 # Draw a slight shadow/glow effect
                 glow_surface = pygame.Surface((revolver_size + 4, revolver_size + 4), pygame.SRCALPHA)
@@ -523,8 +496,8 @@ class PowerupRenderer:
                 self.screen.blit(scaled_revolver, (revolver_x, revolver_y))
             
             # Draw line from shooter to mouse
-            shooter_center = (shooter_x + square_size_scaled // 2, 
-                            shooter_y + square_size_scaled // 2)
+            shooter_center = (shooter_x + SQUARE_SIZE // 2, 
+                            shooter_y + SQUARE_SIZE // 2)
             
             # Draw targeting line
             pygame.draw.line(self.screen, (255, 200, 100, 150), shooter_center, mouse_pos, 2)
@@ -538,9 +511,9 @@ class PowerupRenderer:
                 is_hover = (target_row == mouse_row and target_col == mouse_col)
                 
                 # Draw crosshair
-                center_x = x + square_size_scaled // 2
-                center_y = y + square_size_scaled // 2
-                radius = int(20 * self.scale)
+                center_x = x + SQUARE_SIZE // 2
+                center_y = y + SQUARE_SIZE // 2
+                radius = 20
                 
                 color = (255, 0, 0) if is_hover else (200, 100, 100)
                 pygame.draw.circle(self.screen, color, (center_x, center_y), radius, 2)
@@ -553,12 +526,12 @@ class PowerupRenderer:
         """Draw chopper gunner confirmation dialog."""
         # Dim the entire screen
         dim_surface = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
-        dim_surface.fill((0, 0, 0, 180))  # Dark semi-transparent overlay
+        dim_surface.fill((0, 0, 0, 180))
         self.screen.blit(dim_surface, (0, 0))
         
         # Dialog box dimensions
-        dialog_width = int(400 * self.scale)
-        dialog_height = int(200 * self.scale)
+        dialog_width = 400
+        dialog_height = 200
         dialog_x = (WIDTH - dialog_width) // 2
         dialog_y = (HEIGHT - dialog_height) // 2
         
@@ -573,29 +546,26 @@ class PowerupRenderer:
         # Warning text
         warning_text = "WARNING!"
         warning_surface = self.renderer.pixel_fonts['large'].render(warning_text, True, (255, 50, 50))
-        warning_rect = warning_surface.get_rect(centerx=WIDTH // 2, 
-                                               y=dialog_y + int(20 * self.scale))
+        warning_rect = warning_surface.get_rect(centerx=WIDTH // 2, y=dialog_y + 20)
         self.screen.blit(warning_surface, warning_rect)
         
         # Message text
         message = "This will destroy all enemy pieces!"
         message_surface = self.renderer.pixel_fonts['medium'].render(message, True, (255, 255, 255))
-        message_rect = message_surface.get_rect(centerx=WIDTH // 2, 
-                                               y=dialog_y + int(60 * self.scale))
+        message_rect = message_surface.get_rect(centerx=WIDTH // 2, y=dialog_y + 60)
         self.screen.blit(message_surface, message_rect)
         
         question = "Are you sure you want to continue?"
         question_surface = self.renderer.pixel_fonts['medium'].render(question, True, (200, 200, 200))
-        question_rect = question_surface.get_rect(centerx=WIDTH // 2, 
-                                                 y=dialog_y + int(90 * self.scale))
+        question_rect = question_surface.get_rect(centerx=WIDTH // 2, y=dialog_y + 90)
         self.screen.blit(question_surface, question_rect)
         
         # Store button positions for click handling
-        button_width = int(100 * self.scale)
-        button_height = int(40 * self.scale)
-        button_spacing = int(20 * self.scale)
+        button_width = 100
+        button_height = 40
+        button_spacing = 20
         buttons_total_width = button_width * 2 + button_spacing
-        button_y = dialog_y + dialog_height - int(60 * self.scale)
+        button_y = dialog_y + dialog_height - 60
         
         # YES button
         yes_x = (WIDTH - buttons_total_width) // 2
@@ -628,16 +598,14 @@ class PowerupRenderer:
                                
     def _draw_paratroopers_targeting(self, board, mouse_pos):
         """Draw paratrooper placement indicators."""
-        square_size_scaled = int(SQUARE_SIZE * self.scale)
-        
         # Show how many pawns left to place
         placed = len(self.powerup_system.powerup_state["data"].get("placed", []))
         remaining = 3 - placed
         
         info_text = f"PLACE {remaining} MORE PAWN{'S' if remaining > 1 else ''}"
         text_surface = self.renderer.pixel_fonts['medium'].render(info_text, True, (100, 200, 100))
-        text_rect = text_surface.get_rect(center=(BOARD_OFFSET_X + int(BOARD_SIZE * self.scale) // 2, 
-                                                  BOARD_OFFSET_Y - int(30 * self.scale)))
+        text_rect = text_surface.get_rect(center=(BOARD_OFFSET_X + BOARD_SIZE // 2, 
+                                                  BOARD_OFFSET_Y - 30))
         self.screen.blit(text_surface, text_rect)
         
         # Highlight empty squares
@@ -653,15 +621,15 @@ class PowerupRenderer:
                     # Draw parachute preview
                     if is_hover:
                         # Draw landing zone
-                        zone_surface = pygame.Surface((square_size_scaled, square_size_scaled), pygame.SRCALPHA)
+                        zone_surface = pygame.Surface((SQUARE_SIZE, SQUARE_SIZE), pygame.SRCALPHA)
                         zone_surface.fill((100, 200, 100, 100))
                         self.screen.blit(zone_surface, (x, y))
                         
                         # Draw parachute icon
                         chute_text = "🪂"
                         chute_surface = self.renderer.pixel_fonts['large'].render(chute_text, True, (255, 255, 255))
-                        chute_rect = chute_surface.get_rect(center=(x + square_size_scaled // 2, 
-                                                                   y + square_size_scaled // 2))
+                        chute_rect = chute_surface.get_rect(center=(x + SQUARE_SIZE // 2, 
+                                                                   y + SQUARE_SIZE // 2))
                         self.screen.blit(chute_surface, chute_rect)
                                
     def draw_effects(self, board):
@@ -672,9 +640,7 @@ class PowerupRenderer:
         for anim in self.powerup_system.animations:
             progress = (current_time - anim["start_time"]) / anim["duration"]
             
-            if anim["type"] == "airstrike_sequence":
-                self._draw_airstrike_sequence(anim, progress, board)
-            elif anim["type"] == "jet_flyby":
+            if anim["type"] == "jet_flyby":
                 self._draw_jet_flyby_animation(anim, progress, board)
             elif anim["type"] == "airstrike":
                 self._draw_airstrike_animation(anim, progress, board)
@@ -703,24 +669,23 @@ class PowerupRenderer:
             return
             
         # Calculate jet position (flying from RIGHT to LEFT)
-        board_width = BOARD_SIZE * self.scale
-        start_x = BOARD_OFFSET_X + board_width + 100 * self.scale  # Start off-screen right
-        end_x = BOARD_OFFSET_X - 200 * self.scale  # End off-screen left
+        start_x = BOARD_OFFSET_X + BOARD_SIZE + 100
+        end_x = BOARD_OFFSET_X - 200
         
         # Jet flies from right to left
         jet_x = start_x + (end_x - start_x) * progress
         
         # Height arc - jet dips down at target then rises
-        base_y = BOARD_OFFSET_Y - 50 * self.scale
-        target_progress = abs(progress - 0.5) * 2  # 0 at middle, 1 at edges
-        jet_y = base_y + (1 - target_progress) * 50 * self.scale  # Reduced dip from 100 to 50
+        base_y = BOARD_OFFSET_Y - 50
+        target_progress = abs(progress - 0.5) * 2
+        jet_y = base_y + (1 - target_progress) * 50
         
-        # Calculate which frame to show (4 frames total)
-        frame_duration = [0.2, 0.14, 0.14, 0.2]  # Seconds for each frame
+        # Calculate which frame to show
+        frame_duration = [0.2, 0.14, 0.14, 0.2]
         total_duration = sum(frame_duration)
         
         # Determine current frame based on animation cycle
-        cycle_progress = (progress * 3) % 1  # Repeat animation 3 times during flyby
+        cycle_progress = (progress * 3) % 1
         current_time = cycle_progress * total_duration
         
         frame_index = 0
@@ -737,8 +702,8 @@ class PowerupRenderer:
         # Get the jet frame
         jet_frame = self.renderer.assets.jet_frames[frame_index]
         
-        # Scale the jet (REDUCED from 1.5x to 0.75x)
-        jet_scale = 0.75 * self.scale  # Half the previous size
+        # Scale the jet
+        jet_scale = 0.75
         jet_width = int(jet_frame.get_width() * jet_scale)
         jet_height = int(jet_frame.get_height() * jet_scale)
         
@@ -748,25 +713,25 @@ class PowerupRenderer:
         # Draw the jet
         self.screen.blit(scaled_jet, (jet_x, jet_y))
         
-        # Draw bomb being dropped when jet is near target (40-60% through)
+        # Draw bomb being dropped when jet is near target
         if 0.4 <= progress <= 0.6:
-            bomb_progress = (progress - 0.4) / 0.2  # 0 to 1 during bomb drop
-            bomb_x = anim["target_x"] + SQUARE_SIZE * self.scale // 2
+            bomb_progress = (progress - 0.4) / 0.2
+            bomb_x = anim["target_x"] + SQUARE_SIZE // 2
             bomb_start_y = jet_y + jet_height
-            bomb_end_y = anim["target_y"] + SQUARE_SIZE * self.scale // 2
+            bomb_end_y = anim["target_y"] + SQUARE_SIZE // 2
             bomb_y = bomb_start_y + (bomb_end_y - bomb_start_y) * bomb_progress
             
-            # Draw a more realistic bomb
-            bomb_width = int(8 * self.scale)
-            bomb_height = int(20 * self.scale)
+            # Draw a realistic bomb
+            bomb_width = 8
+            bomb_height = 20
             
-            # Main bomb body (dark gray cylinder)
+            # Main bomb body
             bomb_rect = pygame.Rect(bomb_x - bomb_width // 2, bomb_y - bomb_height // 2, 
                                    bomb_width, bomb_height)
             pygame.draw.ellipse(self.screen, (60, 60, 60), bomb_rect)
-            pygame.draw.ellipse(self.screen, (40, 40, 40), bomb_rect, 1)  # Outline
+            pygame.draw.ellipse(self.screen, (40, 40, 40), bomb_rect, 1)
             
-            # Nose cone (pointed tip at bottom)
+            # Nose cone
             nose_points = [
                 (bomb_x - bomb_width // 2, bomb_y + bomb_height // 2 - 2),
                 (bomb_x + bomb_width // 2, bomb_y + bomb_height // 2 - 2),
@@ -775,8 +740,8 @@ class PowerupRenderer:
             pygame.draw.polygon(self.screen, (50, 50, 50), nose_points)
             
             # Tail fins at top
-            fin_height = int(6 * self.scale)
-            fin_width = int(12 * self.scale)
+            fin_height = 6
+            fin_width = 12
             # Left fin
             pygame.draw.polygon(self.screen, (70, 70, 70), [
                 (bomb_x - bomb_width // 2, bomb_y - bomb_height // 2),
@@ -793,79 +758,26 @@ class PowerupRenderer:
             pygame.draw.rect(self.screen, (70, 70, 70), 
                            (bomb_x - 1, bomb_y - bomb_height // 2 - fin_height, 
                             2, fin_height))
-            
-        # Calculate more precise explosion timing
-        # Bomb drops from 40% to 60% (0.6s to 0.9s of 1.5s animation)
-        # We want explosion when bomb hits, which is at 60% progress = 0.9s
-        
-    def _draw_airstrike_sequence(self, anim, progress, board):
-        """Draw the full airstrike sequence including helicopter takeoff."""
-        # Check if we have the helicopter sequence images
-        if hasattr(self.renderer, 'assets') and hasattr(self.renderer.assets, 'airstrike_sequence'):
-            sequence = self.renderer.assets.airstrike_sequence
-            if len(sequence) >= 2:
-                # Total sequence: 4 seconds for images + 1.5 seconds for jet
-                total_duration = 5500  # milliseconds
-                current_time = progress * total_duration
-                
-                if current_time < 2000:
-                    # First image (0-2 seconds)
-                    alpha = 255
-                    if current_time < 500:  # Fade in
-                        alpha = int((current_time / 500) * 255)
-                    elif current_time > 1500:  # Fade out
-                        alpha = int(((2000 - current_time) / 500) * 255)
-                    
-                    # Scale image to screen
-                    scaled_img = pygame.transform.scale(sequence[0], (WIDTH, HEIGHT))
-                    scaled_img.set_alpha(alpha)
-                    self.screen.blit(scaled_img, (0, 0))
-                    
-                elif current_time < 4000:
-                    # Second image (2-4 seconds)
-                    alpha = 255
-                    if current_time < 2500:  # Fade in
-                        alpha = int(((current_time - 2000) / 500) * 255)
-                    elif current_time > 3500:  # Fade out
-                        alpha = int(((4000 - current_time) / 500) * 255)
-                    
-                    # Scale image to screen
-                    scaled_img = pygame.transform.scale(sequence[1], (WIDTH, HEIGHT))
-                    scaled_img.set_alpha(alpha)
-                    self.screen.blit(scaled_img, (0, 0))
-                    
-                else:
-                    # Continue with normal jet flyby (4-5.5 seconds)
-                    # Adjust progress for the jet animation
-                    jet_progress = (current_time - 4000) / 1500
-                    self._draw_jet_flyby_animation(anim, jet_progress, board)
-        else:
-            # Fallback to normal jet flyby if images not loaded
-            self._draw_jet_flyby_animation(anim, progress, board)
     
     def _draw_airstrike_animation(self, anim, progress, board):
         """Draw airstrike explosion using sprite frames."""
-        # Skip drawing if progress is negative (animation hasn't started yet)
+        # Skip drawing if progress is negative
         if progress < 0:
             return
             
-        square_size_scaled = int(SQUARE_SIZE * self.scale)
-        
         # Check if we have explosion frames loaded
         if hasattr(self.renderer, 'assets') and hasattr(self.renderer.assets, 'explosion_frames') and self.renderer.assets.explosion_frames:
-            # Calculate which frame to show (7 frames total)
+            # Calculate which frame to show
             frame_count = len(self.renderer.assets.explosion_frames)
-            # FIX: Clamp progress to avoid going past the last frame
             clamped_progress = min(progress, 0.9999)
             frame_index = int(clamped_progress * frame_count)
-            # Extra safety check
             frame_index = max(0, min(frame_index, frame_count - 1))
                 
             # Get the explosion frame
             explosion_frame = self.renderer.assets.explosion_frames[frame_index]
             
             # Scale the explosion to cover 3x3 grid
-            explosion_size = int(square_size_scaled * 3)
+            explosion_size = SQUARE_SIZE * 3
             
             # Cache scaled frames for performance
             cache_key = (frame_index, explosion_size)
@@ -876,8 +788,8 @@ class PowerupRenderer:
             scaled_frame = self.explosion_frames_scaled[cache_key]
             
             # Position explosion centered on the target square
-            center_x = anim["x"] + square_size_scaled // 2
-            center_y = anim["y"] + square_size_scaled // 2
+            center_x = anim["x"] + SQUARE_SIZE // 2
+            center_y = anim["y"] + SQUARE_SIZE // 2
             x = center_x - explosion_size // 2
             y = center_y - explosion_size // 2
             
@@ -886,15 +798,14 @@ class PowerupRenderer:
             
         else:
             # Fallback to original animation if frames not loaded
-            square_size_scaled = int(SQUARE_SIZE * self.scale)
-            center_x = anim["x"] + square_size_scaled // 2
-            center_y = anim["y"] + square_size_scaled // 2
+            center_x = anim["x"] + SQUARE_SIZE // 2
+            center_y = anim["y"] + SQUARE_SIZE // 2
             
             # Multiple explosion rings
             for i in range(3):
                 phase = (progress + i * 0.2) % 1.0
                 if phase < 0.7:
-                    radius = int(square_size_scaled * 1.5 * phase)
+                    radius = int(SQUARE_SIZE * 1.5 * phase)
                     alpha = int(255 * (1 - phase))
                     
                     if radius > 0:
@@ -906,21 +817,20 @@ class PowerupRenderer:
                         
     def _draw_shield_animation(self, anim, progress):
         """Draw shield activation effect."""
-        square_size_scaled = int(SQUARE_SIZE * self.scale)
         x, y = anim["x"], anim["y"]
         
         # Expanding shield bubble
-        max_radius = int(square_size_scaled * 0.6)
+        max_radius = int(SQUARE_SIZE * 0.6)
         radius = int(max_radius * progress)
         alpha = int(200 * (1 - progress))
         
-        shield_surface = pygame.Surface((square_size_scaled, square_size_scaled), pygame.SRCALPHA)
-        shield_surface.fill((0, 0, 0, 0))  # Clear surface
+        shield_surface = pygame.Surface((SQUARE_SIZE, SQUARE_SIZE), pygame.SRCALPHA)
+        shield_surface.fill((0, 0, 0, 0))
         
         # Draw circle with color but set alpha on the surface
         if radius > 0:
             pygame.draw.circle(shield_surface, (100, 200, 255), 
-                             (square_size_scaled // 2, square_size_scaled // 2), radius, 3)
+                             (SQUARE_SIZE // 2, SQUARE_SIZE // 2), radius, 3)
         shield_surface.set_alpha(alpha)
         self.screen.blit(shield_surface, (x, y))
         
@@ -928,11 +838,9 @@ class PowerupRenderer:
         """Draw bullet/laser effect with revolver."""
         # Draw the revolver at the start position for the first part of the animation
         if progress < 0.3 and hasattr(self.renderer, 'assets') and hasattr(self.renderer.assets, 'revolver_image') and self.renderer.assets.revolver_image:
-            square_size_scaled = int(SQUARE_SIZE * self.scale)
-            
             # Calculate revolver position (it should appear to recoil)
-            recoil = int(10 * self.scale * progress * 3)  # Quick recoil effect
-            revolver_size = int(square_size_scaled * 0.4)
+            recoil = int(10 * progress * 3)  # Quick recoil effect
+            revolver_size = int(SQUARE_SIZE * 0.4)
             scaled_revolver = pygame.transform.scale(self.renderer.assets.revolver_image, (revolver_size, revolver_size))
             
             # Position based on the starting position
@@ -941,7 +849,7 @@ class PowerupRenderer:
             
             # Add a muzzle flash effect at the tip of the gun
             if progress < 0.1:
-                flash_size = int(20 * self.scale)
+                flash_size = 20
                 flash_surface = pygame.Surface((flash_size * 2, flash_size * 2), pygame.SRCALPHA)
                 pygame.draw.circle(flash_surface, (255, 255, 200), (flash_size, flash_size), flash_size)
                 flash_surface.set_alpha(int(255 * (1 - progress * 10)))
@@ -954,7 +862,7 @@ class PowerupRenderer:
         y = anim["start_y"] + (anim["end_y"] - anim["start_y"]) * progress
         
         # Draw trail
-        trail_length = 50 * self.scale
+        trail_length = 50
         angle = math.atan2(anim["end_y"] - anim["start_y"], 
                           anim["end_x"] - anim["start_x"])
         trail_x = x - math.cos(angle) * trail_length * progress
@@ -962,8 +870,7 @@ class PowerupRenderer:
         
         # Fade out trail
         alpha = int(255 * (1 - progress * 0.5))
-        pygame.draw.line(self.screen, (255, 200, 100), (trail_x, trail_y), (x, y), 
-                        int(4 * self.scale))
+        pygame.draw.line(self.screen, (255, 200, 100), (trail_x, trail_y), (x, y), 4)
                         
     def _draw_explosion_particle(self, effect, current_time):
         """Draw explosion particle."""
@@ -980,7 +887,7 @@ class PowerupRenderer:
         
         if size > 0:
             particle_surface = pygame.Surface((size * 2, size * 2), pygame.SRCALPHA)
-            particle_surface.fill((0, 0, 0, 0))  # Clear surface
+            particle_surface.fill((0, 0, 0, 0))
             pygame.draw.circle(particle_surface, effect["color"], (size, size), size)
             particle_surface.set_alpha(alpha)
             self.screen.blit(particle_surface, (x - size, y - size))
@@ -989,12 +896,12 @@ class PowerupRenderer:
         """Draw muzzle flash effect."""
         progress = (current_time - effect["start_time"]) / effect["duration"]
         
-        size = int(30 * self.scale * (1 - progress))
+        size = int(30 * (1 - progress))
         alpha = int(255 * (1 - progress))
         
         if size > 0:
             flash_surface = pygame.Surface((size * 2, size * 2), pygame.SRCALPHA)
-            flash_surface.fill((0, 0, 0, 0))  # Clear surface
+            flash_surface.fill((0, 0, 0, 0))
             pygame.draw.circle(flash_surface, (255, 255, 200), (size, size), size)
             flash_surface.set_alpha(alpha)
             self.screen.blit(flash_surface, (effect["x"] - size, effect["y"] - size))
@@ -1003,20 +910,19 @@ class PowerupRenderer:
         """Draw impact effect at target."""
         progress = (current_time - effect["start_time"]) / effect["duration"]
         
-        radius = int(20 * self.scale * (1 + progress))
+        radius = int(20 * (1 + progress))
         alpha = int(200 * (1 - progress))
         
         if radius > 0:
             impact_surface = pygame.Surface((radius * 2, radius * 2), pygame.SRCALPHA)
-            impact_surface.fill((0, 0, 0, 0))  # Clear surface
+            impact_surface.fill((0, 0, 0, 0))
             pygame.draw.circle(impact_surface, (255, 100, 100), 
-                             (radius, radius), radius, int(3 * self.scale))
+                             (radius, radius), radius, 3)
             impact_surface.set_alpha(alpha)
             self.screen.blit(impact_surface, (effect["x"] - radius, effect["y"] - radius))
             
     def _draw_active_shields(self, board):
         """Draw shields on protected pieces."""
-        square_size_scaled = int(SQUARE_SIZE * self.scale)
         current_time = pygame.time.get_ticks()
         
         for (row, col), turns_remaining in self.powerup_system.shielded_pieces.items():
@@ -1024,19 +930,19 @@ class PowerupRenderer:
             
             # Pulsing shield effect
             pulse = math.sin(current_time / 200) * 0.2 + 0.8
-            radius = int(square_size_scaled * 0.4 * pulse)
+            radius = int(SQUARE_SIZE * 0.4 * pulse)
             
             # Shield bubble
-            shield_surface = pygame.Surface((square_size_scaled, square_size_scaled), pygame.SRCALPHA)
-            shield_surface.fill((0, 0, 0, 0))  # Clear surface
-            center = square_size_scaled // 2
+            shield_surface = pygame.Surface((SQUARE_SIZE, SQUARE_SIZE), pygame.SRCALPHA)
+            shield_surface.fill((0, 0, 0, 0))
+            center = SQUARE_SIZE // 2
             
             # Outer glow
             for i in range(3):
                 glow_radius = radius + i * 3
                 alpha = int(100 - i * 30)
                 if glow_radius > 0:
-                    glow_surface = pygame.Surface((square_size_scaled, square_size_scaled), pygame.SRCALPHA)
+                    glow_surface = pygame.Surface((SQUARE_SIZE, SQUARE_SIZE), pygame.SRCALPHA)
                     glow_surface.fill((0, 0, 0, 0))
                     pygame.draw.circle(glow_surface, (100, 200, 255), 
                                      (center, center), glow_radius, 1)
@@ -1077,16 +983,15 @@ class PowerupRenderer:
         
     def _draw_paratrooper_animation(self, anim, progress):
         """Draw paratrooper drop effect."""
-        square_size_scaled = int(SQUARE_SIZE * self.scale)
         x, y = anim["x"], anim["y"]
         
         # Calculate drop position (falling from above)
-        start_y = y - square_size_scaled * 3
+        start_y = y - SQUARE_SIZE * 3
         current_y = start_y + (y - start_y) * progress
         
         # Draw parachute
-        chute_size = int(square_size_scaled * 0.8)
-        chute_x = x + square_size_scaled // 2
+        chute_size = int(SQUARE_SIZE * 0.8)
+        chute_x = x + SQUARE_SIZE // 2
         
         # Parachute canopy
         pygame.draw.arc(self.screen, (200, 200, 200), 
@@ -1102,6 +1007,6 @@ class PowerupRenderer:
         
         # Pawn dangling below
         pawn_y = current_y + chute_size // 2
-        if pawn_y < y + square_size_scaled // 2:
+        if pawn_y < y + SQUARE_SIZE // 2:
             pygame.draw.circle(self.screen, (100, 100, 100), 
-                             (chute_x, pawn_y), int(10 * self.scale))
+                             (chute_x, pawn_y), 10)

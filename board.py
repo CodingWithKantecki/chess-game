@@ -7,7 +7,6 @@ import pygame
 
 class ChessBoard:
     def __init__(self):
-        self.scale = 1.0
         self.reset()
         
     def reset(self):
@@ -45,10 +44,6 @@ class ChessBoard:
         """Set reference to powerup system."""
         self.powerup_system = powerup_system
         
-    def update_scale(self, scale):
-        """Update the scale factor for fullscreen mode."""
-        self.scale = scale
-        
     def get_piece(self, row, col):
         """Get piece at position."""
         if 0 <= row < 8 and 0 <= col < 8:
@@ -63,22 +58,22 @@ class ChessBoard:
     def get_square_pos(self, row, col):
         """Convert row/col to pixel position."""
         import config
-        # Calculate the position within the board first (unscaled)
+        # Calculate the position within the board
         x = config.BOARD_BORDER_LEFT + col * config.SQUARE_SIZE
         y = config.BOARD_BORDER_TOP + row * config.SQUARE_SIZE
         
-        # Then scale and add the board offset
-        x = config.BOARD_OFFSET_X + x * self.scale
-        y = config.BOARD_OFFSET_Y + y * self.scale
+        # Add the board offset
+        x = config.BOARD_OFFSET_X + x
+        y = config.BOARD_OFFSET_Y + y
         return x, y
         
     def get_square_from_pos(self, pos):
         """Convert pixel position to row/col."""
         import config
         x, y = pos
-        # First remove the board offset, then scale, then remove border
-        board_x = ((x - config.BOARD_OFFSET_X) / self.scale) - config.BOARD_BORDER_LEFT
-        board_y = ((y - config.BOARD_OFFSET_Y) / self.scale) - config.BOARD_BORDER_TOP
+        # First remove the board offset, then remove border
+        board_x = (x - config.BOARD_OFFSET_X) - config.BOARD_BORDER_LEFT
+        board_y = (y - config.BOARD_OFFSET_Y) - config.BOARD_BORDER_TOP
         
         if 0 <= board_x < config.PLAYING_AREA_WIDTH and 0 <= board_y < config.PLAYING_AREA_HEIGHT:
             return int(board_y // config.SQUARE_SIZE), int(board_x // config.SQUARE_SIZE)

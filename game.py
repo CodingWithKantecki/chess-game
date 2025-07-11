@@ -1,5 +1,5 @@
 """
-Main Game Class - Enhanced with Settings Menu and Fixed Shop Navigation
+Main Game Class - Enhanced with Shop Navigation (No Settings/Fullscreen)
 """
 
 import pygame
@@ -17,10 +17,9 @@ class ChessGame:
         # Get screen info before creating display
         self.screen_info = pygame.display.Info()
         
-        # Create screen (windowed mode initially)
-        self.fullscreen = False
+        # Create screen (windowed mode only)
         self.screen = pygame.display.set_mode((config.WIDTH, config.HEIGHT))
-        pygame.display.set_caption("Checkmate Protocol - Powerup Edition")
+        pygame.display.set_caption("Checkmate Protocol - BETA")
         self.clock = pygame.time.Clock()
         
         # Load assets
@@ -54,9 +53,6 @@ class ChessGame:
         self.mouse_pos = (0, 0)
         self.selected_difficulty = None
         
-        # Settings state
-        self.settings = self.load_settings()
-        
         # Arms dealer
         self.shop_buttons = {}
         self.arms_dealer_game_button = None
@@ -71,12 +67,25 @@ class ChessGame:
             "What will it be today?"
         ]
         
-        # UI elements - will be updated for scaling
+        # Bar intro dialogue state
+        self.bar_intro_dialogue_index = 0
+        self.bar_intro_dialogues = [
+            "Ah, welcome to my establishment, friend!",
+            "I am Tariq Steele, purveyor of... specialized equipment.",
+            "Before we proceed, I must inform you - this is merely a beta test.",
+            "The full experience, with all its glory and intrigue, will come in the future.",
+            "But fear not! What you're about to play is still quite... explosive.",
+            "Thank you for helping us test these new 'chess enhancements'.",
+            "I hope you'll find the game as thrilling as my other merchandise!",
+            "Now then, shall we see what you're made of?"
+        ]
+        
+        # UI elements
         self.update_ui_positions()
         
         # Volume control
-        self.music_volume = self.settings.get("music_volume", 0.25)
-        self.sfx_volume = self.settings.get("sfx_volume", 0.7)
+        self.music_volume = 0.25
+        self.sfx_volume = 0.7
         self.dragging_music_slider = False
         self.dragging_sfx_slider = False
         pygame.mixer.music.set_volume(self.music_volume)
@@ -102,191 +111,75 @@ class ChessGame:
         # Start music
         pygame.mixer.music.play(-1)
         
-    def load_settings(self):
-        """Load saved settings."""
-        import json
-        import os
-        
-        settings_file = "chess_settings.json"
-        default_settings = {
-            "music_volume": 0.25,
-            "sfx_volume": 0.7,
-            "animations": True,
-            "show_valid_moves": True,
-            "auto_queen": False,
-            "board_theme": 0,
-            "piece_theme": 0,
-            "show_captured": True,
-            "show_timer": False
-        }
-        
-        if os.path.exists(settings_file):
-            try:
-                with open(settings_file, 'r') as f:
-                    loaded = json.load(f)
-                    # Merge with defaults to ensure all keys exist
-                    for key, value in default_settings.items():
-                        if key not in loaded:
-                            loaded[key] = value
-                    return loaded
-            except:
-                return default_settings
-        return default_settings
-        
-    def save_settings(self):
-        """Save current settings."""
-        import json
-        
-        # Update settings with current values
-        self.settings["music_volume"] = self.music_volume
-        self.settings["sfx_volume"] = self.sfx_volume
-        
-        with open("chess_settings.json", 'w') as f:
-            json.dump(self.settings, f)
-            
     def update_ui_positions(self):
-        """Update UI element positions based on current scale."""
-        # Import config to get current values
-        import config
+        """Update UI element positions."""
+        # Center coordinates
+        center_x = config.WIDTH // 2
+        center_y = config.HEIGHT // 2
         
-        # Calculate game area center (accounting for letterboxing in fullscreen)
-        if self.fullscreen and config.SCALE != 1.0:
-            # In fullscreen, center relative to the scaled game area
-            game_width = config.BASE_WIDTH * config.SCALE
-            game_height = config.BASE_HEIGHT * config.SCALE
-            center_x = config.WIDTH // 2  # Use screen center, which is where the game is centered
-            center_y = config.HEIGHT // 2
-            
-            # Volume sliders - stacked vertically in top right
-            slider_width = int(140 * config.SCALE)
-            slider_height = int(20 * config.SCALE)
-            slider_spacing = int(35 * config.SCALE)
-            slider_x = config.GAME_OFFSET_X + game_width - int(160 * config.SCALE)
-            
-            # Music slider
-            self.music_slider_rect = pygame.Rect(
-                slider_x, 
-                config.GAME_OFFSET_Y + int(10 * config.SCALE), 
-                slider_width, 
-                slider_height
-            )
-            
-            # SFX slider (below music)
-            self.sfx_slider_rect = pygame.Rect(
-                slider_x, 
-                config.GAME_OFFSET_Y + int(10 * config.SCALE) + slider_spacing, 
-                slider_width, 
-                slider_height
-            )
-            
-            self.volume_knob_radius = int(10 * config.SCALE)
-        else:
-            # In windowed mode, use normal positioning
-            center_x = config.WIDTH // 2
-            center_y = config.HEIGHT // 2
-            
-            # Volume sliders - stacked vertically in top right
-            slider_width = int(140 * config.SCALE)
-            slider_height = int(20 * config.SCALE)
-            slider_spacing = int(35 * config.SCALE)
-            slider_x = config.WIDTH - int(160 * config.SCALE)
-            
-            # Music slider
-            self.music_slider_rect = pygame.Rect(
-                slider_x, 
-                int(10 * config.SCALE), 
-                slider_width, 
-                slider_height
-            )
-            
-            # SFX slider (below music)
-            self.sfx_slider_rect = pygame.Rect(
-                slider_x, 
-                int(10 * config.SCALE) + slider_spacing, 
-                slider_width, 
-                slider_height
-            )
-            
-            self.volume_knob_radius = int(10 * config.SCALE)
+        # Volume sliders - stacked vertically in top right
+        slider_width = 140
+        slider_height = 20
+        slider_spacing = 35
+        slider_x = config.WIDTH - 160
         
-        # Menu buttons - centered in game area
-        self.play_button = pygame.Rect(
-            center_x - int(100 * config.SCALE), 
-            center_y - int(80 * config.SCALE), 
-            int(200 * config.SCALE), 
-            int(60 * config.SCALE)
+        # Music slider
+        self.music_slider_rect = pygame.Rect(
+            slider_x, 
+            10, 
+            slider_width, 
+            slider_height
         )
-        self.settings_button = pygame.Rect(
-            center_x - int(100 * config.SCALE), 
-            center_y, 
-            int(200 * config.SCALE), 
-            int(60 * config.SCALE)
+        
+        # SFX slider (below music)
+        self.sfx_slider_rect = pygame.Rect(
+            slider_x, 
+            10 + slider_spacing, 
+            slider_width, 
+            slider_height
+        )
+        
+        self.volume_knob_radius = 10
+        
+        # Menu buttons - centered
+        self.play_button = pygame.Rect(
+            center_x - 100, 
+            center_y - 80, 
+            200, 
+            60
         )
         self.beta_button = pygame.Rect(
-            center_x - int(100 * config.SCALE), 
-            center_y + int(80 * config.SCALE), 
-            int(200 * config.SCALE), 
-            int(60 * config.SCALE)
+            center_x - 100, 
+            center_y, 
+            200, 
+            60
         )
         self.credits_button = pygame.Rect(
-            center_x - int(100 * config.SCALE), 
-            center_y + int(160 * config.SCALE), 
-            int(200 * config.SCALE), 
-            int(60 * config.SCALE)
+            center_x - 100, 
+            center_y + 80, 
+            200, 
+            60
         )
         self.back_button = pygame.Rect(
-            center_x - int(100 * config.SCALE), 
-            center_y + int(250 * config.SCALE), 
-            int(200 * config.SCALE), 
-            int(50 * config.SCALE)
+            center_x - 100, 
+            center_y + 250, 
+            200, 
+            50
         )
-        
-        # Settings menu elements
-        self.settings_elements = {}
-        
-        # Toggle switches positioning
-        toggle_y = center_y - int(160 * config.SCALE)
-        toggle_spacing = int(50 * config.SCALE)
-        
-        settings_options = [
-            ("animations", "Animations"),
-            ("show_valid_moves", "Show Valid Moves"),
-            ("auto_queen", "Auto-Promote to Queen"),
-            ("show_captured", "Show Captured Pieces"),
-            ("show_timer", "Show Move Timer")
-        ]
-        
-        for i, (key, label) in enumerate(settings_options):
-            y = toggle_y + i * toggle_spacing
-            self.settings_elements[key] = {
-                "rect": pygame.Rect(center_x + int(120 * config.SCALE), y, 
-                                   int(60 * config.SCALE), int(30 * config.SCALE)),
-                "label": label
-            }
-        
-        # Board theme selector
-        self.settings_elements["board_theme"] = {
-            "rect": pygame.Rect(center_x - int(50 * config.SCALE), 
-                               center_y + int(120 * config.SCALE), 
-                               int(100 * config.SCALE), int(40 * config.SCALE)),
-            "label": "Board Theme",
-            "options": ["Classic", "Wood", "Metal", "Marble"],
-            "current": self.settings.get("board_theme", 0)
-        }
         
         # Difficulty buttons
         self.difficulty_buttons = {}
-        button_height = int(60 * config.SCALE)
-        button_spacing = int(20 * config.SCALE)
+        button_height = 60
+        button_spacing = 20
         total_height = len(config.AI_DIFFICULTIES) * button_height + (len(config.AI_DIFFICULTIES) - 1) * button_spacing
         start_y = center_y - total_height // 2
         
         for i, difficulty in enumerate(config.AI_DIFFICULTIES):
             y = start_y + i * (button_height + button_spacing)
             self.difficulty_buttons[difficulty] = pygame.Rect(
-                center_x - int(150 * config.SCALE), 
+                center_x - 150, 
                 y, 
-                int(300 * config.SCALE), 
+                300, 
                 button_height
             )
             
@@ -414,38 +307,7 @@ class ChessGame:
         # Play sound effect
         if 'capture' in self.assets.sounds:
             self.assets.sounds['capture'].play()
-            
-    def toggle_fullscreen(self):
-        """Toggle between fullscreen and windowed mode."""
-        self.fullscreen = not self.fullscreen
-        
-        # Update dimensions
-        from config import update_screen_dimensions
-        update_screen_dimensions(self.fullscreen, self.screen_info)
-        
-        # Recreate screen
-        if self.fullscreen:
-            self.screen = pygame.display.set_mode((config.WIDTH, config.HEIGHT), pygame.FULLSCREEN)
-        else:
-            self.screen = pygame.display.set_mode((config.WIDTH, config.HEIGHT))
-            
-        # Update renderer with new screen
-        self.renderer.screen = self.screen
-        self.renderer.update_scale(config.SCALE)
-        self.powerup_renderer.screen = self.screen
-        self.powerup_renderer.update_scale(config.SCALE)
-        
-        # Update board scaling
-        self.board.update_scale(config.SCALE)
-        
-        # Update chopper mode if it exists
-        if self.chopper_mode:
-            self.chopper_mode.screen = self.screen
-        
-        # IMPORTANT: Update UI positions AFTER everything else
-        # This ensures we use the correct config values
-        self.update_ui_positions()
-        
+                
     def handle_events(self):
         """Handle all events."""
         for event in pygame.event.get():
@@ -497,10 +359,8 @@ class ChessGame:
                         self.chopper_mode.handle_release()
                     elif self.dragging_music_slider:
                         self.dragging_music_slider = False
-                        self.save_settings()  # Save when slider is released
                     elif self.dragging_sfx_slider:
                         self.dragging_sfx_slider = False
-                        self.save_settings()  # Save when slider is released
                     else:
                         self.handle_release(event.pos)
                     
@@ -543,32 +403,19 @@ class ChessGame:
             
         if self.current_screen == config.SCREEN_START:
             if self.play_button.collidepoint(pos):
-                self.start_fade(config.SCREEN_START, config.SCREEN_DIFFICULTY)
-            elif self.settings_button.collidepoint(pos):
-                self.start_fade(config.SCREEN_START, config.SCREEN_SETTINGS)
+                self.start_fade(config.SCREEN_START, config.SCREEN_BAR_INTRO)
             elif self.beta_button.collidepoint(pos):
                 self.start_fade(config.SCREEN_START, config.SCREEN_BETA)
             elif self.credits_button.collidepoint(pos):
                 self.start_fade(config.SCREEN_START, config.SCREEN_CREDITS)
                 
-        elif self.current_screen == config.SCREEN_SETTINGS:
-            # Handle settings clicks
-            for key, element in self.settings_elements.items():
-                if element["rect"].collidepoint(pos):
-                    if key in ["animations", "show_valid_moves", "auto_queen", "show_captured", "show_timer"]:
-                        # Toggle boolean settings
-                        self.settings[key] = not self.settings.get(key, True)
-                        self.save_settings()
-                    elif key == "board_theme":
-                        # Cycle through board themes
-                        current = element.get("current", 0)
-                        element["current"] = (current + 1) % len(element["options"])
-                        self.settings[key] = element["current"]
-                        self.save_settings()
-                        
-            # Back button
-            if self.back_button.collidepoint(pos):
-                self.start_fade(config.SCREEN_SETTINGS, config.SCREEN_START)
+        elif self.current_screen == config.SCREEN_BAR_INTRO:
+            # Click anywhere to advance dialogue
+            if self.bar_intro_dialogue_index < len(self.bar_intro_dialogues) - 1:
+                self.bar_intro_dialogue_index += 1
+            else:
+                # Finished all dialogue, go to difficulty selection
+                self.start_fade(config.SCREEN_BAR_INTRO, config.SCREEN_DIFFICULTY)
                 
         elif self.current_screen == config.SCREEN_ARMS_DEALER:
             # Check purchase buttons
@@ -655,11 +502,7 @@ class ChessGame:
             if self.board.promoting:
                 for rect, piece_type in self.promotion_rects:
                     if rect.collidepoint(pos):
-                        # Check if auto-queen is enabled
-                        if self.settings.get("auto_queen", False):
-                            self.board.promote_pawn("Q")
-                        else:
-                            self.board.promote_pawn(piece_type)
+                        self.board.promote_pawn(piece_type)
                         if 'capture' in self.assets.sounds:
                             self.assets.sounds['capture'].play()
                         return
@@ -669,8 +512,8 @@ class ChessGame:
                 row, col = self.board.get_square_from_pos(pos)
                 if row >= 0 and col >= 0 and self.board.is_valid_selection(row, col):
                     self.board.selected_piece = (row, col)
-                    if self.settings.get("show_valid_moves", True):
-                        self.board.valid_moves = self.board.get_valid_moves(row, col)
+                    # Always show valid moves
+                    self.board.valid_moves = self.board.get_valid_moves(row, col)
                     self.board.dragging = True
                     self.board.drag_piece = self.board.get_piece(row, col)
                     self.board.drag_start = (row, col)
@@ -692,24 +535,16 @@ class ChessGame:
         if (row, col) in self.board.valid_moves:
             # Make move
             from_row, from_col = self.board.selected_piece
-            if self.settings.get("animations", True):
-                self.board.start_move(from_row, from_col, row, col)
-            else:
-                # Skip animation
-                self.board.animation_from = (from_row, from_col)
-                self.board.animation_to = (row, col)
-                self.board.animation_piece = self.board.get_piece(from_row, from_col)
-                captured = self.board.complete_move()
-                if captured and 'capture' in self.assets.sounds:
-                    self.assets.sounds['capture'].play()
+            # Always use animation
+            self.board.start_move(from_row, from_col, row, col)
             self.board.selected_piece = None
             self.board.valid_moves = []
         else:
             # Check if selecting new piece
             if row >= 0 and col >= 0 and self.board.is_valid_selection(row, col):
                 self.board.selected_piece = (row, col)
-                if self.settings.get("show_valid_moves", True):
-                    self.board.valid_moves = self.board.get_valid_moves(row, col)
+                # Always show valid moves
+                self.board.valid_moves = self.board.get_valid_moves(row, col)
             else:
                 self.board.selected_piece = None
                 self.board.valid_moves = []
@@ -720,11 +555,6 @@ class ChessGame:
         
     def handle_key(self, key):
         """Handle keyboard input."""
-        # F key toggles fullscreen on any screen
-        if key == pygame.K_f:
-            self.toggle_fullscreen()
-            return
-            
         # CHEAT CODE: Press 'T' for TEST MODE - unlocks everything and gives money
         if key == pygame.K_t:
             # Check if SHIFT is also held for the cheat
@@ -776,9 +606,6 @@ class ChessGame:
                 # Cancel active powerup
                 elif self.powerup_system.active_powerup:
                     self.powerup_system.cancel_powerup()
-                # If in fullscreen, exit fullscreen first
-                elif self.fullscreen:
-                    self.toggle_fullscreen()
                 else:
                     self.start_fade(config.SCREEN_GAME, config.SCREEN_START)
             elif key == pygame.K_r and self.board.game_over:
@@ -795,9 +622,18 @@ class ChessGame:
         elif self.current_screen == config.SCREEN_DIFFICULTY:
             if key == pygame.K_ESCAPE:
                 self.start_fade(config.SCREEN_DIFFICULTY, config.SCREEN_START)
-        elif self.current_screen in [config.SCREEN_START, config.SCREEN_CREDITS, config.SCREEN_ARMS_DEALER, config.SCREEN_BETA, config.SCREEN_SETTINGS]:
-            if key == pygame.K_ESCAPE and self.fullscreen:
-                self.toggle_fullscreen()
+        elif self.current_screen == config.SCREEN_BAR_INTRO:
+            if key == pygame.K_ESCAPE:
+                # Skip to difficulty selection
+                self.start_fade(config.SCREEN_BAR_INTRO, config.SCREEN_DIFFICULTY)
+            elif key == pygame.K_SPACE or key == pygame.K_RETURN:
+                # Advance dialogue with space or enter
+                if self.bar_intro_dialogue_index < len(self.bar_intro_dialogues) - 1:
+                    self.bar_intro_dialogue_index += 1
+                else:
+                    self.start_fade(config.SCREEN_BAR_INTRO, config.SCREEN_DIFFICULTY)
+        elif self.current_screen in [config.SCREEN_START, config.SCREEN_CREDITS, config.SCREEN_ARMS_DEALER, config.SCREEN_BETA]:
+            pass  # No special key handling for these screens
                 
     def start_fade(self, from_screen, to_screen):
         """Start fade transition."""
@@ -842,7 +678,7 @@ class ChessGame:
             self.powerup_system.update_effects(current_time)
             
             # Check animation complete
-            if self.board.animating and self.settings.get("animations", True):
+            if self.board.animating:
                 if current_time - self.board.animation_start >= config.MOVE_ANIMATION_DURATION:
                     captured = self.board.complete_move()
                     # Play capture sound immediately when capture happens
@@ -851,10 +687,6 @@ class ChessGame:
                             self.assets.sounds['capture'].play()
                         except Exception as e:
                             print(f"Error playing capture sound: {e}")
-                        
-            # Check for auto-promotion
-            if self.board.promoting and self.settings.get("auto_queen", False):
-                self.board.promote_pawn("Q")
                         
             # AI turn
             if self.board.current_turn == "black" and not self.board.game_over and not self.board.animating:
@@ -878,16 +710,8 @@ class ChessGame:
                         ai_move = self.ai.get_move(self.board)
                         if ai_move:
                             from_pos, to_pos = ai_move
-                            if self.settings.get("animations", True):
-                                self.board.start_move(from_pos[0], from_pos[1], to_pos[0], to_pos[1])
-                            else:
-                                # Skip animation for AI moves too
-                                self.board.animation_from = from_pos
-                                self.board.animation_to = to_pos
-                                self.board.animation_piece = self.board.get_piece(from_pos[0], from_pos[1])
-                                captured = self.board.complete_move()
-                                if captured and 'capture' in self.assets.sounds:
-                                    self.assets.sounds['capture'].play()
+                            # Always use animation
+                            self.board.start_move(from_pos[0], from_pos[1], to_pos[0], to_pos[1])
                         self.ai.start_thinking = None
                         
             # Check for player victory and unlock next difficulty
@@ -968,16 +792,14 @@ class ChessGame:
         if screen_type == config.SCREEN_START:
             buttons = {
                 'play': self.play_button,
-                'settings': self.settings_button,
                 'beta': self.beta_button, 
                 'credits': self.credits_button
             }
             self.renderer.draw_menu(config.SCREEN_START, buttons, self.mouse_pos)
             self.draw_volume_sliders()
             
-        elif screen_type == config.SCREEN_SETTINGS:
-            self.renderer.draw_settings_menu(self.settings, self.settings_elements, 
-                                            self.back_button, self.mouse_pos)
+        elif screen_type == config.SCREEN_BAR_INTRO:
+            self.renderer.draw_bar_intro(self.bar_intro_dialogue_index, self.bar_intro_dialogues, self.mouse_pos)
             self.draw_volume_sliders()
             
         elif screen_type == config.SCREEN_ARMS_DEALER:
@@ -1009,14 +831,14 @@ class ChessGame:
             self.renderer.draw_pieces(self.board, self.mouse_pos)
             
             # Game elements
-            if not self.board.game_over and self.settings.get("show_valid_moves", True):
+            if not self.board.game_over:
                 self.renderer.draw_highlights(self.board)
                 self.renderer.draw_check_indicator(self.board)
                 
-            # UI with AI info (modified to not include mute button)
+            # UI with AI info (always show captured pieces)
             self.renderer.draw_ui(self.board, None, False, self.mouse_pos, 
                                  self.ai, self.selected_difficulty,
-                                 show_captured=self.settings.get("show_captured", True))
+                                 show_captured=True)
             self.draw_volume_sliders()
             
             # Add Arms Dealer button in game
@@ -1032,7 +854,7 @@ class ChessGame:
             self.powerup_renderer.draw_powerup_targeting(self.board, self.mouse_pos)
             
             # Overlays
-            if self.board.promoting and not self.settings.get("auto_queen", False):
+            if self.board.promoting:
                 self.promotion_rects = self.renderer.draw_promotion_menu(self.board, self.mouse_pos)
             
             # Pass selected difficulty and victory reward to renderer
@@ -1042,14 +864,6 @@ class ChessGame:
                 if not hasattr(self.board, 'victory_reward'):
                     self.board.victory_reward = self.victory_reward
             self.renderer.draw_game_over(self.board)
-            
-        # Draw fullscreen indicator (small 'F' in corner)
-        if self.fullscreen:
-            text = self.renderer.pixel_fonts['tiny'].render("Press F to exit fullscreen", True, (150, 150, 150))
-            self.screen.blit(text, (10, config.HEIGHT - 20))
-        else:
-            text = self.renderer.pixel_fonts['tiny'].render("Press F for fullscreen", True, (150, 150, 150))
-            self.screen.blit(text, (10, config.HEIGHT - 20))
             
     def draw_volume_sliders(self):
         """Draw both volume sliders."""
@@ -1116,9 +930,9 @@ class ChessGame:
     def draw_arms_dealer_button(self):
         """Draw the Arms Dealer button in the game screen."""
         # Position it in the middle left side of the screen
-        button_width = int(150 * config.SCALE)
-        button_height = int(40 * config.SCALE)
-        button_x = int(20 * config.SCALE)
+        button_width = 150
+        button_height = 40
+        button_x = 20
         button_y = config.HEIGHT // 2 - button_height // 2  # Center vertically
         
         self.arms_dealer_game_button = pygame.Rect(button_x, button_y, button_width, button_height)

@@ -765,99 +765,7 @@ class Renderer:
             
         # Back button
         self._draw_button(back_button, "BACK", (150, 70, 70), (200, 100, 100), mouse_pos)
-        
-    def draw_settings_menu(self, settings, settings_elements, back_button, mouse_pos):
-        """Draw the settings menu."""
-        self.draw_parallax_background(0.8)
-        
-        # Overlay
-        overlay = pygame.Surface((config.WIDTH, config.HEIGHT), pygame.SRCALPHA)
-        overlay.fill((0, 0, 0, 180))
-        self.screen.blit(overlay, (0, 0))
-        
-        # Calculate center for fullscreen compatibility
-        if config.SCALE != 1.0:
-            game_center_x = config.GAME_OFFSET_X + (config.BASE_WIDTH * config.SCALE) // 2
-            game_center_y = config.GAME_OFFSET_Y + (config.BASE_HEIGHT * config.SCALE) // 2
-        else:
-            game_center_x = config.WIDTH // 2
-            game_center_y = config.HEIGHT // 2
-        
-        # Title
-        title = self.pixel_fonts['huge'].render("SETTINGS", True, config.WHITE)
-        title_rect = title.get_rect(center=(game_center_x, game_center_y - 220 * self.scale))
-        self.screen.blit(title, title_rect)
-        
-        # Draw toggle switches
-        for key, element in settings_elements.items():
-            if key in ["animations", "show_valid_moves", "auto_queen", "show_captured", "show_timer"]:
-                # Draw label
-                label = self.pixel_fonts['medium'].render(element["label"], True, config.WHITE)
-                label_rect = label.get_rect(midright=(element["rect"].x - 20, element["rect"].centery))
-                self.screen.blit(label, label_rect)
-                
-                # Draw toggle switch background
-                is_on = settings.get(key, True)
-                bg_color = (60, 150, 60) if is_on else (100, 60, 60)
-                pygame.draw.rect(self.screen, bg_color, element["rect"], border_radius=15)
-                pygame.draw.rect(self.screen, config.WHITE, element["rect"], 2, border_radius=15)
-                
-                # Draw toggle circle
-                circle_x = element["rect"].x + (element["rect"].width - 15 if is_on else 15)
-                circle_y = element["rect"].centery
-                circle_color = (200, 255, 200) if is_on else (255, 200, 200)
-                pygame.draw.circle(self.screen, circle_color, (circle_x, circle_y), 12)
-                pygame.draw.circle(self.screen, config.WHITE, (circle_x, circle_y), 12, 2)
-                
-                # Hover effect
-                if element["rect"].collidepoint(mouse_pos):
-                    hover_rect = element["rect"].inflate(4, 4)
-                    pygame.draw.rect(self.screen, (255, 255, 255, 50), hover_rect, 2, border_radius=17)
-                    
-            elif key == "board_theme":
-                # Draw board theme selector
-                label = self.pixel_fonts['medium'].render(element["label"], True, config.WHITE)
-                label_rect = label.get_rect(midright=(element["rect"].x - 20, element["rect"].centery))
-                self.screen.blit(label, label_rect)
-                
-                # Draw theme button
-                current_theme = element["options"][element["current"]]
-                is_hover = element["rect"].collidepoint(mouse_pos)
-                
-                button_color = (80, 80, 100) if is_hover else (60, 60, 80)
-                pygame.draw.rect(self.screen, button_color, element["rect"], border_radius=5)
-                pygame.draw.rect(self.screen, config.WHITE, element["rect"], 2, border_radius=5)
-                
-                # Draw theme name
-                theme_text = self.pixel_fonts['small'].render(current_theme, True, config.WHITE)
-                theme_rect = theme_text.get_rect(center=element["rect"].center)
-                self.screen.blit(theme_text, theme_rect)
-                
-                # Draw arrows to indicate cycling
-                arrow_left = self.pixel_fonts['small'].render("◄", True, (150, 150, 150))
-                arrow_right = self.pixel_fonts['small'].render("►", True, (150, 150, 150))
-                arrow_left_rect = arrow_left.get_rect(midright=(element["rect"].x - 5, element["rect"].centery))
-                arrow_right_rect = arrow_right.get_rect(midleft=(element["rect"].right + 5, element["rect"].centery))
-                self.screen.blit(arrow_left, arrow_left_rect)
-                self.screen.blit(arrow_right, arrow_right_rect)
-        
-        # Instructions
-        instructions = [
-            "Click toggles to enable/disable features",
-            "Volume sliders are in the top-right corner",
-            "Settings are automatically saved"
-        ]
-        
-        y = game_center_y + 180 * self.scale
-        for instruction in instructions:
-            text = self.pixel_fonts['tiny'].render(instruction, True, (180, 180, 180))
-            text_rect = text.get_rect(center=(game_center_x, y))
-            self.screen.blit(text, text_rect)
-            y += 20 * self.scale
-        
-        # Back button
-        self._draw_button(back_button, "BACK", (150, 70, 70), (200, 100, 100), mouse_pos)
-        
+            
     def draw_menu(self, screen_type, buttons, mouse_pos):
         """Draw menu screens."""
         # Store current screen for chess pieces behavior
@@ -898,7 +806,7 @@ class Renderer:
                 self.high_flying_jets.append({
                     'x': -100,  # Start off-screen left
                     'y': random.randint(50, 150),  # High in the sky
-                    'speed': random.uniform(2, 4),  # Slower speed for high altitude
+                    'speed': random.uniform(5, 8),  # Increased speed from 2-4 to 5-8
                     'scale': random.uniform(0.15, 0.25)  # Smaller for distance
                 })
                 # Schedule next jet
@@ -1033,15 +941,14 @@ class Renderer:
                 scaled_badge = pygame.transform.scale(self.assets.beta_badge, (badge_width, badge_height))
                 rotated_badge = pygame.transform.rotate(scaled_badge, -15)  # Rotate 15 degrees clockwise
                 
-                # Position it closer to the corner of the title
+                # Position it higher up to avoid overlap
                 badge_x = rect.right - int(20 * config.SCALE)  # Closer to title
-                badge_y = rect.top - int(30 * config.SCALE)  # Higher up
+                badge_y = rect.top - int(70 * config.SCALE)  # Moved up from -60 to -70
                 
                 self.screen.blit(rotated_badge, (badge_x, badge_y))
             
             # Buttons
             self._draw_button(buttons['play'], "PLAY GAME", (70, 150, 70), (100, 200, 100), mouse_pos)
-            self._draw_button(buttons['settings'], "SETTINGS", (150, 70, 150), (200, 100, 200), mouse_pos)
             self._draw_button(buttons['beta'], "BETA TEST INFO", (150, 150, 70), (200, 200, 100), mouse_pos)
             self._draw_button(buttons['credits'], "CREDITS", (70, 70, 150), (100, 100, 200), mouse_pos)
             
@@ -1125,6 +1032,63 @@ class Renderer:
             
             # Back button
             self._draw_button(buttons['back'], "BACK", (150, 70, 70), (200, 100, 100), mouse_pos)
+            
+    def draw_bar_intro(self, dialogue_index, dialogues, mouse_pos):
+        """Draw the bar intro scene with Tariq."""
+        # Draw bar background
+        if hasattr(self.assets, 'bar_background') and self.assets.bar_background:
+            # Scale background to fill screen
+            scaled_bg = pygame.transform.scale(self.assets.bar_background, (config.WIDTH, config.HEIGHT))
+            self.screen.blit(scaled_bg, (0, 0))
+        else:
+            # Fallback: dark bar atmosphere
+            self.screen.fill((20, 15, 10))
+            
+        # Semi-transparent overlay for better text visibility
+        overlay = pygame.Surface((config.WIDTH, config.HEIGHT), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 80))
+        self.screen.blit(overlay, (0, 0))
+        
+        # Draw Tariq on the left side
+        if hasattr(self.assets, 'tariq_image') and self.assets.tariq_image:
+            # Scale Tariq appropriately
+            tariq_height = int(500 * config.SCALE)
+            aspect_ratio = self.assets.tariq_image.get_width() / self.assets.tariq_image.get_height()
+            tariq_width = int(tariq_height * aspect_ratio)
+            scaled_tariq = pygame.transform.smoothscale(self.assets.tariq_image, (tariq_width, tariq_height))
+            
+            # Position on left side
+            tariq_x = int(50 * config.SCALE)
+            tariq_y = config.HEIGHT - tariq_height
+            
+            self.screen.blit(scaled_tariq, (tariq_x, tariq_y))
+            
+            # Draw speech bubble to the right of Tariq
+            if 0 <= dialogue_index < len(dialogues):
+                dialogue = dialogues[dialogue_index]
+                bubble_width = int(500 * config.SCALE)  # Increased from 400 to 500
+                bubble_x = tariq_x + tariq_width - int(100 * config.SCALE)  # Moved more to the left (from -50 to -100)
+                bubble_y = config.HEIGHT // 2 - int(50 * config.SCALE)  # Moved down (from -150 to -50)
+                self._draw_speech_bubble(bubble_x, bubble_y, dialogue, bubble_width)
+        
+        # Instructions
+        instruction_text = "Click anywhere to continue..." if dialogue_index < len(dialogues) - 1 else "Click to begin!"
+        instruction = self.pixel_fonts['small'].render(instruction_text, True, (200, 200, 200))
+        instruction_rect = instruction.get_rect(center=(config.WIDTH // 2, config.HEIGHT - int(40 * config.SCALE)))
+        self.screen.blit(instruction, instruction_rect)
+        
+        # Progress indicator
+        progress_text = f"{dialogue_index + 1}/{len(dialogues)}"
+        progress = self.pixel_fonts['small'].render(progress_text, True, (150, 150, 150))
+        progress_rect = progress.get_rect(bottomright=(config.WIDTH - int(20 * config.SCALE), 
+                                                       config.HEIGHT - int(20 * config.SCALE)))
+        self.screen.blit(progress, progress_rect)
+        
+        # Skip instruction
+        skip_text = "Press ESC to skip"
+        skip = self.pixel_fonts['tiny'].render(skip_text, True, (150, 150, 150))
+        skip_rect = skip.get_rect(bottomleft=(int(20 * config.SCALE), config.HEIGHT - int(20 * config.SCALE)))
+        self.screen.blit(skip, skip_rect)
             
     def draw_arms_dealer(self, powerup_system, shop_buttons, back_button, mouse_pos, dialogue_index=0, dialogues=None):
         """Draw the arms dealer shop with Tariq character."""
@@ -1240,25 +1204,62 @@ class Renderer:
             pygame.draw.rect(self.screen, border_color, card_rect, 3, border_radius=10)
             
             # Powerup icon
-            icon_text = powerup["icon"]
-            icon_surface = self.pixel_fonts['large'].render(icon_text, True, config.WHITE)
-            icon_rect = icon_surface.get_rect(center=(card_rect.centerx, card_y + 35 * self.scale))
-            self.screen.blit(icon_surface, icon_rect)
+            if key == "gun" and hasattr(self.renderer, 'assets') and hasattr(self.renderer.assets, 'revolver_image') and self.renderer.assets.revolver_image:
+                # Use the actual revolver image for gun powerup
+                icon_size = 25
+                scaled_revolver = pygame.transform.scale(self.renderer.assets.revolver_image, (icon_size, icon_size))
+                
+                # Apply grayscale effect if can't afford
+                if not can_afford:
+                    # Convert to grayscale
+                    gray_surface = pygame.Surface((icon_size, icon_size), pygame.SRCALPHA)
+                    for x in range(icon_size):
+                        for y in range(icon_size):
+                            r, g, b, a = scaled_revolver.get_at((x, y))
+                            gray = int(0.3 * r + 0.59 * g + 0.11 * b)
+                            gray_surface.set_at((x, y), (gray, gray, gray, a))
+                    scaled_revolver = gray_surface
+                
+                icon_rect = scaled_revolver.get_rect(centerx=card_rect.centerx, y=card_rect.y + 12)
+                self.screen.blit(scaled_revolver, icon_rect)
+            elif key == "chopper":
+                # Draw helicopter icon
+                self._draw_helicopter_icon(card_rect, can_afford)
+            else:
+                # Draw custom icons for other powerups
+                icon_size = 30
+                icon_surface = pygame.Surface((icon_size, icon_size), pygame.SRCALPHA)
+                icon_surface.fill((0, 0, 0, 0))
+                
+                if powerup_key == "airstrike":
+                    # Draw missile icon
+                    self._draw_missile_icon(icon_surface, icon_size, can_afford)
+                elif powerup_key == "shield":
+                    # Draw shield icon
+                    self._draw_shield_icon(icon_surface, icon_size, can_afford)
+                elif powerup_key == "paratroopers":
+                    # Draw parachute icon
+                    self._draw_parachute_icon(icon_surface, icon_size, can_afford)
+                else:
+                    # Fallback to text icon
+                    icon_color = config.WHITE if can_afford else (80, 80, 80)
+                    icon_surface = self.pixel_fonts['large'].render(powerup["icon"], True, icon_color)
+                
+                icon_rect = icon_surface.get_rect(centerx=card_rect.centerx, y=card_rect.y + 10)
+                self.screen.blit(icon_surface, icon_rect)
             
-            # Powerup name
-            name_color = config.WHITE if is_unlocked else powerup["color"]
+            # Draw name
+            name_color = (0, 255, 0) if can_afford else (80, 80, 80)
             name_surface = self.pixel_fonts['small'].render(powerup["name"], True, name_color)
-            name_rect = name_surface.get_rect(center=(card_rect.centerx, card_y + 70 * self.scale))
+            name_rect = name_surface.get_rect(centerx=card_rect.centerx, y=card_rect.y + 35)
             self.screen.blit(name_surface, name_rect)
             
-            # Description (shortened for smaller cards)
-            desc_lines = self._wrap_text(powerup["description"], self.pixel_fonts['tiny'], card_width - 10)
-            desc_y = card_y + 90 * self.scale
-            for line in desc_lines[:2]:  # Max 2 lines
-                line_surface = self.pixel_fonts['tiny'].render(line, True, (200, 200, 200))
-                line_rect = line_surface.get_rect(center=(card_rect.centerx, desc_y))
-                self.screen.blit(line_surface, line_rect)
-                desc_y += 12 * self.scale
+            # Draw cost
+            cost_text = f"Cost: {powerup['cost']}"
+            cost_color = (255, 204, 0) if can_afford else (80, 80, 80)
+            cost_surface = self.pixel_fonts['tiny'].render(cost_text, True, cost_color)
+            cost_rect = cost_surface.get_rect(centerx=card_rect.centerx, y=card_rect.y + 55)
+            self.screen.blit(cost_surface, cost_rect)
             
             # Price or status
             if is_unlocked:
@@ -1290,7 +1291,7 @@ class Renderer:
         
         for word in words:
             test_line = ' '.join(current_line + [word])
-            if self.pixel_fonts['small'].size(test_line)[0] <= max_width - 40:
+            if self.pixel_fonts['medium'].size(test_line)[0] <= max_width - 40:  # Changed from 'small' to 'medium'
                 current_line.append(word)
             else:
                 if current_line:
@@ -1302,7 +1303,7 @@ class Renderer:
             lines.append(' '.join(current_line))
         
         # Calculate bubble size
-        line_height = self.pixel_fonts['small'].get_height() + 5
+        line_height = self.pixel_fonts['medium'].get_height() + 5  # Changed from 'small' to 'medium'
         bubble_height = len(lines) * line_height + 30
         bubble_width = max_width
         
@@ -1342,7 +1343,7 @@ class Renderer:
         # Draw text
         text_y = y + 15
         for line in lines:
-            text_surface = self.pixel_fonts['small'].render(line, True, (255, 255, 255))
+            text_surface = self.pixel_fonts['medium'].render(line, True, (255, 255, 255))  # Changed from 'small' to 'medium'
             text_rect = text_surface.get_rect(centerx=x + bubble_width // 2, y=text_y)
             self.screen.blit(text_surface, text_rect)
             text_y += line_height
@@ -2003,3 +2004,188 @@ class Renderer:
         # Limit max pieces for performance
         if len(self.falling_chess_pieces) > 200:
             self.falling_chess_pieces = self.falling_chess_pieces[-200:]
+            
+    def _draw_helicopter_icon(self, button_rect, enabled):
+        """Draw a helicopter icon for chopper gunner."""
+        color = (255, 100, 100) if enabled else (80, 80, 80)
+        darker_color = tuple(c // 2 for c in color)
+        
+        # Calculate center position
+        center_x = button_rect.centerx
+        center_y = button_rect.y + 22
+        
+        # Main body
+        body_width = 20
+        body_height = 12
+        body_rect = pygame.Rect(center_x - body_width // 2, center_y - body_height // 2, 
+                               body_width, body_height)
+        pygame.draw.ellipse(self.screen, color, body_rect)
+        pygame.draw.ellipse(self.screen, darker_color, body_rect, 1)
+        
+        # Tail
+        tail_width = 15
+        tail_height = 4
+        pygame.draw.rect(self.screen, color, 
+                        (center_x + body_width // 2 - 2, center_y - tail_height // 2, 
+                         tail_width, tail_height))
+        
+        # Main rotor (animated)
+        rotor_length = 25
+        rotor_angle = (pygame.time.get_ticks() // 20) % 360
+        for i in range(2):
+            angle = rotor_angle + i * 180
+            x1 = center_x + math.cos(math.radians(angle)) * rotor_length
+            y1 = center_y - body_height // 2 - 3 + math.sin(math.radians(angle)) * 2
+            x2 = center_x - math.cos(math.radians(angle)) * rotor_length
+            y2 = center_y - body_height // 2 - 3 - math.sin(math.radians(angle)) * 2
+            pygame.draw.line(self.screen, darker_color, (x1, y1), (x2, y2), 2)
+            
+        # Tail rotor
+        tail_rotor_x = center_x + body_width // 2 + tail_width - 3
+        pygame.draw.circle(self.screen, darker_color, (tail_rotor_x, center_y), 4, 1)
+        
+        # Landing skids
+        skid_y = center_y + body_height // 2 + 2
+        pygame.draw.line(self.screen, darker_color, 
+                        (center_x - body_width // 2, skid_y), 
+                        (center_x + body_width // 2, skid_y), 1)
+            
+    def _draw_missile_icon(self, surface, size, enabled):
+        """Draw a horizontal missile icon for airstrike."""
+        color = (255, 100, 100) if enabled else (80, 80, 80)
+        darker_color = tuple(c // 2 for c in color)
+        
+        # Horizontal missile
+        missile_length = int(size * 0.7)
+        missile_height = int(size * 0.25)
+        
+        # Center the missile
+        missile_x = (size - missile_length) // 2
+        missile_y = (size - missile_height) // 2
+        
+        # Draw main body
+        body_x = missile_x + missile_length // 4
+        body_width = missile_length // 2
+        pygame.draw.rect(surface, color, 
+                        (body_x, missile_y, body_width, missile_height))
+        
+        # Add highlight for 3D effect
+        pygame.draw.line(surface, tuple(min(255, c + 50) for c in color),
+                        (body_x, missile_y + 1), 
+                        (body_x + body_width, missile_y + 1), 1)
+        
+        # Draw nose cone
+        nose_points = [
+            (missile_x, missile_y + missile_height // 2),
+            (body_x, missile_y),
+            (body_x, missile_y + missile_height)
+        ]
+        pygame.draw.polygon(surface, color, nose_points)
+        
+        # Draw tail fins
+        fin_x = body_x + body_width
+        fin_width = missile_length // 4
+        
+        # Top fin
+        pygame.draw.polygon(surface, darker_color, [
+            (fin_x, missile_y),
+            (fin_x + fin_width, missile_y - missile_height // 3),
+            (fin_x + fin_width, missile_y + missile_height // 3),
+            (fin_x, missile_y + missile_height // 3)
+        ])
+        
+        # Bottom fin
+        pygame.draw.polygon(surface, darker_color, [
+            (fin_x, missile_y + missile_height),
+            (fin_x + fin_width, missile_y + missile_height + missile_height // 3),
+            (fin_x + fin_width, missile_y + missile_height * 2 // 3),
+            (fin_x, missile_y + missile_height * 2 // 3)
+        ])
+        
+        # Small center fin
+        pygame.draw.rect(surface, darker_color,
+                        (fin_x, missile_y + missile_height // 3, 
+                         fin_width // 2, missile_height // 3))
+                                   
+    def _draw_shield_icon(self, surface, size, enabled):
+        """Draw a shield icon."""
+        color = (100, 200, 255) if enabled else (80, 80, 80)
+        darker_color = tuple(int(c * 0.7) for c in color)
+        lighter_color = tuple(min(255, int(c * 1.3)) for c in color)
+        
+        # Shield shape
+        width = int(size * 0.6)
+        height = int(size * 0.7)
+        x = (size - width) // 2
+        y = size // 6
+        
+        # Main shield body
+        shield_rect = pygame.Rect(x, y, width, height)
+        pygame.draw.rect(surface, color, shield_rect)
+        
+        # Top curved part
+        pygame.draw.ellipse(surface, color, (x - 2, y - height // 4, width + 4, height // 2))
+        
+        # Inner border for depth
+        inner_rect = pygame.Rect(x + 3, y + 3, width - 6, height - 6)
+        pygame.draw.rect(surface, darker_color, inner_rect, 2)
+        
+        # Simple cross design
+        cross_thickness = 4
+        # Vertical line
+        pygame.draw.rect(surface, lighter_color, 
+                        (size // 2 - cross_thickness // 2, y + height // 5, 
+                         cross_thickness, height * 3 // 5))
+        # Horizontal line
+        pygame.draw.rect(surface, lighter_color, 
+                        (x + width // 5, y + height // 2 - cross_thickness // 2, 
+                         width * 3 // 5, cross_thickness))
+            
+    def _draw_parachute_icon(self, surface, size, enabled):
+        """Draw a parachute icon."""
+        color = (100, 200, 100) if enabled else (80, 80, 80)
+        darker_color = tuple(int(c * 0.7) for c in color)
+        
+        # Cleaner parachute design
+        canopy_width = int(size * 0.7)
+        canopy_height = int(size * 0.35)
+        canopy_x = (size - canopy_width) // 2
+        canopy_y = size // 5
+        
+        # Draw canopy as filled semi-circle
+        canopy_center_x = size // 2
+        canopy_center_y = canopy_y + canopy_height // 2
+        
+        # Draw the canopy segments
+        segment_count = 5
+        for i in range(segment_count):
+            angle_start = math.pi + (math.pi * i / segment_count)
+            angle_end = math.pi + (math.pi * (i + 1) / segment_count)
+            
+            # Calculate points for the segment
+            points = [(canopy_center_x, canopy_center_y)]
+            for angle in [angle_start, angle_end]:
+                x = canopy_center_x + int(canopy_width // 2 * math.cos(angle))
+                y = canopy_center_y + int(canopy_height * math.sin(angle))
+                points.append((x, y))
+            
+            # Alternate colors for segments
+            segment_color = color if i % 2 == 0 else darker_color
+            pygame.draw.polygon(surface, segment_color, points)
+        
+        # Draw strings
+        string_end_y = size - size // 3
+        string_end_x = size // 2
+        
+        # Draw 3 main strings
+        string_positions = [canopy_x + canopy_width // 4, size // 2, canopy_x + 3 * canopy_width // 4]
+        for string_x in string_positions:
+            pygame.draw.line(surface, darker_color, 
+                           (string_x, canopy_y + canopy_height), 
+                           (string_end_x, string_end_y), 1)
+        
+        # Draw simplified person/cargo
+        cargo_size = size // 8
+        pygame.draw.rect(surface, color, 
+                        (string_end_x - cargo_size // 2, string_end_y, 
+                         cargo_size, cargo_size))

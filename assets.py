@@ -20,6 +20,7 @@ class AssetManager:
         self.jet_frames = []  # Store jet animation frames
         self.tariq_image = None  # Store Tariq character image
         self.arms_background = None  # Store arms dealer background
+        self.bar_background = None  # Store bar background for intro
         self.cockpit_view = None  # Store cockpit view for chopper gunner
         self.chopper_activation_overlay = None  # Store chopper activation overlay
         self.airstrike_sequence = []  # Store helicopter takeoff sequence
@@ -37,6 +38,7 @@ class AssetManager:
         self.load_jet_frames()
         self.load_tariq()
         self.load_arms_background()
+        self.load_bar_background()
         self.load_cockpit_view()
         self.load_chopper_activation_overlay()
         self.load_airstrike_sequence()
@@ -340,6 +342,18 @@ class AssetManager:
                 print(f"✗ Error loading arms background: {str(e)}")
         else:
             print("✗ Arms dealer background not found")
+            
+    def load_bar_background(self):
+        """Load bar background for intro scene."""
+        bar_path = os.path.join(ASSETS_DIR, "bar.png")
+        if os.path.exists(bar_path):
+            try:
+                self.bar_background = pygame.image.load(bar_path).convert()
+                print("✓ Loaded bar background")
+            except Exception as e:
+                print(f"✗ Error loading bar background: {str(e)}")
+        else:
+            print("✗ Bar background not found")
             
     def load_cockpit_view(self):
         """Load cockpit view for chopper gunner."""

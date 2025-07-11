@@ -12,15 +12,10 @@ BOARD_SIZE = 640
 UI_WIDTH = 200
 UI_HEIGHT = 100
 POWERUP_MENU_WIDTH = 250  # Width of powerup menu
-BASE_WIDTH = BOARD_SIZE + UI_WIDTH * 2 + POWERUP_MENU_WIDTH
-BASE_HEIGHT = BOARD_SIZE + UI_HEIGHT * 2
+WIDTH = BOARD_SIZE + UI_WIDTH * 2 + POWERUP_MENU_WIDTH
+HEIGHT = BOARD_SIZE + UI_HEIGHT * 2
 
-# These will be updated when going fullscreen
-WIDTH = BASE_WIDTH
-HEIGHT = BASE_HEIGHT
-SCALE = 1.0
-
-# Board settings
+# Rows and columns
 ROWS = 8
 COLS = 8
 
@@ -40,6 +35,13 @@ BOARD_BORDER_BOTTOM = 36
 PLAYING_AREA_WIDTH = BOARD_SIZE - BOARD_BORDER_LEFT - BOARD_BORDER_RIGHT
 PLAYING_AREA_HEIGHT = BOARD_SIZE - BOARD_BORDER_TOP - BOARD_BORDER_BOTTOM
 SQUARE_SIZE = PLAYING_AREA_WIDTH // 8
+
+# Scaling and display settings
+SCALE = 1.0  # Default scale (1.0 = no scaling)
+BASE_WIDTH = WIDTH
+BASE_HEIGHT = HEIGHT
+GAME_OFFSET_X = 0
+GAME_OFFSET_Y = 0
 
 # Colors
 WHITE = (255, 255, 255)
@@ -72,12 +74,12 @@ FPS = 60
 
 # Screen states
 SCREEN_START = "start"
+SCREEN_BAR_INTRO = "bar_intro"
 SCREEN_DIFFICULTY = "difficulty"
 SCREEN_GAME = "game"
 SCREEN_CREDITS = "credits"
 SCREEN_ARMS_DEALER = "arms_dealer"
 SCREEN_BETA = "beta"
-SCREEN_SETTINGS = "settings"
 
 # AI Difficulty levels with ELO ratings
 AI_DIFFICULTIES = ["easy", "medium", "hard", "very_hard"]
@@ -162,41 +164,6 @@ INITIAL_BOARD = [
     ["wP"] * 8,
     ["wR", "wN", "wB", "wQ", "wK", "wB", "wN", "wR"],
 ]
-
-def update_screen_dimensions(fullscreen, screen_info):
-    """Update dimensions for fullscreen mode."""
-    global WIDTH, HEIGHT, SCALE, BOARD_OFFSET_X, BOARD_OFFSET_Y, GAME_OFFSET_X, GAME_OFFSET_Y
-    
-    if fullscreen:
-        # Get monitor size
-        WIDTH = screen_info.current_w
-        HEIGHT = screen_info.current_h
-        
-        # Calculate scale to fit the game while maintaining aspect ratio
-        scale_x = WIDTH / BASE_WIDTH
-        scale_y = HEIGHT / BASE_HEIGHT
-        SCALE = min(scale_x, scale_y)
-        
-        # Calculate the scaled game dimensions
-        scaled_game_width = BASE_WIDTH * SCALE
-        scaled_game_height = BASE_HEIGHT * SCALE
-        
-        # Calculate centering offsets
-        GAME_OFFSET_X = (WIDTH - scaled_game_width) / 2
-        GAME_OFFSET_Y = (HEIGHT - scaled_game_height) / 2
-        
-        # Calculate board position within the centered game area
-        # The board should be positioned relative to the centered game area, not the screen
-        BOARD_OFFSET_X = GAME_OFFSET_X + (UI_WIDTH * SCALE)
-        BOARD_OFFSET_Y = GAME_OFFSET_Y + (UI_HEIGHT * SCALE)
-    else:
-        WIDTH = BASE_WIDTH
-        HEIGHT = BASE_HEIGHT
-        SCALE = 1.0
-        BOARD_OFFSET_X = UI_WIDTH
-        BOARD_OFFSET_Y = UI_HEIGHT
-        GAME_OFFSET_X = 0
-        GAME_OFFSET_Y = 0
 
 # Progress tracking functions
 def load_progress():
