@@ -1,5 +1,5 @@
 """
-Main Game Class - Enhanced with Shop Navigation (No Settings/Fullscreen)
+Main Game Class - Enhanced with Tutorial and Better Victory Screen
 """
 
 import pygame
@@ -72,17 +72,79 @@ class ChessGame:
             "What will it be today?"
         ]
         
-        # Bar intro dialogue state
-        self.bar_intro_dialogue_index = 0
-        self.bar_intro_dialogues = [
-            "Ah, welcome to my establishment, friend!",
-            "I am Tariq Steele, purveyor of... specialized equipment.",
-            "Before we proceed, I must inform you - this is merely a beta test.",
-            "The full experience, with all its glory and intrigue, will come in the future.",
-            "But fear not! What you're about to play is still quite... explosive.",
-            "Thank you for helping us test these new 'chess enhancements'.",
-            "I hope you'll find the game as thrilling as my other merchandise!",
-            "Now then, shall we see what you're made of?"
+        # Tutorial page state
+        self.tutorial_page = 0
+        self.tutorial_pages = [
+            {
+                "title": "WELCOME TO CHECKMATE PROTOCOL",
+                "content": [
+                    "This is not your ordinary chess game!",
+                    "",
+                    "In addition to standard chess rules, you can",
+                    "earn points by capturing enemy pieces and",
+                    "spend them on powerful abilities.",
+                    "",
+                    "Defeat increasingly difficult AI opponents",
+                    "to unlock new challenges and earn money",
+                    "for purchasing more devastating powerups!"
+                ]
+            },
+            {
+                "title": "BASIC CHESS RULES",
+                "content": [
+                    "• Click a piece to select it",
+                    "• Valid moves will be highlighted",
+                    "• Click a highlighted square to move",
+                    "• Capture enemy pieces by moving to their square",
+                    "",
+                    "SPECIAL MOVES:",
+                    "• Pawns can move 2 squares on first move",
+                    "• Pawns promote when reaching the end",
+                    "• Protect your King at all costs!"
+                ]
+            },
+            {
+                "title": "EARNING POINTS",
+                "content": [
+                    "Capture enemy pieces to earn powerup points:",
+                    "",
+                    "• Pawn = 1 point",
+                    "• Knight/Bishop = 3 points",
+                    "• Rook = 5 points",
+                    "• Queen = 9 points",
+                    "",
+                    "Points are shown in the powerup menu",
+                    "on the right side of the game board."
+                ]
+            },
+            {
+                "title": "POWERUPS",
+                "content": [
+                    "SHIELD (5 pts): Protects a piece for 3 turns",
+                    "",
+                    "GUN (7 pts): Shoot any enemy in line of sight",
+                    "",
+                    "AIRSTRIKE (10 pts): Bomb a 3x3 area",
+                    "",
+                    "PARATROOPERS (10 pts): Drop 3 pawns anywhere",
+                    "",
+                    "CHOPPER GUNNER (25 pts): Ultimate destruction!"
+                ]
+            },
+            {
+                "title": "PROGRESSION",
+                "content": [
+                    "Beat AI opponents to progress:",
+                    "",
+                    "• Win to unlock the next difficulty",
+                    "• Earn money based on difficulty",
+                    "• Visit the Arms Dealer to buy powerups",
+                    "",
+                    "REWARDS:",
+                    "Easy: $100 | Medium: $200",
+                    "Hard: $400 | Very Hard: $800"
+                ]
+            }
         ]
         
         # UI elements
@@ -146,22 +208,29 @@ class ChessGame:
         
         self.volume_knob_radius = 10
         
-        # Menu buttons - centered
+        # Menu buttons - centered (added tutorial button)
+        button_spacing = 80
         self.play_button = pygame.Rect(
             center_x - 100, 
-            center_y - 80, 
+            center_y - 120, 
+            200, 
+            60
+        )
+        self.tutorial_button = pygame.Rect(
+            center_x - 100, 
+            center_y - 40, 
             200, 
             60
         )
         self.beta_button = pygame.Rect(
             center_x - 100, 
-            center_y, 
+            center_y + 40, 
             200, 
             60
         )
         self.credits_button = pygame.Rect(
             center_x - 100, 
-            center_y + 80, 
+            center_y + 120, 
             200, 
             60
         )
@@ -169,6 +238,20 @@ class ChessGame:
             center_x - 100, 
             center_y + 250, 
             200, 
+            50
+        )
+        
+        # Tutorial navigation buttons
+        self.prev_button = pygame.Rect(
+            50,
+            center_y + 200,
+            120,
+            50
+        )
+        self.next_button = pygame.Rect(
+            config.WIDTH - 170,
+            center_y + 200,
+            120,
             50
         )
         
@@ -417,19 +500,23 @@ class ChessGame:
             
         if self.current_screen == config.SCREEN_START:
             if self.play_button.collidepoint(pos):
-                self.start_fade(config.SCREEN_START, config.SCREEN_BAR_INTRO)
+                self.start_fade(config.SCREEN_START, config.SCREEN_DIFFICULTY)
+            elif self.tutorial_button.collidepoint(pos):
+                self.start_fade(config.SCREEN_START, "tutorial")
             elif self.beta_button.collidepoint(pos):
                 self.start_fade(config.SCREEN_START, config.SCREEN_BETA)
             elif self.credits_button.collidepoint(pos):
                 self.start_fade(config.SCREEN_START, config.SCREEN_CREDITS)
                 
-        elif self.current_screen == config.SCREEN_BAR_INTRO:
-            # Click anywhere to advance dialogue
-            if self.bar_intro_dialogue_index < len(self.bar_intro_dialogues) - 1:
-                self.bar_intro_dialogue_index += 1
-            else:
-                # Finished all dialogue, go to difficulty selection
-                self.start_fade(config.SCREEN_BAR_INTRO, config.SCREEN_DIFFICULTY)
+        elif self.current_screen == "tutorial":
+            # Handle tutorial navigation
+            if self.prev_button.collidepoint(pos) and self.tutorial_page > 0:
+                self.tutorial_page -= 1
+            elif self.next_button.collidepoint(pos) and self.tutorial_page < len(self.tutorial_pages) - 1:
+                self.tutorial_page += 1
+            elif self.back_button.collidepoint(pos):
+                self.tutorial_page = 0  # Reset to first page
+                self.start_fade("tutorial", config.SCREEN_START)
                 
         elif self.current_screen == config.SCREEN_ARMS_DEALER:
             # Check purchase buttons
@@ -636,16 +723,14 @@ class ChessGame:
         elif self.current_screen == config.SCREEN_DIFFICULTY:
             if key == pygame.K_ESCAPE:
                 self.start_fade(config.SCREEN_DIFFICULTY, config.SCREEN_START)
-        elif self.current_screen == config.SCREEN_BAR_INTRO:
+        elif self.current_screen == "tutorial":
             if key == pygame.K_ESCAPE:
-                # Skip to difficulty selection
-                self.start_fade(config.SCREEN_BAR_INTRO, config.SCREEN_DIFFICULTY)
-            elif key == pygame.K_SPACE or key == pygame.K_RETURN:
-                # Advance dialogue with space or enter
-                if self.bar_intro_dialogue_index < len(self.bar_intro_dialogues) - 1:
-                    self.bar_intro_dialogue_index += 1
-                else:
-                    self.start_fade(config.SCREEN_BAR_INTRO, config.SCREEN_DIFFICULTY)
+                self.tutorial_page = 0  # Reset to first page
+                self.start_fade("tutorial", config.SCREEN_START)
+            elif key == pygame.K_LEFT and self.tutorial_page > 0:
+                self.tutorial_page -= 1
+            elif key == pygame.K_RIGHT and self.tutorial_page < len(self.tutorial_pages) - 1:
+                self.tutorial_page += 1
         elif self.current_screen in [config.SCREEN_START, config.SCREEN_CREDITS, config.SCREEN_ARMS_DEALER, config.SCREEN_BETA]:
             pass  # No special key handling for these screens
                 
@@ -833,14 +918,27 @@ class ChessGame:
         elif screen_type == config.SCREEN_START:
             buttons = {
                 'play': self.play_button,
+                'tutorial': self.tutorial_button,
                 'beta': self.beta_button, 
                 'credits': self.credits_button
             }
             self.renderer.draw_menu(config.SCREEN_START, buttons, self.mouse_pos)
             self.draw_volume_sliders()
             
-        elif screen_type == config.SCREEN_BAR_INTRO:
-            self.renderer.draw_bar_intro(self.bar_intro_dialogue_index, self.bar_intro_dialogues, self.mouse_pos)
+        elif screen_type == "tutorial":
+            # Create tutorial buttons dictionary
+            tutorial_buttons = {
+                'prev': self.prev_button,
+                'next': self.next_button,
+                'back': self.back_button
+            }
+            # Pass the tutorial page data with additional info
+            tutorial_page_data = {
+                'page': self.tutorial_pages[self.tutorial_page],
+                'current_index': self.tutorial_page,
+                'total_pages': len(self.tutorial_pages)
+            }
+            self.renderer.draw_tutorial(tutorial_page_data, tutorial_buttons, self.mouse_pos)
             self.draw_volume_sliders()
             
         elif screen_type == config.SCREEN_ARMS_DEALER:

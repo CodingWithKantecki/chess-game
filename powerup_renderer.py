@@ -1,5 +1,5 @@
 """
-Powerup Rendering Module
+Powerup Rendering Module FINAL
 Handles all visual aspects of the powerup system
 """
 

@@ -1,5 +1,5 @@
 """
-Powerup System for Chess Game
+Powerup System for Chess Game FINAL
 Handles powerup logic, effects, and visual feedback
 """
 

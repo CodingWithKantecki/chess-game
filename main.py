@@ -1,4 +1,4 @@
-"""
+""" FINAL
 Checkmate Protocol - Main Entry Point
 A chess game by Thomas Kantecki
 """

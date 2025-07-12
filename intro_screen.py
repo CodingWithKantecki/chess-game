@@ -1,6 +1,6 @@
 """
 Intro Screen Implementation for Checkmate Protocol
-Displays credits with fade in/out sequences
+Displays credits with fade in/out sequences FINAL
 Total duration: 11.5 seconds
 """
 

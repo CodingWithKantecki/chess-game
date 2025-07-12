@@ -1,5 +1,5 @@
 """
-Chess Game Configuration
+Chess Game Configuration FINAL
 All game constants and settings in one place
 """
 

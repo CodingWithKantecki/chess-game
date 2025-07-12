@@ -1008,44 +1008,169 @@ class Renderer:
         return rects
         
     def draw_game_over(self, board):
-        """Draw game over screen."""
+        """Draw improved game over screen with animations."""
         if not board.game_over:
             return
             
+        current_time = pygame.time.get_ticks()
+        
+        # Overlay
         overlay = pygame.Surface((config.WIDTH, config.HEIGHT))
         overlay.set_alpha(180)
         overlay.fill(config.BLACK)
         self.screen.blit(overlay, (0, 0))
         
-        winner_text = f"{board.winner.upper()} WINS!"
-        text = self.pixel_fonts['huge'].render(winner_text, True, config.WHITE)
-        rect = text.get_rect(center=(config.WIDTH // 2, config.HEIGHT // 2 - 80 * self.scale))
-        self.screen.blit(text, rect)
-        
-        # Show reward if player won
-        if board.winner == "white" and hasattr(board, 'victory_reward') and board.victory_reward > 0:
-            reward_text = f"EARNED ${board.victory_reward}!"
-            text = self.pixel_fonts['large'].render(reward_text, True, (255, 215, 0))
-            rect = text.get_rect(center=(config.WIDTH // 2, config.HEIGHT // 2 - 30 * self.scale))
+        # Victory or defeat screen
+        if board.winner == "white":
+            # VICTORY SCREEN
+            # Animated victory text with pulsing effect
+            pulse = math.sin(current_time / 200) * 0.1 + 0.9
+            victory_size = int(48 * self.scale * pulse)
+            victory_font = pygame.font.SysFont("Courier", victory_size)
+            victory_text = victory_font.render("VICTORY!", True, (255, 215, 0))
+            victory_rect = victory_text.get_rect(center=(config.WIDTH // 2, config.HEIGHT // 2 - 120 * self.scale))
+            self.screen.blit(victory_text, victory_rect)
+            
+            # Draw rotating stars around victory text
+            star_count = 8
+            star_radius = 80 * self.scale
+            for i in range(star_count):
+                angle = (i / star_count) * 2 * math.pi + current_time / 1000
+                star_x = victory_rect.centerx + math.cos(angle) * star_radius
+                star_y = victory_rect.centery + math.sin(angle) * star_radius
+                self._draw_star(star_x, star_y, 15 * self.scale, (255, 255, 100))
+            
+            # Show reward with coin icon
+            if hasattr(board, 'victory_reward') and board.victory_reward > 0:
+                # Draw coin icon
+                coin_y = config.HEIGHT // 2 - 40 * self.scale
+                coin_x = config.WIDTH // 2 - 80 * self.scale
+                pygame.draw.circle(self.screen, (255, 215, 0), (int(coin_x), int(coin_y)), int(20 * self.scale))
+                pygame.draw.circle(self.screen, (255, 255, 100), (int(coin_x), int(coin_y)), int(20 * self.scale), 2)
+                coin_text = self.pixel_fonts['large'].render("$", True, (180, 150, 0))
+                coin_rect = coin_text.get_rect(center=(coin_x, coin_y))
+                self.screen.blit(coin_text, coin_rect)
+                
+                # Draw reward text
+                reward_text = f"EARNED ${board.victory_reward}!"
+                text = self.pixel_fonts['large'].render(reward_text, True, (255, 255, 255))
+                rect = text.get_rect(center=(config.WIDTH // 2 + 20 * self.scale, coin_y))
+                self.screen.blit(text, rect)
+            
+            # Check for new difficulty unlock
+            if hasattr(board, 'selected_difficulty'):
+                progress = config.load_progress()
+                current_index = config.AI_DIFFICULTIES.index(board.selected_difficulty) if board.selected_difficulty in config.AI_DIFFICULTIES else -1
+                
+                if current_index >= 0 and current_index < len(config.AI_DIFFICULTIES) - 1:
+                    next_diff = config.AI_DIFFICULTIES[current_index + 1]
+                    if next_diff not in progress.get("unlocked_difficulties", []):
+                        # Draw unlock icon
+                        unlock_y = config.HEIGHT // 2 + 20 * self.scale
+                        self._draw_unlock_icon(config.WIDTH // 2 - 100 * self.scale, unlock_y)
+                        
+                        unlock_text = f"{config.AI_DIFFICULTY_NAMES[next_diff]} DIFFICULTY UNLOCKED!"
+                        text = self.pixel_fonts['medium'].render(unlock_text, True, (255, 215, 0))
+                        rect = text.get_rect(center=(config.WIDTH // 2 + 20 * self.scale, unlock_y))
+                        self.screen.blit(text, rect)
+            
+            # Statistics box
+            stats_y = config.HEIGHT // 2 + 80 * self.scale
+            stats_width = 300 * self.scale
+            stats_height = 80 * self.scale
+            stats_x = config.WIDTH // 2 - stats_width // 2
+            
+            # Stats background
+            pygame.draw.rect(self.screen, (40, 40, 40), 
+                           (stats_x, stats_y, stats_width, stats_height), 
+                           border_radius=10)
+            pygame.draw.rect(self.screen, (255, 215, 0), 
+                           (stats_x, stats_y, stats_width, stats_height), 2, 
+                           border_radius=10)
+            
+            # Stats text
+            pieces_captured = len(board.captured_pieces["black"])
+            pieces_lost = len(board.captured_pieces["white"])
+            
+            stats_text = [
+                f"Pieces Captured: {pieces_captured}",
+                f"Pieces Lost: {pieces_lost}"
+            ]
+            
+            y_offset = stats_y + 20 * self.scale
+            for stat in stats_text:
+                text = self.pixel_fonts['small'].render(stat, True, (200, 200, 200))
+                rect = text.get_rect(center=(config.WIDTH // 2, y_offset))
+                self.screen.blit(text, rect)
+                y_offset += 25 * self.scale
+                
+        else:
+            # DEFEAT SCREEN
+            defeat_text = "DEFEAT"
+            text = self.pixel_fonts['huge'].render(defeat_text, True, (200, 50, 50))
+            rect = text.get_rect(center=(config.WIDTH // 2, config.HEIGHT // 2 - 80 * self.scale))
+            self.screen.blit(text, rect)
+            
+            # Encouraging message
+            encourage_text = "Better luck next time!"
+            text = self.pixel_fonts['medium'].render(encourage_text, True, (150, 150, 150))
+            rect = text.get_rect(center=(config.WIDTH // 2, config.HEIGHT // 2 - 20 * self.scale))
             self.screen.blit(text, rect)
         
-        # Check if player won and if there's a new difficulty to unlock
-        if board.winner == "white" and hasattr(board, 'selected_difficulty'):
-            progress = config.load_progress()
-            current_index = config.AI_DIFFICULTIES.index(board.selected_difficulty) if hasattr(board, 'selected_difficulty') and board.selected_difficulty in config.AI_DIFFICULTIES else -1
-            
-            if current_index >= 0 and current_index < len(config.AI_DIFFICULTIES) - 1:
-                next_diff = config.AI_DIFFICULTIES[current_index + 1]
-                if next_diff not in progress.get("unlocked_difficulties", []):
-                    unlock_text = f"{config.AI_DIFFICULTY_NAMES[next_diff]} DIFFICULTY UNLOCKED!"
-                    text = self.pixel_fonts['medium'].render(unlock_text, True, (255, 215, 0))
-                    rect = text.get_rect(center=(config.WIDTH // 2, config.HEIGHT // 2 + 20 * self.scale))
-                    self.screen.blit(text, rect)
+        # Buttons with better styling
+        button_y = config.HEIGHT // 2 + 160 * self.scale
+        button_width = 140 * self.scale
+        button_height = 40 * self.scale
+        button_spacing = 20 * self.scale
         
-        restart_text = "PRESS R TO RESTART OR ESC TO MAIN MENU"
-        text = self.pixel_fonts['medium'].render(restart_text, True, (200, 200, 200))
-        rect = text.get_rect(center=(config.WIDTH // 2, config.HEIGHT // 2 + 70 * self.scale))
-        self.screen.blit(text, rect)
+        # Restart button
+        restart_x = config.WIDTH // 2 - button_width - button_spacing // 2
+        restart_rect = pygame.Rect(restart_x, button_y, button_width, button_height)
+        restart_color = (70, 150, 70) if restart_rect.collidepoint(pygame.mouse.get_pos()) else (50, 100, 50)
+        pygame.draw.rect(self.screen, restart_color, restart_rect, border_radius=5)
+        pygame.draw.rect(self.screen, (255, 255, 255), restart_rect, 2, border_radius=5)
+        
+        restart_text = self.pixel_fonts['small'].render("RESTART (R)", True, (255, 255, 255))
+        restart_text_rect = restart_text.get_rect(center=restart_rect.center)
+        self.screen.blit(restart_text, restart_text_rect)
+        
+        # Menu button
+        menu_x = config.WIDTH // 2 + button_spacing // 2
+        menu_rect = pygame.Rect(menu_x, button_y, button_width, button_height)
+        menu_color = (150, 70, 70) if menu_rect.collidepoint(pygame.mouse.get_pos()) else (100, 50, 50)
+        pygame.draw.rect(self.screen, menu_color, menu_rect, border_radius=5)
+        pygame.draw.rect(self.screen, (255, 255, 255), menu_rect, 2, border_radius=5)
+        
+        menu_text = self.pixel_fonts['small'].render("MENU (ESC)", True, (255, 255, 255))
+        menu_text_rect = menu_text.get_rect(center=menu_rect.center)
+        self.screen.blit(menu_text, menu_text_rect)
+        
+    def _draw_star(self, x, y, size, color):
+        """Helper method to draw a star."""
+        points = []
+        for i in range(10):
+            angle = (i * math.pi / 5) - math.pi / 2
+            if i % 2 == 0:
+                r = size
+            else:
+                r = size * 0.5
+            px = x + r * math.cos(angle)
+            py = y + r * math.sin(angle)
+            points.append((px, py))
+        pygame.draw.polygon(self.screen, color, points)
+        
+    def _draw_unlock_icon(self, x, y):
+        """Helper method to draw an unlock padlock icon."""
+        # Padlock body
+        pygame.draw.rect(self.screen, (255, 215, 0), 
+                        (x - 15, y - 10, 30, 20), 
+                        border_radius=3)
+        # Padlock shackle (open)
+        pygame.draw.arc(self.screen, (255, 215, 0), 
+                       (x - 12, y - 20, 24, 20), 
+                       0, math.pi, 3)
+        # Keyhole
+        pygame.draw.circle(self.screen, (40, 40, 40), (int(x), int(y)), 3)
         
     def draw_difficulty_menu(self, difficulty_buttons, back_button, mouse_pos):
         """Draw difficulty selection menu."""
@@ -1317,6 +1442,7 @@ class Renderer:
             
             # Buttons
             self._draw_button(buttons['play'], "PLAY GAME", (70, 150, 70), (100, 200, 100), mouse_pos)
+            self._draw_button(buttons['tutorial'], "TUTORIAL", (70, 100, 150), (100, 130, 200), mouse_pos)
             self._draw_button(buttons['beta'], "BETA TEST INFO", (150, 150, 70), (200, 200, 100), mouse_pos)
             self._draw_button(buttons['credits'], "CREDITS", (70, 70, 150), (100, 100, 200), mouse_pos)
             
@@ -1400,6 +1526,75 @@ class Renderer:
             
             # Back button
             self._draw_button(buttons['back'], "BACK", (150, 70, 70), (200, 100, 100), mouse_pos)
+            
+    def draw_tutorial(self, tutorial_page_data, tutorial_buttons, mouse_pos):
+        """Draw tutorial screen with navigation."""
+        self.draw_parallax_background(1.0)
+        
+        # Extract data from the tutorial_page_data dictionary
+        tutorial_page = tutorial_page_data['page']
+        current_index = tutorial_page_data['current_index']
+        total_pages = tutorial_page_data['total_pages']
+        
+        # Overlay
+        overlay = pygame.Surface((config.WIDTH, config.HEIGHT), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 120))
+        self.screen.blit(overlay, (0, 0))
+        
+        # Calculate game area center
+        if config.SCALE != 1.0:
+            game_center_x = config.GAME_OFFSET_X + (config.BASE_WIDTH * config.SCALE) // 2
+            game_center_y = config.GAME_OFFSET_Y + (config.BASE_HEIGHT * config.SCALE) // 2
+        else:
+            game_center_x = config.WIDTH // 2
+            game_center_y = config.HEIGHT // 2
+        
+        # Title
+        text = self.pixel_fonts['huge'].render("TUTORIAL", True, config.WHITE)
+        rect = text.get_rect(center=(game_center_x, game_center_y - 250 * config.SCALE))
+        self.screen.blit(text, rect)
+        
+        # Page indicator
+        page_text = f"Page {current_index + 1}/{total_pages}"
+        page_surface = self.pixel_fonts['small'].render(page_text, True, (200, 200, 200))
+        page_rect = page_surface.get_rect(center=(game_center_x, game_center_y - 200 * config.SCALE))
+        self.screen.blit(page_surface, page_rect)
+        
+        # Tutorial content
+        y = game_center_y - 150 * config.SCALE
+        
+        # Draw the title of the current page
+        if "title" in tutorial_page:
+            title_surface = self.pixel_fonts['large'].render(tutorial_page["title"], True, (255, 215, 0))
+            title_rect = title_surface.get_rect(center=(game_center_x, y))
+            self.screen.blit(title_surface, title_rect)
+            y += 50 * config.SCALE
+        
+        # Draw the content
+        if "content" in tutorial_page:
+            for line in tutorial_page["content"]:
+                if line:  # Skip empty lines
+                    # Determine text color based on content
+                    if line.startswith("•"):
+                        color = (200, 200, 200)
+                    elif "=" in line:  # For point values
+                        color = (255, 215, 0)
+                    else:
+                        color = (200, 200, 200)
+                    
+                    text_surface = self.pixel_fonts['medium'].render(line, True, color)
+                    text_rect = text_surface.get_rect(center=(game_center_x, y))
+                    self.screen.blit(text_surface, text_rect)
+                y += 35 * config.SCALE
+        
+        # Navigation buttons
+        if current_index > 0:
+            self._draw_button(tutorial_buttons['prev'], "PREVIOUS", (100, 100, 100), (150, 150, 150), mouse_pos)
+        
+        if current_index < total_pages - 1:
+            self._draw_button(tutorial_buttons['next'], "NEXT", (100, 100, 100), (150, 150, 150), mouse_pos)
+        
+        self._draw_button(tutorial_buttons['back'], "BACK TO MENU", (150, 70, 70), (200, 100, 100), mouse_pos)
             
     def draw_bar_intro(self, dialogue_index, dialogues, mouse_pos):
         """Draw the bar intro scene with Tariq."""
@@ -1795,7 +1990,3 @@ class Renderer:
         
         # Tail rotor
         pygame.draw.circle(self.screen, color, (heli_x + 30, heli_y + 5), 4, 1)
-        
-        # Landing skids
-        pygame.draw.line(self.screen, color, (heli_x - 10, heli_y + 15), 
-                        (heli_x + 10, heli_y + 15), 2)

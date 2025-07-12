@@ -1,5 +1,5 @@
 """
-Checkmate Protocol - Powerup Edition
+Checkmate Protocol - Powerup Edition FINAL
 A chess game with special abilities by Thomas Kantecki
 Enhanced with powerup system
 """

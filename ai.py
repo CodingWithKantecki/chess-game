@@ -1,5 +1,5 @@
 """
-Chess AI Bot System - Enhanced with Powerup Usage and ELO Ratings
+Chess AI Bot System - Enhanced with Powerup Usage and ELO Ratings FINAL
 Different difficulty levels from Easy to Very Hard with ELO-based play strength
 """
 
