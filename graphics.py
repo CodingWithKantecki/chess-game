@@ -23,8 +23,8 @@ class Renderer:
         self.board_cache_scale = None
         
         # Intro sequence state
-        self.intro_start_time = pygame.time.get_ticks()
-        self.intro_jet_triggered = True  # Changed from False - start immediately
+        self.intro_start_time = None  # Will be set when main menu is first shown
+        self.intro_jet_triggered = False  # Don't start until we're on main menu
         self.intro_sound_played = False
         
         # Fire system - COMPLETELY REDESIGNED
@@ -36,6 +36,11 @@ class Renderer:
         # Falling chess pieces system
         self.falling_chess_pieces = []  # Chess pieces falling from trees
         self.chess_pieces_enabled = False  # Enable after bombs drop
+        
+        # Add missing attributes
+        self._fire_updated_this_frame = False
+        self.current_screen = None
+        self.falling_bombs = []
         
     def update_scale(self, scale):
         """Update scale factor for fullscreen mode."""
@@ -86,7 +91,275 @@ class Renderer:
             fonts[key] = pygame.font.Font(pygame.font.get_default_font(), size)
         
         return fonts
+    
+    def _draw_fire_at_depth(self, current_time, depth):
+        """Draw fire particles at a specific depth layer."""
+        if self._fire_updated_this_frame:
+            return
+            
+        # Update fire zones at this depth
+        for zone in self.fire_zones:
+            if zone['depth'] == depth:
+                # Spawn new fire particles
+                if zone['spawn_timer'] <= 0 and zone['intensity'] > 0:
+                    # Create multiple particles per spawn for fuller fire
+                    for _ in range(2):  # Reduced from 3 to 2 for less dense fire
+                        particle = {
+                            'x': zone['world_x'] - self.parallax_offset * depth + random.randint(-zone['width']//3, zone['width']//3),
+                            'y': zone['y'] + random.randint(0, 10),  # Start lower
+                            'vx': random.uniform(-0.5, 0.5),
+                            'vy': random.uniform(-1.5, -0.5),  # Less upward velocity
+                            'size': random.randint(8, 20),  # Larger base size
+                            'life': 1.0,
+                            'depth': depth,
+                            'spike_height': random.uniform(0.5, 1.5),  # For spiky flames
+                            'flicker': random.uniform(0, 6.28)  # Random flicker phase
+                        }
+                        self.fire_particles.append(particle)
+                    zone['spawn_timer'] = random.randint(1, 2)
+                else:
+                    zone['spawn_timer'] -= 1
         
+        # Draw particles with additive blending for realism
+        fire_surface = pygame.Surface((config.WIDTH, config.HEIGHT), pygame.SRCALPHA)
+        
+        # Update and draw fire particles at this depth
+        particles_to_remove = []
+        for particle in self.fire_particles:
+            if particle['depth'] == depth:
+                # Update particle
+                particle['x'] += particle['vx']
+                particle['y'] += particle['vy']
+                particle['vy'] -= 0.08  # Less rise acceleration
+                particle['life'] -= 0.035  # Faster decay
+                particle['size'] = max(1, particle['size'] - 0.3)
+                particle['flicker'] += 0.3  # Update flicker
+                
+                # Add turbulence and flicker
+                flicker_offset = math.sin(particle['flicker']) * 2
+                particle['vx'] += random.uniform(-0.1, 0.1) + flicker_offset * 0.1
+                
+                if particle['life'] <= 0 or particle['y'] < zone['y'] - 60:  # Limit height
+                    particles_to_remove.append(particle)
+                else:
+                    # Draw particle
+                    screen_x = int(particle['x'] - self.parallax_offset * depth)
+                    screen_y = int(particle['y'])
+                    
+                    # Fire colors with more orange/red bias
+                    if particle['life'] > 0.85:
+                        # Core of flame - bright yellow
+                        base_color = (255, 240, 100)
+                        glow_color = (255, 180, 50)
+                    elif particle['life'] > 0.6:
+                        # Orange flame
+                        base_color = (255, 180, 0)
+                        glow_color = (255, 120, 0)
+                    elif particle['life'] > 0.3:
+                        # Red-orange flame
+                        base_color = (255, 100, 0)
+                        glow_color = (200, 50, 0)
+                    else:
+                        # Dark red and smoke
+                        base_color = (150, 30, 0)
+                        glow_color = (80, 20, 0)
+                    
+                    # Apply alpha based on life
+                    alpha = int(particle['life'] * 180)
+                    size = int(particle['size'] * self.scale)
+                    
+                    # Draw spiky fire shape
+                    if 0 <= screen_x <= config.WIDTH and particle['life'] > 0.3:
+                        # Draw flame as elongated shape for spiky effect
+                        flame_height = int(size * particle['spike_height'])
+                        
+                        # Outer glow
+                        glow_size = int(size * 1.2)
+                        glow_surf = pygame.Surface((glow_size * 2, flame_height * 2), pygame.SRCALPHA)
+                        glow_alpha = int(alpha * 0.4)
+                        
+                        # Draw elongated glow for spiky effect
+                        for i in range(3):
+                            offset_y = i * flame_height // 3
+                            radius = glow_size - (i * glow_size // 4)
+                            if radius > 0:
+                                pygame.draw.circle(glow_surf, (*glow_color, glow_alpha // (i + 1)), 
+                                                 (glow_size, glow_size + offset_y), radius)
+                        
+                        fire_surface.blit(glow_surf, (screen_x - glow_size, screen_y - glow_size), 
+                                        special_flags=pygame.BLEND_ADD)
+                        
+                        # Inner flame core - draw as vertical ellipse for spike
+                        particle_surf = pygame.Surface((size * 2, flame_height * 2), pygame.SRCALPHA)
+                        # Draw multiple circles to create flame shape
+                        for i in range(3):
+                            offset_y = i * flame_height // 4
+                            radius = size - (i * size // 3)
+                            if radius > 0:
+                                pygame.draw.circle(particle_surf, (*base_color, alpha - (i * 30)), 
+                                                 (size, size + offset_y), radius)
+                        
+                        fire_surface.blit(particle_surf, (screen_x - size, screen_y - size), 
+                                        special_flags=pygame.BLEND_ADD)
+        
+        # Blit fire surface with additive blending
+        self.screen.blit(fire_surface, (0, 0), special_flags=pygame.BLEND_ADD)
+        
+        # Remove dead particles
+        for particle in particles_to_remove:
+            if particle in self.fire_particles:
+                self.fire_particles.remove(particle)
+    
+    def _draw_chess_pieces_at_layer(self, depth):
+        """Draw falling chess pieces at a specific depth layer."""
+        # Draw chess pieces that match this depth
+        for piece in self.falling_chess_pieces:
+            if abs(piece['depth'] - depth) < 0.1:  # Close enough to this layer
+                # Calculate screen position based on depth
+                screen_x = int(piece['x'] - self.parallax_offset * piece['depth'])
+                screen_y = int(piece['y'])
+                
+                # Only draw if on screen
+                if -50 <= screen_x <= config.WIDTH + 50:
+                    # Get the piece image
+                    piece_key = piece['piece']
+                    if piece_key in self.assets.pieces:
+                        piece_img = self.assets.pieces[piece_key]
+                        
+                        # Scale based on depth
+                        scale_factor = 0.3 + (piece['depth'] * 0.7)  # Smaller in back
+                        piece_size = int(50 * self.scale * scale_factor)
+                        scaled_piece = pygame.transform.scale(piece_img, (piece_size, piece_size))
+                        
+                        # Rotate the piece
+                        rotated_piece = pygame.transform.rotate(scaled_piece, piece['rotation'])
+                        
+                        # Apply transparency based on depth
+                        alpha = int(100 + piece['depth'] * 155)  # More opaque in front
+                        rotated_piece.set_alpha(alpha)
+                        
+                        # Draw the piece
+                        piece_rect = rotated_piece.get_rect(center=(screen_x, screen_y))
+                        self.screen.blit(rotated_piece, piece_rect)
+    
+    def _update_chess_pieces(self):
+        """Update physics for falling chess pieces."""
+        pieces_to_remove = []
+        current_time = pygame.time.get_ticks()
+        
+        # Spawn new pieces occasionally
+        if not hasattr(self, 'next_piece_spawn'):
+            self.next_piece_spawn = current_time + random.randint(500, 2000)
+        
+        if current_time >= self.next_piece_spawn and len(self.falling_chess_pieces) < 20:
+            # Random piece types
+            piece_types = ['wP', 'wN', 'wB', 'wR', 'wQ', 'wK', 'bP', 'bN', 'bB', 'bR', 'bQ', 'bK']
+            
+            # Create new falling piece - spawn from middle of screen at tree level
+            new_piece = {
+                'x': random.randint(0, config.WIDTH) + self.parallax_offset * 0.7,
+                'y': random.randint(config.HEIGHT // 3, config.HEIGHT // 2),  # Middle third of screen
+                'vy': random.uniform(0.5, 1.5),  # Gentle initial fall
+                'vx': random.uniform(-0.3, 0.3),  # Minimal horizontal drift
+                'rotation': random.uniform(0, 360),
+                'rotation_speed': random.uniform(-2, 2),  # Gentle rotation
+                'piece': random.choice(piece_types),
+                'depth': random.choice([0.3, 0.5, 0.7, 0.9])
+            }
+            self.falling_chess_pieces.append(new_piece)
+            self.next_piece_spawn = current_time + random.randint(500, 2000)
+        
+        # Update existing pieces
+        for piece in self.falling_chess_pieces:
+            # Update position
+            piece['x'] += piece['vx']
+            piece['y'] += piece['vy']
+            piece['rotation'] += piece['rotation_speed']
+            
+            # Very gentle gravity
+            piece['vy'] += 0.03  # Very slow acceleration
+            
+            # Add slight air resistance
+            piece['vy'] = min(piece['vy'], 4)  # Terminal velocity
+            
+            # Remove if off screen
+            if piece['y'] > config.HEIGHT + 100:
+                pieces_to_remove.append(piece)
+        
+        # Remove pieces that fell off screen
+        for piece in pieces_to_remove:
+            if piece in self.falling_chess_pieces:
+                self.falling_chess_pieces.remove(piece)
+    
+    def _draw_intro_jet_with_bombs(self, time_elapsed):
+        """Draw the intro jet sequence with bomb drops."""
+        if not hasattr(self.assets, 'jet_frames') or not self.assets.jet_frames:
+            return
+            
+        # Jet appears immediately and flies across
+        jet_start_time = 0
+        jet_duration = 4000  # 4 seconds to cross screen
+        
+        if time_elapsed < jet_start_time + jet_duration:
+            # Calculate jet position
+            progress = (time_elapsed - jet_start_time) / jet_duration
+            jet_x = -200 + (config.WIDTH + 400) * progress
+            jet_y = 100
+            
+            # Play jet sound once
+            if not self.intro_sound_played and hasattr(self.assets, 'jet_sound') and self.assets.jet_sound:
+                self.assets.jet_sound.play()
+                self.intro_sound_played = True
+            
+            # Draw jet
+            frame_index = int((time_elapsed / 100) % len(self.assets.jet_frames))
+            jet_frame = self.assets.jet_frames[frame_index]
+            
+            # Scale jet
+            jet_scale = 0.5 * self.scale
+            jet_width = int(jet_frame.get_width() * jet_scale)
+            jet_height = int(jet_frame.get_height() * jet_scale)
+            scaled_jet = pygame.transform.scale(jet_frame, (jet_width, jet_height))
+            
+            # Flip the jet to face the correct direction (right)
+            flipped_jet = pygame.transform.flip(scaled_jet, True, False)
+            
+            self.screen.blit(flipped_jet, (int(jet_x), int(jet_y)))
+            
+            # Initialize falling bombs list if not exists
+            if not hasattr(self, 'falling_bombs'):
+                self.falling_bombs = []
+            
+            # Drop MORE bombs at closer intervals
+            bomb_drop_times = [500, 800, 1100, 1400, 1700, 2000, 2300, 2600, 2900, 3200, 3500]  # More bombs!
+            
+            for drop_time in bomb_drop_times:
+                if jet_start_time + drop_time <= time_elapsed < jet_start_time + drop_time + 50:
+                    # Check if we already dropped a bomb at this time
+                    already_dropped = any(b['drop_time'] == drop_time for b in self.falling_bombs)
+                    
+                    if not already_dropped:
+                        # Calculate bomb drop position
+                        bomb_progress = drop_time / jet_duration
+                        bomb_x = -200 + (config.WIDTH + 400) * bomb_progress + jet_width // 2
+                        
+                        self.falling_bombs.append({
+                            'x': bomb_x,
+                            'y': jet_y + jet_height,
+                            'vy': 2,
+                            'world_x': bomb_x + self.parallax_offset,
+                            'exploded': False,
+                            'drop_time': drop_time
+                        })
+                        
+                        # Play bomb sound
+                        if hasattr(self.assets, 'bomb_sound') and self.assets.bomb_sound:
+                            self.assets.bomb_sound.play()
+        
+        # Enable chess pieces after first bomb
+        if time_elapsed > 1500 and not self.chess_pieces_enabled:
+            self.chess_pieces_enabled = True
+            
     def draw_parallax_background_with_fire(self, brightness=1.0):
         """Draw scrolling background with fire integrated at appropriate depth."""
         # Reset fire update flag for this frame
@@ -791,6 +1064,11 @@ class Renderer:
             game_center_y = config.HEIGHT // 2
         
         if screen_type == config.SCREEN_START:
+            # Initialize jet sequence timing when first showing main menu
+            if self.intro_start_time is None:
+                self.intro_start_time = pygame.time.get_ticks()
+                self.intro_jet_triggered = True
+                
             # Check for intro jet sequence - NOW IMMEDIATE
             current_time = pygame.time.get_ticks()
             time_since_start = current_time - self.intro_start_time
@@ -1204,10 +1482,10 @@ class Renderer:
             pygame.draw.rect(self.screen, border_color, card_rect, 3, border_radius=10)
             
             # Powerup icon
-            if key == "gun" and hasattr(self.renderer, 'assets') and hasattr(self.renderer.assets, 'revolver_image') and self.renderer.assets.revolver_image:
+            if powerup_key == "gun" and hasattr(self, 'assets') and hasattr(self.assets, 'revolver_image') and self.assets.revolver_image:
                 # Use the actual revolver image for gun powerup
                 icon_size = 25
-                scaled_revolver = pygame.transform.scale(self.renderer.assets.revolver_image, (icon_size, icon_size))
+                scaled_revolver = pygame.transform.scale(self.assets.revolver_image, (icon_size, icon_size))
                 
                 # Apply grayscale effect if can't afford
                 if not can_afford:
@@ -1222,7 +1500,7 @@ class Renderer:
                 
                 icon_rect = scaled_revolver.get_rect(centerx=card_rect.centerx, y=card_rect.y + 12)
                 self.screen.blit(scaled_revolver, icon_rect)
-            elif key == "chopper":
+            elif powerup_key == "chopper":
                 # Draw helicopter icon
                 self._draw_helicopter_icon(card_rect, can_afford)
             else:
@@ -1281,911 +1559,159 @@ class Renderer:
         
         # Back button
         self._draw_button(back_button, "BACK TO GAME", (150, 70, 70), (200, 100, 100), mouse_pos)
+
+    def _draw_button(self, rect, text, base_color, hover_color, mouse_pos):
+        """Helper method to draw a button."""
+        is_hover = rect.collidepoint(mouse_pos)
+        color = hover_color if is_hover else base_color
         
-    def _draw_speech_bubble(self, x, y, text, max_width, point_down=False):
+        pygame.draw.rect(self.screen, color, rect, border_radius=10)
+        pygame.draw.rect(self.screen, config.WHITE, rect, 3, border_radius=10)
+        
+        text_surface = self.pixel_fonts['medium'].render(text, True, config.WHITE)
+        text_rect = text_surface.get_rect(center=rect.center)
+        self.screen.blit(text_surface, text_rect)
+
+    def _draw_speech_bubble(self, x, y, text, width, point_down=False):
         """Draw a speech bubble with text."""
-        # Wrap text
+        padding = int(20 * self.scale)
+        line_height = int(20 * self.scale)
+        
+        # Word wrap the text
         words = text.split(' ')
         lines = []
         current_line = []
         
         for word in words:
             test_line = ' '.join(current_line + [word])
-            if self.pixel_fonts['medium'].size(test_line)[0] <= max_width - 40:  # Changed from 'small' to 'medium'
-                current_line.append(word)
-            else:
+            text_surface = self.pixel_fonts['small'].render(test_line, True, config.BLACK)
+            if text_surface.get_width() > width - 2 * padding:
                 if current_line:
                     lines.append(' '.join(current_line))
                     current_line = [word]
                 else:
                     lines.append(word)
+            else:
+                current_line.append(word)
+        
         if current_line:
             lines.append(' '.join(current_line))
         
-        # Calculate bubble size
-        line_height = self.pixel_fonts['medium'].get_height() + 5  # Changed from 'small' to 'medium'
-        bubble_height = len(lines) * line_height + 30
-        bubble_width = max_width
+        # Calculate bubble height
+        height = len(lines) * line_height + 2 * padding
         
         # Draw bubble background
-        bubble_rect = pygame.Rect(x, y, bubble_width, bubble_height)
-        pygame.draw.rect(self.screen, (40, 40, 40), bubble_rect, border_radius=15)
-        pygame.draw.rect(self.screen, (200, 200, 200), bubble_rect, 3, border_radius=15)
+        bubble_rect = pygame.Rect(x, y, width, height)
+        pygame.draw.rect(self.screen, (255, 255, 255), bubble_rect, border_radius=15)
+        pygame.draw.rect(self.screen, (0, 0, 0), bubble_rect, 3, border_radius=15)
         
-        # Draw tail
+        # Draw pointer/tail
         if point_down:
-            # Tail pointing down from bottom of bubble
-            tail_x = x + bubble_width // 2  # Center of bubble
             tail_points = [
-                (tail_x - 15, y + bubble_height - 2),  # Left point
-                (tail_x + 15, y + bubble_height - 2),  # Right point
-                (tail_x, y + bubble_height + 20)        # Bottom point
+                (x + width // 2 - 15, y + height),
+                (x + width // 2, y + height + 20),
+                (x + width // 2 + 15, y + height)
             ]
-            pygame.draw.polygon(self.screen, (40, 40, 40), tail_points)
-            # Draw outline
-            pygame.draw.lines(self.screen, (200, 200, 200), False, 
-                             [(tail_x - 15, y + bubble_height - 2), (tail_x, y + bubble_height + 20)], 3)
-            pygame.draw.lines(self.screen, (200, 200, 200), False, 
-                             [(tail_x + 15, y + bubble_height - 2), (tail_x, y + bubble_height + 20)], 3)
-        else:
-            # Original tail pointing left
-            tail_points = [
-                (x - 10, y + 30),
-                (x + 10, y + 20),
-                (x + 10, y + 40)
-            ]
-            pygame.draw.polygon(self.screen, (40, 40, 40), tail_points)
-            pygame.draw.lines(self.screen, (200, 200, 200), False, 
-                             [(x - 10, y + 30), (x + 10, y + 20)], 3)
-            pygame.draw.lines(self.screen, (200, 200, 200), False, 
-                             [(x - 10, y + 30), (x + 10, y + 40)], 3)
+            pygame.draw.polygon(self.screen, (255, 255, 255), tail_points)
+            pygame.draw.lines(self.screen, (0, 0, 0), False, 
+                            [(tail_points[0][0], tail_points[0][1] - 1),
+                             tail_points[1],
+                             (tail_points[2][0], tail_points[2][1] - 1)], 3)
         
         # Draw text
-        text_y = y + 15
-        for line in lines:
-            text_surface = self.pixel_fonts['medium'].render(line, True, (255, 255, 255))  # Changed from 'small' to 'medium'
-            text_rect = text_surface.get_rect(centerx=x + bubble_width // 2, y=text_y)
+        for i, line in enumerate(lines):
+            text_surface = self.pixel_fonts['small'].render(line, True, config.BLACK)
+            text_rect = text_surface.get_rect(centerx=x + width // 2, 
+                                             y=y + padding + i * line_height)
             self.screen.blit(text_surface, text_rect)
-            text_y += line_height
 
-    def _wrap_text(self, text, font, max_width):
-        """Wrap text to fit within max_width."""
-        words = text.split(' ')
-        lines = []
-        current_line = []
-        
-        for word in words:
-            current_line.append(word)
-            line_text = ' '.join(current_line)
-            if font.size(line_text)[0] > max_width:
-                if len(current_line) > 1:
-                    current_line.pop()
-                    lines.append(' '.join(current_line))
-                    current_line = [word]
-                else:
-                    lines.append(word)
-                    current_line = []
-        
-        if current_line:
-            lines.append(' '.join(current_line))
-        
-        return lines
-            
-    def _draw_button(self, rect, text, color, hover_color, mouse_pos):
-        """Draw a button."""
-        is_hover = rect.collidepoint(mouse_pos)
-        
-        pygame.draw.rect(self.screen, hover_color if is_hover else color, rect, border_radius=10)
-        pygame.draw.rect(self.screen, config.WHITE, rect, 3, border_radius=10)
-        
-        text_surface = self.pixel_fonts['large'].render(text, True, config.WHITE)
-        text_rect = text_surface.get_rect(center=rect.center)
-        self.screen.blit(text_surface, text_rect)
-        
-    def _draw_intro_jet_with_bombs(self, elapsed_time):
-        """Draw jet flyby and create fire zones."""
-        # Jet flies from left to right
-        jet_progress = elapsed_time / 4000.0  # 4 second flyby
-        jet_x = -200 + (config.WIDTH + 400) * jet_progress
-        jet_y = config.HEIGHT * 0.1  # 10% from top - above the treeline
-        
-        # Initialize bomb list if needed
-        if not hasattr(self, 'falling_bombs'):
-            self.falling_bombs = []
-        
-        # Draw jet
-        if hasattr(self.assets, 'jet_frames') and self.assets.jet_frames and jet_progress < 1.0:
-            frame_index = int((elapsed_time / 100) % len(self.assets.jet_frames))
-            jet_frame = self.assets.jet_frames[frame_index]
-            
-            jet_scale = 0.3 * self.scale
-            jet_width = int(jet_frame.get_width() * jet_scale)
-            jet_height = int(jet_frame.get_height() * jet_scale)
-            scaled_jet = pygame.transform.scale(jet_frame, (jet_width, jet_height))
-            flipped_jet = pygame.transform.flip(scaled_jet, True, False)
-            
-            self.screen.blit(flipped_jet, (jet_x, jet_y))
-            
-            # Drop bombs continuously
-            if 0.05 < jet_progress < 0.95:  # Extended bombing range
-                # Drop a bomb every 80 pixels
-                if not hasattr(self, '_last_bomb_drop_x'):
-                    self._last_bomb_drop_x = jet_x
-                    
-                if jet_x - self._last_bomb_drop_x > 80:
-                    self._last_bomb_drop_x = jet_x
-                    
-                    # Create a falling bomb
-                    self.falling_bombs.append({
-                        'x': jet_x + jet_width // 2,
-                        'y': jet_y + jet_height,
-                        'vy': 2,
-                        'world_x': jet_x + jet_width // 2 + self.parallax_offset * 0.6,
-                        'exploded': False
-                    })
-        
-        # Always update and process ALL falling bombs
-        if hasattr(self, 'falling_bombs'):
-            bombs_to_remove = []
-            for bomb in self.falling_bombs:
-                if not bomb['exploded']:
-                    # Update bomb position
-                    bomb['y'] += bomb['vy']
-                    bomb['vy'] += 0.5  # Gravity
-                    
-                    # Check if bomb hit ground or went off screen
-                    if bomb['y'] >= config.HEIGHT - 80:
-                        bomb['exploded'] = True
-                        
-                        # Create fire zones at multiple depth layers
-                        world_x = bomb['x']  # Use screen position instead of world position
-                        
-                        # Create fire at different depths for dimensionality
-                        layers = [
-                            {'depth': 0.5, 'y_offset': -10, 'size': 0.8},  # Far layer
-                            {'depth': 0.7, 'y_offset': 0, 'size': 1.0},    # Middle layer
-                            {'depth': 0.9, 'y_offset': 10, 'size': 1.2}    # Near layer
-                        ]
-                        
-                        for layer in layers:
-                            self.fire_zones.append({
-                                'world_x': world_x + self.parallax_offset * layer['depth'],  # Convert to world coordinates
-                                'y': config.HEIGHT - 80 + layer['y_offset'],
-                                'width': int(80 * layer['size']),
-                                'spawn_timer': random.randint(0, 5),
-                                'intensity': 1.0,
-                                'depth': layer['depth']  # Store depth for parallax calculation
-                            })
-                        
-                        print(f"Bomb exploded! Created fire zones at world_x={world_x}, total zones: {len(self.fire_zones)}")
-                                
-                        # Create explosion effect
-                        for _ in range(20):
-                            angle = random.uniform(0, 2 * math.pi)
-                            speed = random.uniform(2, 8)
-                            self.bomb_explosions.append({
-                                'x': bomb['x'],
-                                'y': config.HEIGHT - 80,
-                                'vx': math.cos(angle) * speed,
-                                'vy': math.sin(angle) * speed - 5,
-                                'size': random.randint(4, 12),
-                                'life': random.randint(20, 40),
-                                'color': random.choice([(255, 200, 0), (255, 150, 0), (255, 100, 0)])
-                            })
-                        
-                        # Enable chess pieces falling after first bomb
-                        if not self.chess_pieces_enabled:
-                            self.chess_pieces_enabled = True
-                            self._spawn_initial_chess_pieces()
-                            # Play sound if available
-                            if hasattr(self.assets, 'explosion_sound') and self.assets.explosion_sound and not self.intro_sound_played:
-                                self.assets.explosion_sound.play()
-                                self.intro_sound_played = True
-                        
-                        bombs_to_remove.append(bomb)
-                    
-                    # Also remove if way off screen
-                    elif bomb['y'] > config.HEIGHT + 100:
-                        bomb['exploded'] = True
-                        bombs_to_remove.append(bomb)
-                        
-            # Remove exploded bombs
-            for bomb in bombs_to_remove:
-                if bomb in self.falling_bombs:
-                    self.falling_bombs.remove(bomb)
-        
-        # Once jet is done, create additional fire zones to fill the entire scrollable area
-        if jet_progress >= 0.9 and not hasattr(self, '_extra_fire_zones_created'):
-            self._extra_fire_zones_created = True
-            
-            # Only create extra zones if we have at least one fire zone from bombs
-            if self.fire_zones:
-                # Create fire zones extending far to the left and right
-                # This ensures fire appears when scrolling
-                for offset in range(-3000, 3000, 120):  # Slightly wider spacing since we have layers
-                    world_x = offset + self.parallax_offset * 0.6
-                    
-                    # Create fire at different depths
-                    layers = [
-                        {'depth': 0.5, 'y_offset': -10, 'size': 0.8},  # Far layer
-                        {'depth': 0.7, 'y_offset': 0, 'size': 1.0},    # Middle layer
-                        {'depth': 0.9, 'y_offset': 10, 'size': 1.2}    # Near layer
-                    ]
-                    
-                    for layer in layers:
-                        self.fire_zones.append({
-                            'world_x': world_x + random.randint(-40, 40),  # More variation
-                            'y': config.HEIGHT - 80 + layer['y_offset'],
-                            'width': int(80 * layer['size']),
-                            'spawn_timer': random.randint(0, 15),  # More stagger
-                            'intensity': 1.0,
-                            'depth': layer['depth']
-                        })
-                    
-    def _draw_fire_at_depth(self, current_time, target_depth):
-        """Draw only fire particles at a specific depth layer."""
-        # Update fire zones first if not already done
-        if not hasattr(self, '_fire_updated_this_frame') or not self._fire_updated_this_frame:
-            self._update_fire_zones(current_time)
-            self._fire_updated_this_frame = True
-        
-        # Draw only particles at this depth
-        particles_drawn = 0
-        for particle in self.fire_particles:
-            if abs(particle.get('depth', 0.7) - target_depth) < 0.1:  # Close to target depth
-                life_ratio = particle['life'] / 60
-                
-                if particle['type'] == 'flame':
-                    self._draw_16bit_fire(particle, life_ratio)
-                elif particle['type'] == 'ember':
-                    self._draw_pixel_ember(particle, life_ratio)
-                particles_drawn += 1
-        
-        # Also draw explosion particles at this depth
-        for exp in self.bomb_explosions:
-            life_ratio = exp['life'] / 30
-            color = tuple(max(0, min(255, int(c * life_ratio))) for c in exp['color'])
-            pygame.draw.circle(self.screen, color, 
-                             (int(exp['x']), int(exp['y'])), int(exp['size']))
-    
-    def _update_fire_zones(self, current_time):
-        """Update fire zones and spawn particles without drawing."""
-        # Update fire zones - only process visible ones for performance
-        visible_buffer = 100
-        
-        zones_visible = 0
-        particles_spawned = 0
-        
-        for zone in self.fire_zones:
-            # Get depth for this zone
-            depth = zone.get('depth', 0.7)
-            
-            # Calculate screen position based on parallax and depth
-            screen_x = zone['world_x'] - self.parallax_offset * (0.6 * depth)
-            
-            # Initialize fade-in state if needed
-            if 'fade_in' not in zone:
-                zone['fade_in'] = 0.0
-                zone['was_visible'] = False
-            
-            # Check if zone is potentially visible
-            zone_visible = -visible_buffer < screen_x < config.WIDTH + visible_buffer
-            
-            # If zone just became visible, start fade-in
-            if zone_visible and not zone['was_visible']:
-                zone['fade_in'] = 0.0
-                zone['was_visible'] = True
-            elif not zone_visible:
-                zone['was_visible'] = False
-                continue
-            
-            # Gradually increase fade-in
-            if zone['fade_in'] < 1.0:
-                zone['fade_in'] = min(1.0, zone['fade_in'] + 0.02)
-            
-            zone['spawn_timer'] += 1
-            
-            # Spawn new particles continuously
-            if zone['spawn_timer'] > 2:
-                zone['spawn_timer'] = 0
-                
-                num_particles = int(random.randint(5, 8) * zone['fade_in'])
-                if num_particles > 0:
-                    for _ in range(num_particles):
-                        x_offset = random.randint(-zone['width']//2, zone['width']//2)
-                        
-                        size_multiplier = 0.5 + 0.5 * zone['fade_in']
-                        life_multiplier = 0.6 + 0.4 * zone['fade_in']
-                        
-                        # Adjust particle properties based on depth
-                        depth_scale = 0.6 + 0.4 * depth
-                        
-                        self.fire_particles.append({
-                            'x': screen_x + x_offset,
-                            'y': zone['y'] + random.randint(-10, 10),
-                            'vx': random.uniform(-0.5, 0.5) * depth_scale,
-                            'vy': random.uniform(-3, -1) * (0.5 + 0.5 * zone['fade_in']) * depth_scale,
-                            'size': random.randint(int(10 * size_multiplier * depth_scale), int(20 * size_multiplier * depth_scale)),
-                            'life': random.randint(int(40 * life_multiplier), int(60 * life_multiplier)),
-                            'type': random.choice(['flame', 'flame', 'ember']),
-                            'flicker': random.randint(0, 10),
-                            'opacity_modifier': zone['fade_in'] * (0.5 + 0.5 * depth),
-                            'depth': depth
-                        })
-        
-        # Update particles physics
-        remaining_particles = []
-        for particle in self.fire_particles:
-            particle['x'] += particle['vx']
-            particle['y'] += particle['vy']
-            particle['life'] -= 1
-            particle['flicker'] += 1
-            
-            if particle['type'] == 'flame':
-                particle['size'] *= 0.97
-                particle['vy'] -= 0.15
-            elif particle['type'] == 'ember':
-                particle['size'] *= 0.95
-                particle['vx'] += random.uniform(-0.2, 0.2)
-            
-            # Gradually increase opacity modifier if it's less than 1
-            if 'opacity_modifier' in particle and particle['opacity_modifier'] < 1.0:
-                particle['opacity_modifier'] = min(1.0, particle['opacity_modifier'] + 0.02)
-            elif 'opacity_modifier' not in particle:
-                particle['opacity_modifier'] = 1.0
-            
-            if particle['life'] > 0 and particle['size'] > 1:
-                remaining_particles.append(particle)
-                
-        self.fire_particles = remaining_particles
-        
-        # Update explosion particles
-        remaining_explosions = []
-        for exp in self.bomb_explosions:
-            exp['x'] += exp['vx']
-            exp['y'] += exp['vy']
-            exp['vy'] += 0.5
-            exp['life'] -= 1
-            exp['size'] *= 0.95
-            exp['vx'] *= 0.96
-            
-            if exp['life'] > 0 and exp['size'] > 1:
-                life_ratio = exp['life'] / 30
-                color = tuple(max(0, min(255, int(c * life_ratio))) for c in exp['color'])
-                pygame.draw.circle(self.screen, color, 
-                                 (int(exp['x']), int(exp['y'])), int(exp['size']))
-                remaining_explosions.append(exp)
-                
-        self.bomb_explosions = remaining_explosions
-        
-        # Keep reasonable particle limits
-        if len(self.fire_particles) > 500:
-            self.fire_particles = self.fire_particles[-500:]
-            
-    def _update_and_draw_fire_system(self, current_time):
-        """Update and draw the entire fire system - simplified version for non-layered drawing."""
-        # This method is still used by the regular parallax background
-        # Update fire zones first
-        self._update_fire_zones(current_time)
-        
-        # Draw all particles
-        for particle in self.fire_particles:
-            life_ratio = particle['life'] / 60
-            
-            if particle['type'] == 'flame':
-                self._draw_16bit_fire(particle, life_ratio)
-            elif particle['type'] == 'ember':
-                self._draw_pixel_ember(particle, life_ratio)
-        """Update and draw the entire fire system."""
-        # Update fire zones - only process visible ones for performance
-        visible_buffer = 100  # Tighter buffer so fire appears closer to edge
-        
-        for zone in self.fire_zones:
-            # Get depth for this zone
-            depth = zone.get('depth', 0.7)  # Default to middle depth
-            
-            # Calculate screen position based on parallax and depth
-            screen_x = zone['world_x'] - self.parallax_offset * (0.6 * depth)
-            
-            # Initialize fade-in state if needed
-            if 'fade_in' not in zone:
-                zone['fade_in'] = 0.0  # Start completely faded out
-                zone['was_visible'] = False
-            
-            # Check if zone is potentially visible
-            zone_visible = -visible_buffer < screen_x < config.WIDTH + visible_buffer
-            
-            # If zone just became visible, start fade-in
-            if zone_visible and not zone['was_visible']:
-                zone['fade_in'] = 0.0
-                zone['was_visible'] = True
-            elif not zone_visible:
-                zone['was_visible'] = False
-                continue
-            
-            # Gradually increase fade-in
-            if zone['fade_in'] < 1.0:
-                zone['fade_in'] = min(1.0, zone['fade_in'] + 0.02)  # Fade in over ~50 frames
-            
-            zone['spawn_timer'] += 1
-            
-            # Spawn new particles continuously - but scale by fade-in
-            if zone['spawn_timer'] > 2:
-                zone['spawn_timer'] = 0
-                
-                # Spawn fewer particles when fading in
-                num_particles = int(random.randint(5, 8) * zone['fade_in'])
-                if num_particles > 0:
-                    # Spawn multiple particles across zone width
-                    for _ in range(num_particles):
-                        x_offset = random.randint(-zone['width']//2, zone['width']//2)
-                        
-                        # Start particles with smaller size and shorter life when fading in
-                        size_multiplier = 0.5 + 0.5 * zone['fade_in']
-                        life_multiplier = 0.6 + 0.4 * zone['fade_in']
-                        
-                        # Adjust particle properties based on depth
-                        depth_scale = 0.6 + 0.4 * depth  # Smaller when further away
-                        
-                        self.fire_particles.append({
-                            'x': screen_x + x_offset,
-                            'y': zone['y'] + random.randint(-10, 10),
-                            'vx': random.uniform(-0.5, 0.5) * depth_scale,
-                            'vy': random.uniform(-3, -1) * (0.5 + 0.5 * zone['fade_in']) * depth_scale,
-                            'size': random.randint(int(10 * size_multiplier * depth_scale), int(20 * size_multiplier * depth_scale)),
-                            'life': random.randint(int(40 * life_multiplier), int(60 * life_multiplier)),
-                            'type': random.choice(['flame', 'flame', 'ember']),
-                            'flicker': random.randint(0, 10),
-                            'opacity_modifier': zone['fade_in'] * (0.5 + 0.5 * depth),  # More transparent when further
-                            'depth': depth  # Store depth for rendering order
-                        })
-                    
-        # Update and draw particles
-        remaining_particles = []
-        for particle in self.fire_particles:
-            particle['x'] += particle['vx']
-            particle['y'] += particle['vy']
-            particle['life'] -= 1
-            particle['flicker'] += 1
-            
-            if particle['type'] == 'flame':
-                particle['size'] *= 0.97
-                particle['vy'] -= 0.15
-            elif particle['type'] == 'ember':
-                particle['size'] *= 0.95
-                particle['vx'] += random.uniform(-0.2, 0.2)
-            
-            # Gradually increase opacity modifier if it's less than 1
-            if 'opacity_modifier' in particle and particle['opacity_modifier'] < 1.0:
-                particle['opacity_modifier'] = min(1.0, particle['opacity_modifier'] + 0.02)
-            elif 'opacity_modifier' not in particle:
-                particle['opacity_modifier'] = 1.0
-            
-            if particle['life'] > 0 and particle['size'] > 1:
-                # Draw particle
-                life_ratio = particle['life'] / 60
-                
-                if particle['type'] == 'flame':
-                    self._draw_16bit_fire(particle, life_ratio)
-                elif particle['type'] == 'ember':
-                    self._draw_pixel_ember(particle, life_ratio)
-                    
-                remaining_particles.append(particle)
-                
-        self.fire_particles = remaining_particles
-        
-        # Update and draw explosion particles - SIMPLER
-        remaining_explosions = []
-        for exp in self.bomb_explosions:
-            exp['x'] += exp['vx']
-            exp['y'] += exp['vy']
-            exp['vy'] += 0.5  # Gravity
-            exp['life'] -= 1
-            exp['size'] *= 0.95  # Gradual shrink
-            exp['vx'] *= 0.96  # Slight air resistance
-            
-            if exp['life'] > 0 and exp['size'] > 1:
-                # Simple fading circle
-                life_ratio = exp['life'] / 30
-                color = tuple(max(0, min(255, int(c * life_ratio))) for c in exp['color'])
-                pygame.draw.circle(self.screen, color, 
-                                 (int(exp['x']), int(exp['y'])), int(exp['size']))
-                remaining_explosions.append(exp)
-                
-        self.bomb_explosions = remaining_explosions
-        
-        # Note: Chess pieces are drawn in draw_menu now, not here
-        
-        # Keep reasonable particle limits
-        if len(self.fire_particles) > 500:
-            self.fire_particles = self.fire_particles[-500:]
-            
-    def _draw_16bit_fire(self, particle, life_ratio):
-        """Draw 16-bit style fire particle."""
-        x, y = int(particle['x']), int(particle['y'])
-        size = int(particle['size'])
-        flicker = particle['flicker']
-        
-        # Get opacity modifier
-        opacity = particle.get('opacity_modifier', 1.0)
-        
-        # Create fire shape using rectangles for that pixel art look
-        if life_ratio > 0.7:
-            # Hot white/yellow core
-            base_color = (255, 255, 200) if flicker % 4 < 2 else (255, 255, 150)
-            core_color = tuple(int(c * opacity) for c in base_color)
-            # Draw diamond shape core
-            for i in range(size // 3):
-                w = size // 3 - i
-                if w > 0:
-                    pygame.draw.rect(self.screen, core_color, 
-                                   (x - w, y - i, w * 2, 1))
-                    pygame.draw.rect(self.screen, core_color, 
-                                   (x - w, y + i, w * 2, 1))
-                                   
-        # Middle orange layer
-        if life_ratio > 0.4:
-            base_color = (255, 150, 0) if flicker % 3 < 2 else (255, 180, 0)
-            mid_color = tuple(int(c * opacity) for c in base_color)
-            mid_size = int(size * 0.8)
-            # Draw larger diamond
-            for i in range(mid_size // 2):
-                w = mid_size // 2 - i
-                if w > 0:
-                    pygame.draw.rect(self.screen, mid_color, 
-                                   (x - w, y - i - size // 6, w * 2, 1))
-                    pygame.draw.rect(self.screen, mid_color, 
-                                   (x - w, y + i - size // 6, w * 2, 1))
-                                   
-        # Outer red layer
-        base_color = (200, 50, 0) if flicker % 5 < 3 else (180, 30, 0)
-        outer_color = tuple(int(c * opacity) for c in base_color)
-        # Draw flickering outer flames
-        flame_height = int(size * 1.2)
-        for i in range(0, flame_height, 2):  # Draw every other line for performance
-            width = int((flame_height - i) * 0.7)
-            wobble = int(math.sin(i * 0.5 + flicker * 0.3) * 2)
-            if width > 0:
-                pygame.draw.rect(self.screen, outer_color,
-                               (x - width // 2 + wobble, y - i, width, 2))
-                               
-    def _draw_pixel_ember(self, particle, life_ratio):
-        """Draw pixelated ember."""
-        x, y = int(particle['x']), int(particle['y'])
-        size = max(2, int(particle['size'] * 0.4))
-        
-        # Get opacity modifier
-        opacity = particle.get('opacity_modifier', 1.0)
-        
-        # Ember colors based on heat
-        if life_ratio > 0.7:
-            base_color = (255, 200, 100)
-        elif life_ratio > 0.4:
-            base_color = (255, 100, 0)
-        else:
-            base_color = (150, 50, 0)
-            
-        color = tuple(int(c * opacity) for c in base_color)
-            
-        # Draw small pixel squares
-        pygame.draw.rect(self.screen, color, (x - size//2, y - size//2, size, size))
-        
-        # Add glow effect with neighboring pixels
-        if life_ratio > 0.5 and size > 2:
-            glow_base = tuple(c // 2 for c in base_color)
-            glow_color = tuple(int(c * opacity) for c in glow_base)
-            pygame.draw.rect(self.screen, glow_color, (x - size//2 - 1, y - size//2, 1, size))
-            pygame.draw.rect(self.screen, glow_color, (x + size//2, y - size//2, 1, size))
-            pygame.draw.rect(self.screen, glow_color, (x - size//2, y - size//2 - 1, size, 1))
-            pygame.draw.rect(self.screen, glow_color, (x - size//2, y + size//2, size, 1))
-            
-    def _draw_chess_pieces_at_layer(self, target_layer):
-        """Draw only chess pieces at a specific layer depth."""
-        for piece in self.falling_chess_pieces:
-            # Only draw pieces at this specific layer
-            if abs(piece['layer'] - target_layer) > 0.01:
-                continue
-            
-            # Calculate screen position
-            screen_x = piece['world_x'] - self.parallax_offset * (0.6 * piece['layer'])
-            
-            # Add swaying motion
-            sway_x = math.sin(piece['swing']) * piece['swing_amplitude'] * piece['layer']
-            screen_x += sway_x
-            
-            # Skip if off screen horizontally
-            if screen_x < -100 or screen_x > config.WIDTH + 100:
-                continue
-            
-            # Skip if fallen off bottom
-            if piece['y'] > config.HEIGHT + 100:
-                continue
-                
-            # Draw the piece
-            if piece['piece'] in self.assets.pieces:
-                # Calculate size based on distance
-                base_size = int(50 * self.scale * piece['size_scale'])
-                
-                # Get and scale the piece image
-                original = self.assets.pieces[piece['piece']]
-                scaled = pygame.transform.scale(original, (base_size, base_size))
-                
-                # Rotate the piece
-                rotated = pygame.transform.rotate(scaled, piece['rotation'])
-                
-                # Apply transparency based on distance and fade-in
-                distance_alpha = int(255 * (0.6 + 0.4 * piece['layer']))
-                fade_alpha = piece.get('opacity', 255)
-                final_alpha = min(distance_alpha, fade_alpha)
-                rotated.set_alpha(final_alpha)
-                
-                # Draw with rotation center adjustment
-                rect = rotated.get_rect(center=(int(screen_x), int(piece['y'])))
-                self.screen.blit(rotated, rect)
-            
-    def _spawn_initial_chess_pieces(self):
-        """Spawn initial wave of chess pieces falling from trees."""
-        # Spawn pieces across the visible area and beyond
-        for i in range(50):  # Much more initial pieces (was 20)
-            self._spawn_chess_piece()
-            
-    def _spawn_chess_piece(self):
-        """Spawn a single chess piece at a random position."""
-        # Chess piece types
-        piece_types = ['wP', 'wN', 'wB', 'wR', 'wQ', 'wK', 'bP', 'bN', 'bB', 'bR', 'bQ', 'bK']
-        
-        # Calculate spawn position in world space
-        world_x = self.parallax_offset * 0.6 + random.randint(-config.WIDTH, config.WIDTH * 2)
-        
-        # Different layers for parallax effect - only use specific depths
-        layer = random.choice([0.3, 0.5, 0.7, 0.9])  # Removed 1.0 to keep pieces behind trees
-        
-        # Spawn from tree canopy height (middle of screen) instead of above screen
-        # Trees are roughly in the middle third of the screen
-        tree_top = config.HEIGHT * 0.25  # Slightly below top of tree canopy
-        tree_bottom = config.HEIGHT * 0.55  # Slightly above bottom of tree canopy
-        spawn_y = random.uniform(tree_top, tree_bottom)
-        
-        self.falling_chess_pieces.append({
-            'world_x': world_x,
-            'y': spawn_y,  # Start at tree height
-            'vy': random.uniform(0.5, 2) * layer,  # Slower initial fall speed
-            'vx': random.uniform(-1, 1),  # More horizontal drift
-            'rotation': random.uniform(0, 360),
-            'rotation_speed': random.uniform(-8, 8),  # Faster rotation
-            'piece': random.choice(piece_types),
-            'layer': layer,  # Distance from camera
-            'size_scale': 0.3 + 0.7 * layer,  # Smaller when further away
-            'swing': random.uniform(0, 2 * math.pi),  # For swaying motion
-            'swing_speed': random.uniform(0.02, 0.08),  # More varied sway
-            'swing_amplitude': random.uniform(10, 40),  # Bigger sway
-            'opacity': 0  # Start invisible for fade-in effect
-        })
-        
-    def _update_chess_pieces(self):
-        """Update chess pieces physics and spawning without drawing."""
-        # Different spawn rates for different screens
-        if hasattr(self, 'current_screen'):
-            spawn_rate = 0.15 if self.current_screen == config.SCREEN_CREDITS else 0.08
-        else:
-            spawn_rate = 0.08
-            
-        # Spawn new pieces more frequently
-        if random.random() < spawn_rate:  # Higher rate for credits
-            self._spawn_chess_piece()
-            # Sometimes spawn multiple at once for clusters
-            if random.random() < 0.3:  # 30% chance of cluster
-                for _ in range(random.randint(2, 5)):
-                    self._spawn_chess_piece()
-        
-        # Update all pieces physics
-        remaining_pieces = []
-        for piece in self.falling_chess_pieces:
-            # Update position - slower for credits page
-            fall_speed = piece['vy'] * 0.3 if hasattr(self, 'current_screen') and self.current_screen == config.SCREEN_CREDITS else piece['vy']
-            piece['y'] += fall_speed
-            piece['world_x'] += piece['vx']
-            piece['rotation'] += piece['rotation_speed']
-            piece['swing'] += piece['swing_speed']
-            
-            # Fade in effect
-            if 'opacity' in piece and piece['opacity'] < 255:
-                piece['opacity'] = min(255, piece['opacity'] + 10)
-            
-            # Accelerate falling
-            piece['vy'] += 0.1  # Gravity
-            
-            # Keep piece if it hasn't fallen too far off screen
-            if piece['y'] <= config.HEIGHT + 200:
-                remaining_pieces.append(piece)
-                
-        self.falling_chess_pieces = remaining_pieces
-        
-        # Limit max pieces for performance
-        if len(self.falling_chess_pieces) > 200:
-            self.falling_chess_pieces = self.falling_chess_pieces[-200:]
-            
-    def _draw_helicopter_icon(self, button_rect, enabled):
-        """Draw a helicopter icon for chopper gunner."""
-        color = (255, 100, 100) if enabled else (80, 80, 80)
-        darker_color = tuple(c // 2 for c in color)
-        
-        # Calculate center position
-        center_x = button_rect.centerx
-        center_y = button_rect.y + 22
-        
-        # Main body
-        body_width = 20
-        body_height = 12
-        body_rect = pygame.Rect(center_x - body_width // 2, center_y - body_height // 2, 
-                               body_width, body_height)
-        pygame.draw.ellipse(self.screen, color, body_rect)
-        pygame.draw.ellipse(self.screen, darker_color, body_rect, 1)
-        
-        # Tail
-        tail_width = 15
-        tail_height = 4
-        pygame.draw.rect(self.screen, color, 
-                        (center_x + body_width // 2 - 2, center_y - tail_height // 2, 
-                         tail_width, tail_height))
-        
-        # Main rotor (animated)
-        rotor_length = 25
-        rotor_angle = (pygame.time.get_ticks() // 20) % 360
-        for i in range(2):
-            angle = rotor_angle + i * 180
-            x1 = center_x + math.cos(math.radians(angle)) * rotor_length
-            y1 = center_y - body_height // 2 - 3 + math.sin(math.radians(angle)) * 2
-            x2 = center_x - math.cos(math.radians(angle)) * rotor_length
-            y2 = center_y - body_height // 2 - 3 - math.sin(math.radians(angle)) * 2
-            pygame.draw.line(self.screen, darker_color, (x1, y1), (x2, y2), 2)
-            
-        # Tail rotor
-        tail_rotor_x = center_x + body_width // 2 + tail_width - 3
-        pygame.draw.circle(self.screen, darker_color, (tail_rotor_x, center_y), 4, 1)
-        
-        # Landing skids
-        skid_y = center_y + body_height // 2 + 2
-        pygame.draw.line(self.screen, darker_color, 
-                        (center_x - body_width // 2, skid_y), 
-                        (center_x + body_width // 2, skid_y), 1)
-            
-    def _draw_missile_icon(self, surface, size, enabled):
-        """Draw a horizontal missile icon for airstrike."""
-        color = (255, 100, 100) if enabled else (80, 80, 80)
-        darker_color = tuple(c // 2 for c in color)
-        
-        # Horizontal missile
-        missile_length = int(size * 0.7)
-        missile_height = int(size * 0.25)
-        
-        # Center the missile
-        missile_x = (size - missile_length) // 2
-        missile_y = (size - missile_height) // 2
-        
-        # Draw main body
-        body_x = missile_x + missile_length // 4
-        body_width = missile_length // 2
-        pygame.draw.rect(surface, color, 
-                        (body_x, missile_y, body_width, missile_height))
-        
-        # Add highlight for 3D effect
-        pygame.draw.line(surface, tuple(min(255, c + 50) for c in color),
-                        (body_x, missile_y + 1), 
-                        (body_x + body_width, missile_y + 1), 1)
-        
-        # Draw nose cone
-        nose_points = [
-            (missile_x, missile_y + missile_height // 2),
-            (body_x, missile_y),
-            (body_x, missile_y + missile_height)
-        ]
-        pygame.draw.polygon(surface, color, nose_points)
-        
-        # Draw tail fins
-        fin_x = body_x + body_width
-        fin_width = missile_length // 4
-        
-        # Top fin
-        pygame.draw.polygon(surface, darker_color, [
-            (fin_x, missile_y),
-            (fin_x + fin_width, missile_y - missile_height // 3),
-            (fin_x + fin_width, missile_y + missile_height // 3),
-            (fin_x, missile_y + missile_height // 3)
-        ])
-        
-        # Bottom fin
-        pygame.draw.polygon(surface, darker_color, [
-            (fin_x, missile_y + missile_height),
-            (fin_x + fin_width, missile_y + missile_height + missile_height // 3),
-            (fin_x + fin_width, missile_y + missile_height * 2 // 3),
-            (fin_x, missile_y + missile_height * 2 // 3)
-        ])
-        
-        # Small center fin
-        pygame.draw.rect(surface, darker_color,
-                        (fin_x, missile_y + missile_height // 3, 
-                         fin_width // 2, missile_height // 3))
-                                   
-    def _draw_shield_icon(self, surface, size, enabled):
+    def _draw_shield_icon(self, surface, size, enabled=True):
         """Draw a shield icon."""
-        color = (100, 200, 255) if enabled else (80, 80, 80)
-        darker_color = tuple(int(c * 0.7) for c in color)
-        lighter_color = tuple(min(255, int(c * 1.3)) for c in color)
+        color = (200, 200, 200) if enabled else (80, 80, 80)
+        center = size // 2
         
         # Shield shape
-        width = int(size * 0.6)
-        height = int(size * 0.7)
-        x = (size - width) // 2
-        y = size // 6
+        points = [
+            (center, 5),
+            (size - 5, 10),
+            (size - 5, size // 2),
+            (center, size - 5),
+            (5, size // 2),
+            (5, 10)
+        ]
+        pygame.draw.polygon(surface, color, points)
+        pygame.draw.polygon(surface, (0, 0, 0), points, 2)
+
+    def _draw_missile_icon(self, surface, size, enabled=True):
+        """Draw a missile/airstrike icon."""
+        color = (200, 50, 50) if enabled else (80, 80, 80)
+        center = size // 2
         
-        # Main shield body
-        shield_rect = pygame.Rect(x, y, width, height)
-        pygame.draw.rect(surface, color, shield_rect)
+        # Missile body
+        pygame.draw.rect(surface, color, (center - 3, 8, 6, 15))
         
-        # Top curved part
-        pygame.draw.ellipse(surface, color, (x - 2, y - height // 4, width + 4, height // 2))
+        # Nose cone
+        pygame.draw.polygon(surface, color, [
+            (center - 3, 8),
+            (center, 3),
+            (center + 3, 8)
+        ])
         
-        # Inner border for depth
-        inner_rect = pygame.Rect(x + 3, y + 3, width - 6, height - 6)
-        pygame.draw.rect(surface, darker_color, inner_rect, 2)
-        
-        # Simple cross design
-        cross_thickness = 4
-        # Vertical line
-        pygame.draw.rect(surface, lighter_color, 
-                        (size // 2 - cross_thickness // 2, y + height // 5, 
-                         cross_thickness, height * 3 // 5))
-        # Horizontal line
-        pygame.draw.rect(surface, lighter_color, 
-                        (x + width // 5, y + height // 2 - cross_thickness // 2, 
-                         width * 3 // 5, cross_thickness))
-            
-    def _draw_parachute_icon(self, surface, size, enabled):
+        # Fins
+        pygame.draw.polygon(surface, color, [
+            (center - 6, 20),
+            (center - 3, 23),
+            (center - 3, 18)
+        ])
+        pygame.draw.polygon(surface, color, [
+            (center + 6, 20),
+            (center + 3, 23),
+            (center + 3, 18)
+        ])
+
+    def _draw_parachute_icon(self, surface, size, enabled=True):
         """Draw a parachute icon."""
-        color = (100, 200, 100) if enabled else (80, 80, 80)
-        darker_color = tuple(int(c * 0.7) for c in color)
+        color = (100, 150, 200) if enabled else (80, 80, 80)
+        center = size // 2
         
-        # Cleaner parachute design
-        canopy_width = int(size * 0.7)
-        canopy_height = int(size * 0.35)
-        canopy_x = (size - canopy_width) // 2
-        canopy_y = size // 5
+        # Parachute canopy
+        pygame.draw.arc(surface, color, (5, 5, size - 10, size // 2), 0, 3.14, 3)
         
-        # Draw canopy as filled semi-circle
-        canopy_center_x = size // 2
-        canopy_center_y = canopy_y + canopy_height // 2
+        # Strings
+        for x in [8, center, size - 8]:
+            pygame.draw.line(surface, color, (x, 5 + size // 4), 
+                           (center, size - 8), 1)
         
-        # Draw the canopy segments
-        segment_count = 5
-        for i in range(segment_count):
-            angle_start = math.pi + (math.pi * i / segment_count)
-            angle_end = math.pi + (math.pi * (i + 1) / segment_count)
-            
-            # Calculate points for the segment
-            points = [(canopy_center_x, canopy_center_y)]
-            for angle in [angle_start, angle_end]:
-                x = canopy_center_x + int(canopy_width // 2 * math.cos(angle))
-                y = canopy_center_y + int(canopy_height * math.sin(angle))
-                points.append((x, y))
-            
-            # Alternate colors for segments
-            segment_color = color if i % 2 == 0 else darker_color
-            pygame.draw.polygon(surface, segment_color, points)
+        # Person
+        pygame.draw.circle(surface, color, (center, size - 8), 3)
+
+    def _draw_helicopter_icon(self, card_rect, enabled=True):
+        """Draw a helicopter icon directly on screen."""
+        color = (100, 100, 150) if enabled else (80, 80, 80)
         
-        # Draw strings
-        string_end_y = size - size // 3
-        string_end_x = size // 2
+        # Position at top of card
+        heli_x = card_rect.centerx
+        heli_y = card_rect.y + 20
         
-        # Draw 3 main strings
-        string_positions = [canopy_x + canopy_width // 4, size // 2, canopy_x + 3 * canopy_width // 4]
-        for string_x in string_positions:
-            pygame.draw.line(surface, darker_color, 
-                           (string_x, canopy_y + canopy_height), 
-                           (string_end_x, string_end_y), 1)
+        # Main body
+        body_rect = pygame.Rect(heli_x - 15, heli_y, 30, 15)
+        pygame.draw.ellipse(self.screen, color, body_rect)
         
-        # Draw simplified person/cargo
-        cargo_size = size // 8
-        pygame.draw.rect(surface, color, 
-                        (string_end_x - cargo_size // 2, string_end_y, 
-                         cargo_size, cargo_size))
+        # Tail
+        pygame.draw.rect(self.screen, color, (heli_x + 10, heli_y + 5, 20, 5))
+        pygame.draw.polygon(self.screen, color, [
+            (heli_x + 25, heli_y),
+            (heli_x + 30, heli_y + 5),
+            (heli_x + 30, heli_y + 10)
+        ])
+        
+        # Main rotor
+        pygame.draw.line(self.screen, color, (heli_x - 20, heli_y - 3), 
+                        (heli_x + 20, heli_y - 3), 2)
+        
+        # Tail rotor
+        pygame.draw.circle(self.screen, color, (heli_x + 30, heli_y + 5), 4, 1)
+        
+        # Landing skids
+        pygame.draw.line(self.screen, color, (heli_x - 10, heli_y + 15), 
+                        (heli_x + 10, heli_y + 15), 2)

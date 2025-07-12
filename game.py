@@ -11,6 +11,7 @@ from ai import ChessAI
 from powerups import PowerupSystem
 from powerup_renderer import PowerupRenderer
 from chopper_gunner import ChopperGunnerMode
+from intro_screen import IntroScreen
 
 class ChessGame:
     def __init__(self):
@@ -31,6 +32,10 @@ class ChessGame:
         self.renderer = Renderer(self.screen, self.assets)
         self.ai = None  # Will be created when difficulty is selected
         
+        # Intro screen
+        self.intro_screen = IntroScreen(self.screen, self.renderer)
+        self.intro_complete = False
+        
         # Create powerup system
         self.powerup_system = PowerupSystem()
         self.powerup_renderer = PowerupRenderer(self.screen, self.renderer, self.powerup_system)
@@ -47,9 +52,9 @@ class ChessGame:
         # Chopper gunner mode
         self.chopper_mode = None
         
-        # Game state
+        # Game state - start with intro
         self.running = True
-        self.current_screen = config.SCREEN_START
+        self.current_screen = "intro"  # Start with intro screen
         self.mouse_pos = (0, 0)
         self.selected_difficulty = None
         
@@ -84,8 +89,8 @@ class ChessGame:
         self.update_ui_positions()
         
         # Volume control
-        self.music_volume = 0.25
-        self.sfx_volume = 0.7
+        self.music_volume = 0.75
+        self.sfx_volume = 0.75
         self.dragging_music_slider = False
         self.dragging_sfx_slider = False
         pygame.mixer.music.set_volume(self.music_volume)
@@ -108,7 +113,7 @@ class ChessGame:
         # Store game state when entering shop mid-game
         self.stored_game_state = None
         
-        # Start music
+        # Start music immediately when game loads
         pygame.mixer.music.play(-1)
         
     def update_ui_positions(self):
@@ -314,7 +319,16 @@ class ChessGame:
             if event.type == pygame.QUIT:
                 self.running = False
                 
-            elif event.type == pygame.MOUSEMOTION:
+            # Handle intro screen events
+            if self.current_screen == "intro":
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE or event.key == pygame.K_SPACE:
+                        # Skip intro
+                        self.intro_screen.skip()
+                        if not self.fade_active:
+                            self.start_fade("intro", config.SCREEN_START)
+                        
+            if event.type == pygame.MOUSEMOTION:
                 self.mouse_pos = event.pos
                 
                 # Handle chopper mode mouse movement
@@ -326,7 +340,7 @@ class ChessGame:
                 elif self.dragging_sfx_slider:
                     self.update_sfx_volume_from_mouse(event.pos)
                     
-            elif event.type == pygame.MOUSEBUTTONDOWN:
+            if event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 1:  # Left click
                     # Handle chopper mode clicks
                     if self.chopper_mode and self.chopper_mode.active:
@@ -353,7 +367,7 @@ class ChessGame:
                         else:
                             self.handle_click(event.pos)
                     
-            elif event.type == pygame.MOUSEBUTTONUP:
+            if event.type == pygame.MOUSEBUTTONUP:
                 if event.button == 1:  # Left release
                     if self.chopper_mode and self.chopper_mode.active:
                         self.chopper_mode.handle_release()
@@ -364,7 +378,7 @@ class ChessGame:
                     else:
                         self.handle_release(event.pos)
                     
-            elif event.type == pygame.KEYDOWN:
+            if event.type == pygame.KEYDOWN:
                 self.handle_key(event.key)
                 
     def update_music_volume_from_mouse(self, mouse_pos):
@@ -646,11 +660,24 @@ class ChessGame:
         """Update game logic."""
         current_time = pygame.time.get_ticks()
         
+        # Update intro screen
+        if self.current_screen == "intro" and not self.fade_active:
+            self.intro_screen.update()
+            if self.intro_screen.complete and not self.intro_complete:
+                # Start fade transition to main menu
+                self.start_fade("intro", config.SCREEN_START)
+                self.intro_complete = True  # Prevent multiple fade starts
+        
         # Update fade
         if self.fade_active:
-            if current_time - self.fade_start >= config.FADE_DURATION:
+            elapsed = current_time - self.fade_start
+            if elapsed >= config.FADE_DURATION:
                 self.fade_active = False
                 self.current_screen = self.fade_to
+                # Special handling for fade from intro
+                if self.fade_from == "intro":
+                    self.intro_screen.active = False
+                    self.intro_complete = True  # Mark intro as complete
                 if self.fade_to == config.SCREEN_GAME and not self.stored_game_state:
                     # Only reset if we're not returning from shop
                     self.board.reset()
@@ -738,8 +765,10 @@ class ChessGame:
             pygame.display.flip()
             return
             
-        # Get screen shake offset
-        shake_x, shake_y = self.powerup_system.get_screen_shake_offset()
+        # Get screen shake offset - only apply during actual gameplay, not during fades or menus
+        shake_x, shake_y = 0, 0
+        if self.current_screen == config.SCREEN_GAME and not self.fade_active:
+            shake_x, shake_y = self.powerup_system.get_screen_shake_offset()
         
         # Create a temporary surface for the game content
         if shake_x != 0 or shake_y != 0:
@@ -749,8 +778,7 @@ class ChessGame:
             self.renderer.screen = game_surface
             self.powerup_renderer.screen = game_surface
         
-        # Don't fill the screen here - let each screen handle its own background
-        
+        # Handle fade transitions
         if self.fade_active:
             # Draw fade transition
             progress = min(1.0, (pygame.time.get_ticks() - self.fade_start) / config.FADE_DURATION)
@@ -772,6 +800,7 @@ class ChessGame:
                 fade_surface.set_alpha(alpha)
                 self.screen.blit(fade_surface, (0, 0))
         else:
+            # Normal drawing (no fade)
             self.draw_screen(self.current_screen)
             
         # Apply screen shake if active
@@ -787,9 +816,21 @@ class ChessGame:
             # Blit the game surface with shake offset
             self.screen.blit(game_surface, (shake_x, shake_y))
             
+        pygame.display.flip()
+            
     def draw_screen(self, screen_type):
         """Draw specific screen."""
-        if screen_type == config.SCREEN_START:
+        if screen_type == "intro":
+            self.intro_screen.draw()
+            
+            # Draw skip instruction
+            if hasattr(self.intro_screen, 'credit_font'):
+                skip_text = self.renderer.pixel_fonts['small'].render("Press SPACE or ESC to skip", True, (100, 100, 100))
+                skip_rect = skip_text.get_rect(bottomright=(config.WIDTH - 20, config.HEIGHT - 20))
+                skip_text.set_alpha(150)
+                self.screen.blit(skip_text, skip_rect)
+                
+        elif screen_type == config.SCREEN_START:
             buttons = {
                 'play': self.play_button,
                 'beta': self.beta_button, 
