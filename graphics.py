@@ -97,80 +97,169 @@ class Renderer:
         if self._fire_updated_this_frame:
             return
             
+        # Initialize smoke particles list if not exists
+        if not hasattr(self, 'smoke_particles'):
+            self.smoke_particles = []
+            
+        # Clean up old fire zones that have scrolled off screen
+        zones_to_remove = []
+        for zone in self.fire_zones:
+            # Calculate zone's screen position
+            zone_screen_x = zone['world_x'] - self.parallax_offset * zone['depth']
+            # Remove if scrolled far off screen
+            if zone_screen_x < -500:
+                zones_to_remove.append(zone)
+        
+        for zone in zones_to_remove:
+            if zone in self.fire_zones:
+                self.fire_zones.remove(zone)
+            
         # Update fire zones at this depth
         for zone in self.fire_zones:
             if zone['depth'] == depth:
-                # Spawn new fire particles
+                # Calculate zone age and intensity
+                if 'creation_time' in zone:
+                    zone_age = (current_time - zone['creation_time']) / 1000.0  # Age in seconds
+                    
+                    # Fire dies down after 10 seconds
+                    if zone_age < 10:
+                        # Intensity decreases after 5 seconds
+                        if zone_age > 5:
+                            zone['intensity'] = max(0, 1.0 - (zone_age - 5) / 5.0)
+                        else:
+                            zone['intensity'] = 1.0
+                    else:
+                        zone['intensity'] = 0
+                        
+                    # Spawn smoke after fire starts dying (after 3 seconds)
+                    if zone_age > 3 and zone_age < 15 and zone['spawn_timer'] <= 0:  # Stop smoke after 15 seconds
+                        # Spawn smoke particles (less frequently)
+                        smoke_intensity = max(0, 1.0 - (zone_age - 10) / 5.0) if zone_age > 10 else 1.0
+                        if random.random() < 0.3 * smoke_intensity:  # Only 30% chance to spawn smoke
+                            smoke_particle = {
+                                'x': zone['world_x'] - self.parallax_offset * depth + random.randint(-zone['width']//2, zone['width']//2),
+                                'y': zone['y'] + random.randint(-20, 0),
+                                'vx': random.uniform(-0.3, 0.3),
+                                'vy': random.uniform(-0.8, -0.3),
+                                'size': random.randint(15, 30),
+                                'life': 1.0,
+                                'depth': depth,
+                                'opacity': random.uniform(0.2, 0.4) * smoke_intensity  # Less opaque smoke
+                            }
+                            self.smoke_particles.append(smoke_particle)
+                
+                # Spawn new fire particles if still burning
                 if zone['spawn_timer'] <= 0 and zone['intensity'] > 0:
-                    # Create multiple particles per spawn for fuller fire
-                    for _ in range(2):  # Reduced from 3 to 2 for less dense fire
+                    # Create fire particles (less as intensity decreases)
+                    num_particles = int(2 * zone['intensity'])
+                    for _ in range(max(1, num_particles)):
                         particle = {
                             'x': zone['world_x'] - self.parallax_offset * depth + random.randint(-zone['width']//3, zone['width']//3),
-                            'y': zone['y'] + random.randint(0, 10),  # Start lower
+                            'y': zone['y'] + random.randint(0, 10),
                             'vx': random.uniform(-0.5, 0.5),
-                            'vy': random.uniform(-1.5, -0.5),  # Less upward velocity
-                            'size': random.randint(8, 20),  # Larger base size
-                            'life': 1.0,
+                            'vy': random.uniform(-1.5, -0.5) * zone['intensity'],
+                            'size': random.randint(8, 20) * zone['intensity'],
+                            'life': zone['intensity'],
                             'depth': depth,
-                            'spike_height': random.uniform(0.5, 1.5),  # For spiky flames
-                            'flicker': random.uniform(0, 6.28)  # Random flicker phase
+                            'spike_height': random.uniform(0.5, 1.5),
+                            'flicker': random.uniform(0, 6.28)
                         }
                         self.fire_particles.append(particle)
-                    zone['spawn_timer'] = random.randint(1, 2)
+                    zone['spawn_timer'] = random.randint(1, 3)
                 else:
                     zone['spawn_timer'] -= 1
         
         # Draw particles with additive blending for realism
         fire_surface = pygame.Surface((config.WIDTH, config.HEIGHT), pygame.SRCALPHA)
         
-        # Update and draw fire particles at this depth
+        # Update and draw smoke particles first (behind fire)
+        smoke_to_remove = []
+        # Limit total smoke particles for performance
+        if len(self.smoke_particles) > 50:  # Cap at 50 smoke particles
+            # Remove oldest smoke particles
+            self.smoke_particles = self.smoke_particles[-50:]
+            
+        for smoke in self.smoke_particles:
+            if smoke['depth'] == depth:
+                # Update smoke
+                smoke['x'] += smoke['vx']
+                smoke['y'] += smoke['vy']
+                smoke['vy'] -= 0.02  # Gentle rise
+                smoke['life'] -= 0.008  # Slower decay (was 0.01)
+                smoke['size'] += 0.3  # Slower expansion (was 0.5)
+                smoke['vx'] += random.uniform(-0.05, 0.05)  # Drift
+                
+                if smoke['life'] <= 0 or smoke['y'] < -100:  # Remove if too high
+                    smoke_to_remove.append(smoke)
+                else:
+                    # Draw smoke
+                    screen_x = int(smoke['x'] - self.parallax_offset * depth)
+                    screen_y = int(smoke['y'])
+                    
+                    if 0 <= screen_x <= config.WIDTH:
+                        # Smoke color (dark gray to light gray)
+                        gray_value = int(50 + (1 - smoke['life']) * 100)
+                        smoke_color = (gray_value, gray_value, gray_value)
+                        alpha = int(smoke['life'] * smoke['opacity'] * 120)  # Reduced max alpha
+                        size = int(smoke['size'] * self.scale)
+                        
+                        # Draw smoke cloud
+                        smoke_surf = pygame.Surface((size * 2, size * 2), pygame.SRCALPHA)
+                        # Fewer overlapping circles for performance
+                        for i in range(2):  # Reduced from 3
+                            offset_x = random.randint(-3, 3)
+                            offset_y = random.randint(-3, 3)
+                            pygame.draw.circle(smoke_surf, (*smoke_color, alpha // 2), 
+                                             (size + offset_x, size + offset_y), size)
+                        fire_surface.blit(smoke_surf, (screen_x - size, screen_y - size))
+        
+        # Remove dead smoke
+        for smoke in smoke_to_remove:
+            if smoke in self.smoke_particles:
+                self.smoke_particles.remove(smoke)
+        
+        # Update and draw fire particles
         particles_to_remove = []
         for particle in self.fire_particles:
             if particle['depth'] == depth:
                 # Update particle
                 particle['x'] += particle['vx']
                 particle['y'] += particle['vy']
-                particle['vy'] -= 0.08  # Less rise acceleration
-                particle['life'] -= 0.035  # Faster decay
+                particle['vy'] -= 0.08
+                particle['life'] -= 0.035
                 particle['size'] = max(1, particle['size'] - 0.3)
-                particle['flicker'] += 0.3  # Update flicker
+                particle['flicker'] += 0.3
                 
                 # Add turbulence and flicker
                 flicker_offset = math.sin(particle['flicker']) * 2
                 particle['vx'] += random.uniform(-0.1, 0.1) + flicker_offset * 0.1
                 
-                if particle['life'] <= 0 or particle['y'] < zone['y'] - 60:  # Limit height
+                if particle['life'] <= 0 or particle['y'] < zone['y'] - 60:
                     particles_to_remove.append(particle)
                 else:
                     # Draw particle
                     screen_x = int(particle['x'] - self.parallax_offset * depth)
                     screen_y = int(particle['y'])
                     
-                    # Fire colors with more orange/red bias
+                    # Fire colors
                     if particle['life'] > 0.85:
-                        # Core of flame - bright yellow
                         base_color = (255, 240, 100)
                         glow_color = (255, 180, 50)
                     elif particle['life'] > 0.6:
-                        # Orange flame
                         base_color = (255, 180, 0)
                         glow_color = (255, 120, 0)
                     elif particle['life'] > 0.3:
-                        # Red-orange flame
                         base_color = (255, 100, 0)
                         glow_color = (200, 50, 0)
                     else:
-                        # Dark red and smoke
                         base_color = (150, 30, 0)
                         glow_color = (80, 20, 0)
                     
-                    # Apply alpha based on life
                     alpha = int(particle['life'] * 180)
                     size = int(particle['size'] * self.scale)
                     
                     # Draw spiky fire shape
                     if 0 <= screen_x <= config.WIDTH and particle['life'] > 0.3:
-                        # Draw flame as elongated shape for spiky effect
                         flame_height = int(size * particle['spike_height'])
                         
                         # Outer glow
@@ -178,7 +267,6 @@ class Renderer:
                         glow_surf = pygame.Surface((glow_size * 2, flame_height * 2), pygame.SRCALPHA)
                         glow_alpha = int(alpha * 0.4)
                         
-                        # Draw elongated glow for spiky effect
                         for i in range(3):
                             offset_y = i * flame_height // 3
                             radius = glow_size - (i * glow_size // 4)
@@ -189,14 +277,15 @@ class Renderer:
                         fire_surface.blit(glow_surf, (screen_x - glow_size, screen_y - glow_size), 
                                         special_flags=pygame.BLEND_ADD)
                         
-                        # Inner flame core - draw as vertical ellipse for spike
+                        # Inner flame core
                         particle_surf = pygame.Surface((size * 2, flame_height * 2), pygame.SRCALPHA)
-                        # Draw multiple circles to create flame shape
                         for i in range(3):
                             offset_y = i * flame_height // 4
                             radius = size - (i * size // 3)
                             if radius > 0:
-                                pygame.draw.circle(particle_surf, (*base_color, alpha - (i * 30)), 
+                                # Ensure alpha is never negative
+                                flame_alpha = max(0, alpha - (i * 30))
+                                pygame.draw.circle(particle_surf, (*base_color, flame_alpha), 
                                                  (size, size + offset_y), radius)
                         
                         fire_surface.blit(particle_surf, (screen_x - size, screen_y - size), 
@@ -315,8 +404,8 @@ class Renderer:
             frame_index = int((time_elapsed / 100) % len(self.assets.jet_frames))
             jet_frame = self.assets.jet_frames[frame_index]
             
-            # Scale jet
-            jet_scale = 0.5 * self.scale
+            # Scale jet - SMALLER
+            jet_scale = 0.3 * self.scale  # Reduced from 0.5 to 0.3
             jet_width = int(jet_frame.get_width() * jet_scale)
             jet_height = int(jet_frame.get_height() * jet_scale)
             scaled_jet = pygame.transform.scale(jet_frame, (jet_width, jet_height))
@@ -345,7 +434,7 @@ class Renderer:
                         
                         self.falling_bombs.append({
                             'x': bomb_x,
-                            'y': jet_y + jet_height,
+                            'y': jet_y + jet_height // 2,  # Changed from jet_y + jet_height to spawn from middle of jet
                             'vy': 2,
                             'world_x': bomb_x + self.parallax_offset,
                             'exploded': False,
@@ -1153,7 +1242,8 @@ class Renderer:
                                     'width': int(80 * layer['size']),
                                     'spawn_timer': random.randint(0, 5),
                                     'intensity': 1.0,
-                                    'depth': layer['depth']
+                                    'depth': layer['depth'],
+                                    'creation_time': pygame.time.get_ticks()  # Track when fire was created
                                 })
                             
                             bombs_to_remove.append(bomb)
@@ -1361,12 +1451,6 @@ class Renderer:
         progress_rect = progress.get_rect(bottomright=(config.WIDTH - int(20 * config.SCALE), 
                                                        config.HEIGHT - int(20 * config.SCALE)))
         self.screen.blit(progress, progress_rect)
-        
-        # Skip instruction
-        skip_text = "Press ESC to skip"
-        skip = self.pixel_fonts['tiny'].render(skip_text, True, (150, 150, 150))
-        skip_rect = skip.get_rect(bottomleft=(int(20 * config.SCALE), config.HEIGHT - int(20 * config.SCALE)))
-        self.screen.blit(skip, skip_rect)
             
     def draw_arms_dealer(self, powerup_system, shop_buttons, back_button, mouse_pos, dialogue_index=0, dialogues=None):
         """Draw the arms dealer shop with Tariq character."""
