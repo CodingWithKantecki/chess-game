@@ -1,5 +1,5 @@
 """
-Main Game Class - Enhanced with Tutorial and Better Victory Screen
+Main Game Class - Enhanced with Tutorial, Victory Screen, Killstreaks, Emotes, Story Mode
 """
 
 import pygame
@@ -12,6 +12,8 @@ from powerups import PowerupSystem
 from powerup_renderer import PowerupRenderer
 from chopper_gunner import ChopperGunnerMode
 from intro_screen import IntroScreen
+from emotes import EmoteSystem
+from story_mode import StoryMode
 
 class ChessGame:
     def __init__(self):
@@ -52,11 +54,22 @@ class ChessGame:
         # Chopper gunner mode
         self.chopper_mode = None
         
+        # NEW: Emote system
+        self.emote_system = EmoteSystem(self.screen, self.renderer)
+        
+        # NEW: Story mode
+        self.story_mode = StoryMode()
+        self.current_story_battle = None
+        
         # Game state - start with intro
         self.running = True
         self.current_screen = "intro"  # Start with intro screen
         self.mouse_pos = (0, 0)
         self.selected_difficulty = None
+        
+        # NEW: Game mode
+        self.current_mode = None  # "classic", "story", "survival", etc.
+        self.mode_buttons = {}
         
         # Arms dealer
         self.shop_buttons = {}
@@ -132,6 +145,20 @@ class ChessGame:
                 ]
             },
             {
+                "title": "KILLSTREAKS",
+                "content": [
+                    "NEW! Capture pieces without losing any to build streaks:",
+                    "",
+                    "• 3 KILLS: Free Shield",
+                    "• 5 KILLS: Free Gun", 
+                    "• 7 KILLS: Free Airstrike",
+                    "• 10 KILLS: Free Chopper Gunner",
+                    "• 15 KILLS: TACTICAL NUKE!",
+                    "",
+                    "Lose a piece and your streak resets!"
+                ]
+            },
+            {
                 "title": "PROGRESSION",
                 "content": [
                     "Beat AI opponents to progress:",
@@ -146,6 +173,11 @@ class ChessGame:
                 ]
             }
         ]
+        
+        # Story mode UI - Initialize these dictionaries
+        self.story_chapter_buttons = {}
+        self.story_battle_buttons = {}
+        self.story_back_button = None  # Will be initialized in update_ui_positions()
         
         # UI elements
         self.update_ui_positions()
@@ -174,6 +206,9 @@ class ChessGame:
         
         # Store game state when entering shop mid-game
         self.stored_game_state = None
+        
+        # Track last capture for emotes
+        self.last_captured_piece = None
         
         # Start music immediately when game loads
         pygame.mixer.music.play(-1)
@@ -271,6 +306,14 @@ class ChessGame:
                 button_height
             )
             
+        # Story mode back button
+        self.story_back_button = pygame.Rect(
+            center_x - 100, 
+            config.HEIGHT - 100, 
+            200, 
+            50
+        )
+            
     def store_game_state(self):
         """Store the current game state before entering shop."""
         self.stored_game_state = {
@@ -284,11 +327,17 @@ class ChessGame:
                 "white": self.powerup_system.points["white"],
                 "black": self.powerup_system.points["black"]
             },
+            "killstreaks": {
+                "white": self.powerup_system.current_streak["white"],
+                "black": self.powerup_system.current_streak["black"]
+            },
             "shielded_pieces": dict(self.powerup_system.shielded_pieces),
             "game_over": self.board.game_over,
             "winner": self.board.winner,
             "ai": self.ai,
-            "selected_difficulty": self.selected_difficulty
+            "selected_difficulty": self.selected_difficulty,
+            "current_mode": self.current_mode,
+            "current_story_battle": self.current_story_battle
         }
         
     def restore_game_state(self):
@@ -306,11 +355,14 @@ class ChessGame:
             
             # Restore powerup state
             self.powerup_system.points = dict(self.stored_game_state["powerup_points"])
+            self.powerup_system.current_streak = dict(self.stored_game_state["killstreaks"])
             self.powerup_system.shielded_pieces = dict(self.stored_game_state["shielded_pieces"])
             
-            # Restore AI
+            # Restore AI and mode
             self.ai = self.stored_game_state["ai"]
             self.selected_difficulty = self.stored_game_state["selected_difficulty"]
+            self.current_mode = self.stored_game_state["current_mode"]
+            self.current_story_battle = self.stored_game_state["current_story_battle"]
             
             # Clear stored state
             self.stored_game_state = None
@@ -324,8 +376,20 @@ class ChessGame:
             
     def _handle_ai_powerup(self, powerup_key, action):
         """Handle AI powerup usage."""
-        # Deduct points
-        self.powerup_system.points["black"] -= self.powerup_system.powerups[powerup_key]["cost"]
+        # Deduct points unless it's from killstreak
+        is_free = self.powerup_system.has_pending_streak_reward("black", powerup_key)
+        
+        if is_free:
+            # Find and remove the streak reward
+            for reward in self.powerup_system.pending_streak_rewards["black"]:
+                if reward["powerup"] == powerup_key:
+                    self.powerup_system.pending_streak_rewards["black"].remove(reward)
+                    break
+        else:
+            self.powerup_system.points["black"] -= self.powerup_system.powerups[powerup_key]["cost"]
+        
+        # Trigger emote for powerup use
+        self.emote_system.trigger_emote("ai_powerup", self.selected_difficulty)
         
         if action["type"] == "shield":
             # AI shields a piece
@@ -395,6 +459,36 @@ class ChessGame:
         # Play sound effect
         if 'capture' in self.assets.sounds:
             self.assets.sounds['capture'].play()
+            
+    def _check_and_trigger_game_emotes(self):
+        """Check game state and trigger appropriate emotes."""
+        if not self.ai or not self.emote_system:
+            return
+            
+        # Check for check
+        if self.board.is_in_check():
+            if self.board.current_turn == "white":
+                self.emote_system.trigger_emote("player_check", self.selected_difficulty)
+                
+        # Check material balance for winning/losing
+        white_material = 0
+        black_material = 0
+        
+        for row in range(8):
+            for col in range(8):
+                piece = self.board.get_piece(row, col)
+                if piece:
+                    value = self.ai.piece_values.get(piece[1], 0)
+                    if piece[0] == 'w':
+                        white_material += value
+                    else:
+                        black_material += value
+                        
+        balance = black_material - white_material
+        if balance > 500:
+            self.emote_system.trigger_emote("ai_winning", self.selected_difficulty)
+        elif balance < -500:
+            self.emote_system.trigger_emote("ai_losing", self.selected_difficulty)
                 
     def handle_events(self):
         """Handle all events."""
@@ -500,7 +594,7 @@ class ChessGame:
             
         if self.current_screen == config.SCREEN_START:
             if self.play_button.collidepoint(pos):
-                self.start_fade(config.SCREEN_START, config.SCREEN_DIFFICULTY)
+                self.start_fade(config.SCREEN_START, "mode_select")
             elif self.tutorial_button.collidepoint(pos):
                 self.start_fade(config.SCREEN_START, "tutorial")
             elif self.beta_button.collidepoint(pos):
@@ -508,6 +602,58 @@ class ChessGame:
             elif self.credits_button.collidepoint(pos):
                 self.start_fade(config.SCREEN_START, config.SCREEN_CREDITS)
                 
+        elif self.current_screen == "mode_select":
+            # Handle mode selection
+            for mode_key, button_rect in self.mode_buttons.items():
+                if button_rect.collidepoint(pos):
+                    self.current_mode = mode_key
+                    
+                    if mode_key == "classic":
+                        self.start_fade("mode_select", config.SCREEN_DIFFICULTY)
+                    elif mode_key == "story":
+                        self.start_fade("mode_select", "story_select")
+                    else:
+                        # Other modes not implemented yet
+                        print(f"Mode {mode_key} coming soon!")
+                        
+            if self.back_button.collidepoint(pos):
+                self.start_fade("mode_select", config.SCREEN_START)
+                
+        elif self.current_screen == "story_select":
+            # Handle story chapter selection
+            for chapter_index, button_rect in self.story_chapter_buttons.items():
+                if button_rect.collidepoint(pos) and self.story_mode.unlocked_chapters[chapter_index]:
+                    self.story_mode.current_chapter = chapter_index
+                    self.story_mode.current_battle = 0
+                    self.start_fade("story_select", "story_chapter")
+                    
+            if self.story_back_button and self.story_back_button.collidepoint(pos):
+                self.start_fade("story_select", "mode_select")
+                
+        elif self.current_screen == "story_chapter":
+            # Handle battle selection within chapter
+            for battle_index, button_rect in self.story_battle_buttons.items():
+                if button_rect.collidepoint(pos):
+                    self.story_mode.current_battle = battle_index
+                    battle_data = self.story_mode.get_current_battle()
+                    if battle_data:
+                        self.current_story_battle = battle_data
+                        self.selected_difficulty = battle_data["difficulty"]
+                        self.ai = ChessAI(self.selected_difficulty)
+                        self.start_fade("story_chapter", "story_dialogue")
+                        
+            if self.story_back_button and self.story_back_button.collidepoint(pos):
+                self.start_fade("story_chapter", "story_select")
+                
+        elif self.current_screen == "story_dialogue":
+            # Click to advance dialogue or start battle
+            if hasattr(self, 'dialogue_complete') and self.dialogue_complete:
+                self.start_fade("story_dialogue", config.SCREEN_GAME)
+            else:
+                # Advance dialogue
+                if hasattr(self, 'current_dialogue_index'):
+                    self.current_dialogue_index += 1
+                    
         elif self.current_screen == "tutorial":
             # Handle tutorial navigation
             if self.prev_button.collidepoint(pos) and self.tutorial_page > 0:
@@ -557,12 +703,16 @@ class ChessGame:
                 if button.collidepoint(pos) and difficulty in unlocked:
                     self.selected_difficulty = difficulty
                     self.ai = ChessAI(difficulty)
+                    
+                    # Trigger game start emote
+                    self.emote_system.trigger_emote("game_start", difficulty)
+                    
                     self.start_fade(config.SCREEN_DIFFICULTY, config.SCREEN_GAME)
                     return
                     
             # Back button
             if self.back_button.collidepoint(pos):
-                self.start_fade(config.SCREEN_DIFFICULTY, config.SCREEN_START)
+                self.start_fade(config.SCREEN_DIFFICULTY, "mode_select")
                 
         elif self.current_screen == config.SCREEN_CREDITS:
             if self.back_button.collidepoint(pos):
@@ -708,7 +858,10 @@ class ChessGame:
                 elif self.powerup_system.active_powerup:
                     self.powerup_system.cancel_powerup()
                 else:
-                    self.start_fade(config.SCREEN_GAME, config.SCREEN_START)
+                    if self.current_mode == "story":
+                        self.start_fade(config.SCREEN_GAME, "story_chapter")
+                    else:
+                        self.start_fade(config.SCREEN_GAME, config.SCREEN_START)
             elif key == pygame.K_r and self.board.game_over:
                 self.board.reset()
                 self.powerup_system = PowerupSystem()  # Reset powerup system
@@ -720,9 +873,20 @@ class ChessGame:
                 self.victory_reward = 0  # Reset reward display
                 # Clear chopper mode
                 self.chopper_mode = None
+                # Clear emotes
+                self.emote_system.clear()
         elif self.current_screen == config.SCREEN_DIFFICULTY:
             if key == pygame.K_ESCAPE:
-                self.start_fade(config.SCREEN_DIFFICULTY, config.SCREEN_START)
+                self.start_fade(config.SCREEN_DIFFICULTY, "mode_select")
+        elif self.current_screen == "mode_select":
+            if key == pygame.K_ESCAPE:
+                self.start_fade("mode_select", config.SCREEN_START)
+        elif self.current_screen == "story_select":
+            if key == pygame.K_ESCAPE:
+                self.start_fade("story_select", "mode_select")
+        elif self.current_screen == "story_chapter":
+            if key == pygame.K_ESCAPE:
+                self.start_fade("story_chapter", "story_select")
         elif self.current_screen == "tutorial":
             if key == pygame.K_ESCAPE:
                 self.tutorial_page = 0  # Reset to first page
@@ -763,20 +927,43 @@ class ChessGame:
                 if self.fade_from == "intro":
                     self.intro_screen.active = False
                     self.intro_complete = True  # Mark intro as complete
-                if self.fade_to == config.SCREEN_GAME and not self.stored_game_state:
-                    # Only reset if we're not returning from shop
-                    self.board.reset()
-                    self.powerup_system = PowerupSystem()  # Reset powerup system
-                    self.powerup_system.assets = self.assets  # Pass assets reference
-                    self.board.set_powerup_system(self.powerup_system)
-                    self.powerup_renderer.powerup_system = self.powerup_system
+                if self.fade_to == config.SCREEN_GAME:
+                    if not self.stored_game_state:
+                        # Only reset if we're not returning from shop
+                        self.board.reset()
+                        self.powerup_system = PowerupSystem()  # Reset powerup system
+                        self.powerup_system.assets = self.assets  # Pass assets reference
+                        self.board.set_powerup_system(self.powerup_system)
+                        self.powerup_renderer.powerup_system = self.powerup_system
+                        
+                        # Apply story mode rules if in story mode
+                        if self.current_mode == "story" and self.current_story_battle:
+                            self.story_mode.apply_battle_rules(
+                                self.current_story_battle,
+                                self.board,
+                                self.powerup_system,
+                                self.ai
+                            )
+                elif self.fade_to == "story_dialogue":
+                    # Initialize dialogue state
+                    self.current_dialogue_index = 0
+                    self.dialogue_complete = False
                     
+        # Update emote system
+        if self.emote_system:
+            self.emote_system.update()
+        
         # Check if chopper gunner was requested
         if self.powerup_system.chopper_gunner_requested:
             self.powerup_system.chopper_gunner_requested = False
             # Create and start chopper mode
             self.chopper_mode = ChopperGunnerMode(self.screen, self.assets, self.board)
             self.chopper_mode.start()
+            
+        # Check if nuke was requested
+        if self.powerup_system.nuke_requested:
+            self.powerup_system.nuke_requested = False
+            # Nuke explosion will be handled by powerup system animations
             
         # Update chopper mode if active
         if self.chopper_mode and self.chopper_mode.active:
@@ -799,6 +986,29 @@ class ChessGame:
                             self.assets.sounds['capture'].play()
                         except Exception as e:
                             print(f"Error playing capture sound: {e}")
+                        
+                        # Track capture for killstreaks and emotes
+                        self.last_captured_piece = captured
+                        capturing_player = "black" if self.board.current_turn == "white" else "white"
+                        
+                        # Reset opposing player's streak
+                        if capturing_player == "white":
+                            self.powerup_system.reset_streak("black")
+                        else:
+                            self.powerup_system.reset_streak("white")
+                            
+                        # Trigger emotes based on capture
+                        if captured[1] in ['Q', 'R', 'B', 'N']:
+                            if capturing_player == "black":
+                                self.emote_system.trigger_emote("ai_captures", self.selected_difficulty)
+                            else:
+                                self.emote_system.trigger_emote("capture_major", self.selected_difficulty)
+                        elif captured[1] == 'P':
+                            if capturing_player == "white":
+                                self.emote_system.trigger_emote("capture_pawn", self.selected_difficulty)
+                                
+                    # Check for streaks after move completes
+                    self._check_for_streak_emotes()
                         
             # AI turn
             if self.board.current_turn == "black" and not self.board.game_over and not self.board.animating:
@@ -826,6 +1036,10 @@ class ChessGame:
                             self.board.start_move(from_pos[0], from_pos[1], to_pos[0], to_pos[1])
                         self.ai.start_thinking = None
                         
+            # Check for game state emotes
+            if not self.board.animating:
+                self._check_and_trigger_game_emotes()
+                        
             # Check for player victory and unlock next difficulty
             if self.board.game_over and self.board.winner == "white" and self.selected_difficulty:
                 if not hasattr(self, 'victory_processed'):
@@ -837,10 +1051,62 @@ class ChessGame:
                     self.victory_reward = reward  # Store for display
                     print(f"Victory! Earned ${reward}. Total: ${new_total}")
                     
-                    # Unlock next difficulty
-                    next_difficulty = config.unlock_next_difficulty(self.selected_difficulty)
-                    if next_difficulty:
-                        print(f"Congratulations! You've unlocked {config.AI_DIFFICULTY_NAMES[next_difficulty]} difficulty!")
+                    # Handle story mode victory
+                    if self.current_mode == "story" and self.current_story_battle:
+                        # Mark battle as complete
+                        self.story_mode.complete_battle(self.current_story_battle["id"], won=True)
+                        
+                        # Award story rewards
+                        if "reward_money" in self.current_story_battle:
+                            story_reward = self.current_story_battle["reward_money"]
+                            config.add_money(story_reward)
+                            self.victory_reward += story_reward
+                            
+                        if "reward_unlocks" in self.current_story_battle:
+                            for unlock in self.current_story_battle["reward_unlocks"]:
+                                config.unlock_powerup(unlock)
+                    else:
+                        # Classic mode - unlock next difficulty
+                        next_difficulty = config.unlock_next_difficulty(self.selected_difficulty)
+                        if next_difficulty:
+                            print(f"Congratulations! You've unlocked {config.AI_DIFFICULTY_NAMES[next_difficulty]} difficulty!")
+                    
+                    # Trigger victory emote
+                    self.emote_system.trigger_emote("checkmate", self.selected_difficulty)
+                    
+            elif self.board.game_over and self.board.winner == "black":
+                # AI victory
+                if not hasattr(self, 'defeat_processed'):
+                    self.defeat_processed = True
+                    
+                    # Handle story mode defeat
+                    if self.current_mode == "story" and self.current_story_battle:
+                        self.story_mode.complete_battle(self.current_story_battle["id"], won=False)
+                        
+                    # Trigger defeat emote
+                    self.emote_system.trigger_emote("checkmate", self.selected_difficulty)
+                    
+    def _check_for_streak_emotes(self):
+        """Check for killstreak milestones and trigger emotes."""
+        if not self.ai or not self.emote_system:
+            return
+            
+        # Check player streak
+        player_streak = self.powerup_system.current_streak["white"]
+        if player_streak == 3:
+            self.emote_system.trigger_emote("player_streak_3", self.selected_difficulty)
+        elif player_streak == 5:
+            self.emote_system.trigger_emote("player_streak_5", self.selected_difficulty)
+            
+        # Check AI streak
+        ai_streak = self.powerup_system.current_streak["black"]
+        if ai_streak == 3:
+            self.emote_system.trigger_emote("ai_streak_3", self.selected_difficulty)
+            
+        # Check for broken streaks
+        if self.powerup_system.streak_popup and self.powerup_system.streak_popup.get("type") == "broken":
+            if self.powerup_system.streak_popup["player"] == "white":
+                self.emote_system.trigger_emote("player_streak_broken", self.selected_difficulty)
                     
     def draw(self):
         """Draw everything."""
@@ -925,6 +1191,34 @@ class ChessGame:
             self.renderer.draw_menu(config.SCREEN_START, buttons, self.mouse_pos)
             self.draw_volume_sliders()
             
+        elif screen_type == "mode_select":
+            self.renderer.draw_mode_select(self.mode_buttons, self.back_button, self.mouse_pos)
+            self.draw_volume_sliders()
+            
+        elif screen_type == "story_select":
+            self.renderer.draw_story_chapters(self.story_mode, self.story_chapter_buttons, 
+                                            self.story_back_button, self.mouse_pos)
+            self.draw_volume_sliders()
+            
+        elif screen_type == "story_chapter":
+            chapter = self.story_mode.get_current_chapter()
+            if chapter:
+                self.renderer.draw_story_battles(chapter, self.story_mode, 
+                                               self.story_battle_buttons, 
+                                               self.story_back_button, self.mouse_pos)
+            self.draw_volume_sliders()
+            
+        elif screen_type == "story_dialogue":
+            if self.current_story_battle:
+                self.renderer.draw_story_dialogue(self.current_story_battle, 
+                                                self.current_dialogue_index,
+                                                self.dialogue_complete)
+                
+                # Check if dialogue is complete
+                dialogue_lines = self.current_story_battle.get("pre_battle", [])
+                if self.current_dialogue_index >= len(dialogue_lines) - 1:
+                    self.dialogue_complete = True
+                    
         elif screen_type == "tutorial":
             # Create tutorial buttons dictionary
             tutorial_buttons = {
@@ -983,14 +1277,25 @@ class ChessGame:
             # Add Arms Dealer button in game
             self.draw_arms_dealer_button()
             
-            # Powerup menu
+            # Powerup menu with killstreak indicator
             self.powerup_renderer.draw_powerup_menu(self.board, self.mouse_pos)
+            
+            # Draw killstreak UI
+            self.draw_killstreak_ui()
             
             # Powerup effects
             self.powerup_renderer.draw_effects(self.board)
             
             # Powerup targeting
             self.powerup_renderer.draw_powerup_targeting(self.board, self.mouse_pos)
+            
+            # Draw emotes
+            if self.emote_system:
+                self.emote_system.draw()
+            
+            # Draw story mode UI if in story mode
+            if self.current_mode == "story" and self.current_story_battle:
+                self.renderer.draw_story_battle_ui(self.current_story_battle)
             
             # Overlays
             if self.board.promoting:
@@ -1002,8 +1307,110 @@ class ChessGame:
                     self.board.selected_difficulty = self.selected_difficulty
                 if not hasattr(self.board, 'victory_reward'):
                     self.board.victory_reward = self.victory_reward
+                if self.current_mode == "story":
+                    self.board.is_story_mode = True
+                    self.board.story_battle = self.current_story_battle
             self.renderer.draw_game_over(self.board)
             
+    def draw_killstreak_ui(self):
+        """Draw killstreak counter and notifications."""
+        # Draw current streak for player in top-left corner
+        player_streak = self.powerup_system.current_streak["white"]
+        if player_streak > 0:
+            # Position in top-left, below volume controls
+            streak_x = 20
+            streak_y = 100  # Below the SFX slider
+            
+            # Get color based on streak level
+            bg_color = self.powerup_system._get_streak_color(player_streak)
+            dark_color = tuple(c // 3 for c in bg_color)
+            
+            # Create text
+            streak_text = f"KILLSTREAK: {player_streak}"
+            font = self.renderer.pixel_fonts['small']
+            text_surface = font.render(streak_text, True, config.WHITE)
+            
+            # Create background box
+            padding = 8
+            bg_rect = pygame.Rect(streak_x - padding, streak_y - padding,
+                                text_surface.get_width() + padding * 2,
+                                text_surface.get_height() + padding * 2)
+            
+            # Draw background
+            pygame.draw.rect(self.screen, dark_color, bg_rect, border_radius=5)
+            pygame.draw.rect(self.screen, bg_color, bg_rect, 2, border_radius=5)
+            
+            # Draw text
+            self.screen.blit(text_surface, (streak_x, streak_y))
+            
+            # Show next reward info below
+            next_rewards = []
+            for streak_num in [3, 5, 7, 10, 15]:
+                if player_streak < streak_num and not self.powerup_system.killstreak_rewards[streak_num]["claimed"]["white"]:
+                    next_rewards.append((streak_num, self.powerup_system.killstreak_rewards[streak_num]))
+                    break
+                    
+            if next_rewards:
+                streak_num, reward_data = next_rewards[0]
+                next_text = f"Next: {reward_data['reward'].upper()} at {streak_num}"
+                next_font = self.renderer.pixel_fonts['tiny']
+                next_surface = next_font.render(next_text, True, (180, 180, 180))
+                self.screen.blit(next_surface, (streak_x, streak_y + 25))
+        
+        # Draw streak popup notification
+        if self.powerup_system.streak_popup:
+            popup = self.powerup_system.streak_popup
+            elapsed = pygame.time.get_ticks() - popup["start_time"]
+            
+            if elapsed < 3000:  # Show for 3 seconds
+                # Position in upper middle area, away from game elements
+                popup_x = config.WIDTH // 2
+                popup_y = 150  # Below the top UI elements
+                
+                # Fade in/out
+                alpha = 255
+                if elapsed < 300:
+                    alpha = int(255 * (elapsed / 300))
+                elif elapsed > 2700:
+                    alpha = int(255 * ((3000 - elapsed) / 300))
+                
+                # Scale animation for impact
+                scale = 1.0
+                if elapsed < 200:
+                    scale = 0.5 + (elapsed / 200) * 0.5
+                
+                # Main text
+                main_font_size = int(36 * scale)
+                main_font = pygame.font.Font(None, main_font_size)
+                main_text = main_font.render(popup["text"], True, popup["color"])
+                main_text.set_alpha(alpha)
+                main_rect = main_text.get_rect(center=(popup_x, popup_y))
+                
+                # Draw background box
+                padding = 15
+                bg_rect = main_rect.inflate(padding * 2, padding)
+                bg_surface = pygame.Surface((bg_rect.width, bg_rect.height), pygame.SRCALPHA)
+                bg_surface.fill((*config.BLACK, min(200, alpha)))
+                self.screen.blit(bg_surface, bg_rect)
+                
+                # Draw border
+                if popup.get("type") == "reward":
+                    pygame.draw.rect(self.screen, popup["color"], bg_rect, 2, border_radius=5)
+                
+                self.screen.blit(main_text, main_rect)
+                
+                # Subtext
+                if "subtext" in popup:
+                    sub_font_size = int(20 * scale)
+                    sub_font = pygame.font.Font(None, sub_font_size)
+                    sub_text = sub_font.render(popup["subtext"], True, (200, 200, 200))
+                    sub_text.set_alpha(alpha)
+                    sub_rect = sub_text.get_rect(center=(popup_x, popup_y + 30))
+                    self.screen.blit(sub_text, sub_rect)
+            else:
+                # Clear popup after 3 seconds
+                self.powerup_system.streak_popup = None
+                
     def draw_volume_sliders(self):
         """Draw both volume sliders."""
         # MUSIC SLIDER

@@ -1,6 +1,6 @@
 """
 Powerup System for Chess Game FINAL
-Handles powerup logic, effects, and visual feedback
+Handles powerup logic, effects, visual feedback, and KILLSTREAKS
 """
 
 import pygame
@@ -12,6 +12,27 @@ class PowerupSystem:
     def __init__(self):
         # Player points (white is human player, black is AI)
         self.points = {"white": 0, "black": 0}
+        
+        # Killstreak tracking
+        self.current_streak = {"white": 0, "black": 0}
+        self.highest_streak = {"white": 0, "black": 0}
+        self.last_capture_time = {"white": 0, "black": 0}
+        
+        # Killstreak rewards - can be claimed once per game
+        self.killstreak_rewards = {
+            3: {"name": "KILLING SPREE!", "reward": "shield", "claimed": {"white": False, "black": False}},
+            5: {"name": "RAMPAGE!", "reward": "gun", "claimed": {"white": False, "black": False}},
+            7: {"name": "DOMINATING!", "reward": "airstrike", "claimed": {"white": False, "black": False}},
+            10: {"name": "UNSTOPPABLE!", "reward": "chopper", "claimed": {"white": False, "black": False}},
+            15: {"name": "GODLIKE!", "reward": "nuke", "claimed": {"white": False, "black": False}}
+        }
+        
+        # Pending killstreak rewards
+        self.pending_streak_rewards = {"white": [], "black": []}
+        
+        # Streak animations
+        self.streak_popup = None
+        self.streak_animation_start = 0
         
         # Powerup definitions - Easy to add more!
         self.powerups = {
@@ -49,6 +70,13 @@ class PowerupSystem:
                 "description": "Aerial minigun assault!",
                 "color": (255, 50, 50),
                 "icon": "🚁"
+            },
+            "nuke": {
+                "name": "TACTICAL NUKE",
+                "cost": 0,  # Only available through 15 killstreak
+                "description": "End the game. Destroy everything.",
+                "color": (255, 255, 0),
+                "icon": "☢️"
             }
         }
         
@@ -58,7 +86,8 @@ class PowerupSystem:
             "gun": 500,       # Mid-tier
             "airstrike": 1000,  # Expensive
             "paratroopers": 1500,  # Very expensive
-            "chopper": 3000      # Ultimate powerup
+            "chopper": 3000,      # Ultimate powerup
+            "nuke": 99999        # Can't buy, only earn through killstreak
         }
         
         # Piece point values
@@ -103,28 +132,172 @@ class PowerupSystem:
         # Chopper gunner flag
         self.chopper_gunner_requested = False
         
+        # Nuke flag
+        self.nuke_requested = False
+        
     def add_points_for_capture(self, captured_piece, capturing_player):
-        """Award points when a piece is captured."""
+        """Award points AND update killstreak when a piece is captured."""
         if captured_piece and captured_piece[1] in self.piece_values:
             points = self.piece_values[captured_piece[1]]
             self.points[capturing_player] += points
+            
+            # Update killstreak
+            self.current_streak[capturing_player] += 1
+            if self.current_streak[capturing_player] > self.highest_streak[capturing_player]:
+                self.highest_streak[capturing_player] = self.current_streak[capturing_player]
+            
+            # Check for streak rewards
+            self._check_streak_rewards(capturing_player)
+            
+            # Animate streak popup
+            self._create_streak_popup(capturing_player)
+            
+            # Track capture time
+            self.last_capture_time[capturing_player] = pygame.time.get_ticks()
+            
             return points
         return 0
+        
+    def reset_streak(self, player):
+        """Reset a player's killstreak (called when they lose a piece)."""
+        if self.current_streak[player] >= 3:
+            # Show "STREAK BROKEN" message
+            self.streak_popup = {
+                "text": "STREAK BROKEN!",
+                "subtext": f"Lost {self.current_streak[player]} killstreak",
+                "color": (255, 50, 50),
+                "player": player,
+                "start_time": pygame.time.get_ticks(),
+                "type": "broken"
+            }
+        self.current_streak[player] = 0
+        
+    def _check_streak_rewards(self, player):
+        """Check if player earned any streak rewards."""
+        current = self.current_streak[player]
+        
+        for streak_num, reward_data in self.killstreak_rewards.items():
+            if current >= streak_num and not reward_data["claimed"][player]:
+                # Mark as claimed
+                reward_data["claimed"][player] = True
+                
+                # Add to pending rewards
+                self.pending_streak_rewards[player].append({
+                    "powerup": reward_data["reward"],
+                    "streak": streak_num,
+                    "name": reward_data["name"]
+                })
+                
+    def _create_streak_popup(self, player):
+        """Create streak notification popup."""
+        streak = self.current_streak[player]
+        
+        # Determine message based on streak
+        if streak in self.killstreak_rewards:
+            reward = self.killstreak_rewards[streak]
+            self.streak_popup = {
+                "text": reward["name"],
+                "subtext": f"{streak} KILL STREAK! Free {self.powerups[reward['reward']]['name']}!",
+                "color": (255, 215, 0),
+                "player": player,
+                "start_time": pygame.time.get_ticks(),
+                "type": "reward",
+                "shake": True
+            }
+        else:
+            # Regular streak notification
+            self.streak_popup = {
+                "text": f"{streak} KILL STREAK!",
+                "subtext": self._get_streak_flavor_text(streak),
+                "color": self._get_streak_color(streak),
+                "player": player,
+                "start_time": pygame.time.get_ticks(),
+                "type": "normal"
+            }
+            
+    def _get_streak_flavor_text(self, streak):
+        """Get flavor text for streak number."""
+        if streak == 2:
+            return "Double Kill!"
+        elif streak == 4:
+            return "Keep it going!"
+        elif streak == 6:
+            return "On fire!"
+        elif streak == 8:
+            return "Massacre!"
+        elif streak == 9:
+            return "One more for Chopper!"
+        elif streak == 11:
+            return "Legendary!"
+        elif streak == 12:
+            return "Inhuman!"
+        elif streak == 13:
+            return "Chess God!"
+        elif streak == 14:
+            return "One more for NUKE!"
+        else:
+            return "Incredible!"
+            
+    def _get_streak_color(self, streak):
+        """Get color based on streak magnitude."""
+        if streak < 3:
+            return (200, 200, 200)
+        elif streak < 5:
+            return (100, 200, 255)
+        elif streak < 7:
+            return (150, 100, 255)
+        elif streak < 10:
+            return (255, 100, 100)
+        else:
+            return (255, 215, 0)
+            
+    def claim_streak_reward(self, player, powerup_key):
+        """Claim a killstreak reward (free powerup)."""
+        # Find and remove the reward from pending
+        for reward in self.pending_streak_rewards[player]:
+            if reward["powerup"] == powerup_key:
+                self.pending_streak_rewards[player].remove(reward)
+                
+                # Activate the powerup without spending points
+                self.active_powerup = powerup_key
+                self.powerup_state = {
+                    "player": player,
+                    "phase": "selecting",
+                    "data": {},
+                    "free": True  # Mark as free from killstreak
+                }
+                
+                return True
+        return False
+        
+    def has_pending_streak_reward(self, player, powerup_key):
+        """Check if player has a pending streak reward for this powerup."""
+        return any(r["powerup"] == powerup_key for r in self.pending_streak_rewards[player])
         
     def can_afford_powerup(self, player, powerup_key):
         """Check if player has enough points for a powerup."""
         if powerup_key in self.powerups:
+            # Check if it's a free killstreak reward first
+            if self.has_pending_streak_reward(player, powerup_key):
+                return True
             return self.points[player] >= self.powerups[powerup_key]["cost"]
         return False
         
     def can_use_powerup(self, powerup_key):
         """Check if a powerup is unlocked."""
+        if powerup_key == "nuke":
+            # Nuke is only available through 15 killstreak
+            return False
         progress = load_progress()
         unlocked = progress.get("unlocked_powerups", ["shield"])
         return powerup_key in unlocked
         
     def activate_powerup(self, player, powerup_key):
         """Start the activation process for a powerup."""
+        # Check if it's a killstreak reward
+        if self.has_pending_streak_reward(player, powerup_key):
+            return self.claim_streak_reward(player, powerup_key)
+            
         # Check if unlocked first
         if not self.can_use_powerup(powerup_key):
             return False
@@ -136,7 +309,8 @@ class PowerupSystem:
         self.powerup_state = {
             "player": player,
             "phase": "selecting",
-            "data": {}
+            "data": {},
+            "free": False
         }
         
         return True
@@ -165,14 +339,77 @@ class PowerupSystem:
             return self._handle_chopper_click(row, col, board)
         elif self.active_powerup == "paratroopers":
             return self._handle_paratroopers_click(row, col, board)
+        elif self.active_powerup == "nuke":
+            return self._handle_nuke_click(row, col, board)
             
         return False
         
+    def _handle_nuke_click(self, row, col, board):
+        """Handle tactical nuke activation."""
+        # Check if we're clicking on YES/NO buttons
+        if hasattr(self, 'nuke_yes_button') and hasattr(self, 'nuke_no_button'):
+            import pygame
+            mouse_pos = pygame.mouse.get_pos()
+            
+            if self.nuke_yes_button.collidepoint(mouse_pos):
+                # User clicked YES - activate nuke
+                player = self.powerup_state["player"]
+                
+                # Set flag to request nuke
+                self.nuke_requested = True
+                
+                # Create nuke countdown animation
+                self._create_nuke_countdown()
+                
+                # Clear powerup state
+                self.active_powerup = None
+                self.powerup_state = None
+                
+                # Clean up buttons
+                delattr(self, 'nuke_yes_button')
+                delattr(self, 'nuke_no_button')
+                
+                return True
+                
+            elif self.nuke_no_button.collidepoint(mouse_pos):
+                # User clicked NO - cancel
+                self.cancel_powerup()
+                
+                # Clean up buttons
+                if hasattr(self, 'nuke_yes_button'):
+                    delattr(self, 'nuke_yes_button')
+                if hasattr(self, 'nuke_no_button'):
+                    delattr(self, 'nuke_no_button')
+                    
+                return True
+                
+        return False
+        
+    def _create_nuke_countdown(self):
+        """Create dramatic nuke countdown."""
+        current_time = pygame.time.get_ticks()
+        
+        # Add countdown animation
+        self.animations.append({
+            "type": "nuke_countdown",
+            "start_time": current_time,
+            "duration": 5000,  # 5 second countdown
+            "countdown": 5
+        })
+        
+        # Schedule the actual nuke explosion
+        self.animations.append({
+            "type": "nuke_explosion",
+            "start_time": current_time + 5000,
+            "duration": 3000  # 3 second explosion
+        })
+        
     def _handle_airstrike_click(self, row, col, board):
         """Handle airstrike targeting."""
-        # Spend points
+        # Spend points (unless it's free from killstreak)
         player = self.powerup_state["player"]
-        self.points[player] -= self.powerups["airstrike"]["cost"]
+        if not self.powerup_state.get("free", False):
+            self.points[player] -= self.powerups["airstrike"]["cost"]
         
         # Create airstrike effect
         self._create_airstrike_effect(row, col, board)
@@ -202,8 +439,9 @@ class PowerupSystem:
         # Check if it's player's piece
         piece_color = "white" if piece and piece[0] == 'w' else "black"
         if piece and piece_color == player:
-            # Spend points
-            self.points[player] -= self.powerups["shield"]["cost"]
+            # Spend points (unless it's free from killstreak)
+            if not self.powerup_state.get("free", False):
+                self.points[player] -= self.powerups["shield"]["cost"]
             
             # Apply shield
             self.shielded_pieces[(row, col)] = 3
@@ -237,8 +475,9 @@ class PowerupSystem:
         elif self.powerup_state["phase"] == "targeting":
             # Second click - select target
             if (row, col) in self.powerup_state["data"]["valid_targets"]:
-                # Spend points
-                self.points[player] -= self.powerups["gun"]["cost"]
+                # Spend points (unless it's free from killstreak)
+                if not self.powerup_state.get("free", False):
+                    self.points[player] -= self.powerups["gun"]["cost"]
                 
                 # Create gun effect
                 shooter_pos = self.powerup_state["data"]["shooter"]
@@ -308,7 +547,9 @@ class PowerupSystem:
             if self.chopper_yes_button.collidepoint(mouse_pos):
                 # User clicked YES - activate chopper gunner
                 player = self.powerup_state["player"]
-                self.points[player] -= self.powerups["chopper"]["cost"]
+                # Only spend points if not free from killstreak
+                if not self.powerup_state.get("free", False):
+                    self.points[player] -= self.powerups["chopper"]["cost"]
                 
                 # Set flag to request chopper mode
                 self.chopper_gunner_requested = True
@@ -371,8 +612,9 @@ class PowerupSystem:
         
         # Check if we've placed all 3 pawns
         if len(self.powerup_state["data"]["placed"]) >= 3:
-            # Spend points
-            self.points[player] -= self.powerups["paratroopers"]["cost"]
+            # Spend points (unless it's free from killstreak)
+            if not self.powerup_state.get("free", False):
+                self.points[player] -= self.powerups["paratroopers"]["cost"]
             
             # Clear powerup state
             self.active_powerup = None
@@ -417,6 +659,9 @@ class PowerupSystem:
             elif anim["type"] == "delayed_pawn_placement" and current_time >= anim["start_time"]:
                 # Handle delayed pawn placement when parachute lands
                 self._execute_delayed_pawn_placement(anim)
+            elif anim["type"] == "nuke_explosion" and current_time >= anim["start_time"]:
+                # Handle nuke explosion
+                self._execute_nuke_explosion(anim)
                 
         self.animations = remaining_animations
         
@@ -430,6 +675,35 @@ class PowerupSystem:
             if elapsed >= self.screen_shake["duration"]:
                 self.screen_shake["active"] = False
                 
+    def _execute_nuke_explosion(self, anim):
+        """Execute the tactical nuke - destroy all pieces except kings."""
+        board = anim.get("board")
+        if not board:
+            return
+            
+        # Massive screen shake
+        self.start_screen_shake(30, 2000)
+        
+        # Destroy ALL pieces except kings
+        pieces_destroyed = 0
+        for row in range(8):
+            for col in range(8):
+                piece = board.get_piece(row, col)
+                if piece and piece[1] != 'K':
+                    board.set_piece(row, col, "")
+                    pieces_destroyed += 1
+                    
+        # Create massive explosion effect
+        self.animations.append({
+            "type": "nuke_flash",
+            "start_time": pygame.time.get_ticks(),
+            "duration": 1000
+        })
+        
+        # Game over - player wins by default after nuke
+        board.game_over = True
+        board.winner = "white"  # Player always wins with nuke
+        
     def _execute_delayed_destruction(self, anim):
         """Execute the delayed destruction of pieces from airstrike."""
         row = anim["row"]
