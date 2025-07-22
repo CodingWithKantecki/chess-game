@@ -264,8 +264,9 @@ class Renderer:
             # Lock icon if locked
             if not is_unlocked:
                 lock_text = "LOCKED"
-                lock_surface = self.pixel_fonts['small'].render(lock_text, True, (150, 150, 150))
-                lock_rect = lock_surface.get_rect(center=(button_x + 40, button_rect.centery))
+                lock_surface = self.pixel_fonts['medium'].render(lock_text, True, (200, 50, 50))
+                # Position on the right side, before the progress bar
+                lock_rect = lock_surface.get_rect(center=(bar_x - 80, button_rect.centery))
                 self.screen.blit(lock_surface, lock_rect)
                 
             y_offset += button_height + 20
@@ -325,11 +326,46 @@ class Renderer:
             pygame.draw.rect(self.screen, card_color, card_rect, border_radius=10)
             pygame.draw.rect(self.screen, border_color, card_rect, 3, border_radius=10)
             
-            # Portrait
+            # Portrait with special handling for BOT
             portrait_text = battle.get("portrait", "X")
-            portrait_surface = self.pixel_fonts['huge'].render(portrait_text, True, config.WHITE)
-            portrait_rect = portrait_surface.get_rect(center=(card_x + 60, card_rect.centery))
-            self.screen.blit(portrait_surface, portrait_rect)
+            
+            if portrait_text == "BOT":
+                # Draw mini robot icon
+                robot_x = card_x + 60
+                robot_y = card_rect.centery
+                robot_color = (100, 200, 255)
+                
+                # Mini robot head
+                head_rect = pygame.Rect(robot_x - 20, robot_y - 25, 40, 30)
+                pygame.draw.rect(self.screen, robot_color, head_rect, border_radius=5)
+                pygame.draw.rect(self.screen, (150, 230, 255), head_rect, 2, border_radius=5)
+                
+                # Eyes
+                pygame.draw.circle(self.screen, (255, 100, 100), (robot_x - 10, robot_y - 15), 6)
+                pygame.draw.circle(self.screen, (255, 100, 100), (robot_x + 10, robot_y - 15), 6)
+                pygame.draw.circle(self.screen, (0, 0, 0), (robot_x - 10, robot_y - 15), 2)
+                pygame.draw.circle(self.screen, (0, 0, 0), (robot_x + 10, robot_y - 15), 2)
+                
+                # Mouth
+                pygame.draw.rect(self.screen, (50, 50, 50), (robot_x - 12, robot_y - 5, 24, 5))
+                
+                # Antenna
+                pygame.draw.line(self.screen, robot_color, (robot_x, robot_y - 25), (robot_x, robot_y - 35), 2)
+                pygame.draw.circle(self.screen, (255, 255, 100), (robot_x, robot_y - 35), 3)
+                
+                # Body
+                body_rect = pygame.Rect(robot_x - 18, robot_y + 5, 36, 25)
+                pygame.draw.rect(self.screen, robot_color, body_rect, border_radius=3)
+                pygame.draw.rect(self.screen, (150, 230, 255), body_rect, 2, border_radius=3)
+                
+                # Lights
+                pygame.draw.circle(self.screen, (0, 255, 0), (robot_x - 8, robot_y + 15), 3)
+                pygame.draw.circle(self.screen, (255, 0, 0), (robot_x + 8, robot_y + 15), 3)
+            else:
+                # Regular portrait
+                portrait_surface = self.pixel_fonts['huge'].render(portrait_text, True, config.WHITE)
+                portrait_rect = portrait_surface.get_rect(center=(card_x + 60, card_rect.centery))
+                self.screen.blit(portrait_surface, portrait_rect)
             
             # Battle name
             name_text = battle["opponent"]
@@ -384,11 +420,64 @@ class Renderer:
                        (portrait_x - 10, portrait_y - 10, portrait_size + 20, portrait_size + 20), 
                        3, border_radius=10)
         
-        # Portrait emoji/text
+        # Portrait emoji/text with special handling for BOT
         portrait_text = battle_data.get("portrait", "X")
-        portrait_surface = pygame.font.Font(None, 120).render(portrait_text, True, config.WHITE)
-        portrait_rect = portrait_surface.get_rect(center=(portrait_x + portrait_size // 2, portrait_y + portrait_size // 2))
-        self.screen.blit(portrait_surface, portrait_rect)
+        
+        if portrait_text == "BOT":
+            # Draw a custom robot icon instead of BOT text
+            robot_color = (100, 200, 255)
+            robot_center_x = portrait_x + portrait_size // 2
+            robot_center_y = portrait_y + portrait_size // 2
+            
+            # Robot head
+            head_rect = pygame.Rect(robot_center_x - 40, robot_center_y - 50, 80, 60)
+            pygame.draw.rect(self.screen, robot_color, head_rect, border_radius=10)
+            pygame.draw.rect(self.screen, (150, 230, 255), head_rect, 3, border_radius=10)
+            
+            # Robot eyes
+            eye_size = 15
+            eye_y = robot_center_y - 35
+            # Left eye
+            pygame.draw.circle(self.screen, (255, 100, 100), (robot_center_x - 20, eye_y), eye_size)
+            pygame.draw.circle(self.screen, (255, 255, 255), (robot_center_x - 20, eye_y), eye_size - 5)
+            pygame.draw.circle(self.screen, (0, 0, 0), (robot_center_x - 20, eye_y), 5)
+            # Right eye
+            pygame.draw.circle(self.screen, (255, 100, 100), (robot_center_x + 20, eye_y), eye_size)
+            pygame.draw.circle(self.screen, (255, 255, 255), (robot_center_x + 20, eye_y), eye_size - 5)
+            pygame.draw.circle(self.screen, (0, 0, 0), (robot_center_x + 20, eye_y), 5)
+            
+            # Robot mouth
+            mouth_rect = pygame.Rect(robot_center_x - 25, robot_center_y - 15, 50, 10)
+            pygame.draw.rect(self.screen, (50, 50, 50), mouth_rect)
+            for i in range(5):
+                pygame.draw.line(self.screen, (150, 230, 255), 
+                               (robot_center_x - 25 + i * 12, robot_center_y - 15),
+                               (robot_center_x - 25 + i * 12, robot_center_y - 5), 2)
+            
+            # Robot antenna
+            pygame.draw.line(self.screen, robot_color, 
+                           (robot_center_x, robot_center_y - 50),
+                           (robot_center_x, robot_center_y - 70), 3)
+            pygame.draw.circle(self.screen, (255, 255, 100), 
+                             (robot_center_x, robot_center_y - 70), 6)
+            
+            # Robot body
+            body_rect = pygame.Rect(robot_center_x - 35, robot_center_y + 10, 70, 50)
+            pygame.draw.rect(self.screen, robot_color, body_rect, border_radius=5)
+            pygame.draw.rect(self.screen, (150, 230, 255), body_rect, 3, border_radius=5)
+            
+            # Body details
+            for i in range(3):
+                for j in range(2):
+                    light_x = robot_center_x - 20 + i * 20
+                    light_y = robot_center_y + 25 + j * 15
+                    light_color = (0, 255, 0) if (i + j) % 2 == 0 else (255, 0, 0)
+                    pygame.draw.circle(self.screen, light_color, (light_x, light_y), 4)
+        else:
+            # Regular emoji/text portrait
+            portrait_surface = pygame.font.Font(None, 120).render(portrait_text, True, config.WHITE)
+            portrait_rect = portrait_surface.get_rect(center=(portrait_x + portrait_size // 2, portrait_y + portrait_size // 2))
+            self.screen.blit(portrait_surface, portrait_rect)
         
         # Character name
         name_text = battle_data["opponent"]
@@ -1183,52 +1272,70 @@ class Renderer:
             
         current_time = pygame.time.get_ticks()
         
+        # Darker overlay for better contrast
         overlay = pygame.Surface((config.WIDTH, config.HEIGHT))
-        overlay.set_alpha(180)
+        overlay.set_alpha(200)
         overlay.fill(config.BLACK)
         self.screen.blit(overlay, (0, 0))
         
         if board.winner == "white":
-            pulse = math.sin(current_time / 200) * 0.1 + 0.9
-            victory_size = int(48 * self.scale * pulse)
-            victory_font = pygame.font.SysFont("Courier", victory_size)
-            victory_text = victory_font.render("VICTORY!", True, (255, 215, 0))
-            victory_rect = victory_text.get_rect(center=(config.WIDTH // 2, config.HEIGHT // 2 - 120 * self.scale))
-            self.screen.blit(victory_text, victory_rect)
+            # Clean victory header with subtle animation
+            victory_text = "VICTORY"
+            victory_font_size = int(56 * self.scale)
             
-            star_count = 8
-            star_radius = 80 * self.scale
-            for i in range(star_count):
-                angle = (i / star_count) * 2 * math.pi + current_time / 1000
-                star_x = victory_rect.centerx + math.cos(angle) * star_radius
-                star_y = victory_rect.centery + math.sin(angle) * star_radius
-                self._draw_star(star_x, star_y, 15 * self.scale, (255, 255, 100))
-            
-            if hasattr(board, 'victory_reward') and board.victory_reward > 0:
-                coin_y = config.HEIGHT // 2 - 40 * self.scale
-                coin_x = config.WIDTH // 2 - 80 * self.scale
-                pygame.draw.circle(self.screen, (255, 215, 0), (int(coin_x), int(coin_y)), int(20 * self.scale))
-                pygame.draw.circle(self.screen, (255, 255, 100), (int(coin_x), int(coin_y)), int(20 * self.scale), 2)
-                coin_text = self.pixel_fonts['large'].render("$", True, (180, 150, 0))
-                coin_rect = coin_text.get_rect(center=(coin_x, coin_y))
-                self.screen.blit(coin_text, coin_rect)
+            # Use pixel font for cleaner look
+            if 'huge' in self.pixel_fonts:
+                victory_surface = self.pixel_fonts['huge'].render(victory_text, True, (255, 223, 0))
+            else:
+                victory_font = pygame.font.Font(None, victory_font_size)
+                victory_surface = victory_font.render(victory_text, True, (255, 223, 0))
                 
-                reward_text = f"EARNED ${board.victory_reward}!"
-                text = self.pixel_fonts['large'].render(reward_text, True, (255, 255, 255))
-                rect = text.get_rect(center=(config.WIDTH // 2 + 20 * self.scale, coin_y))
-                self.screen.blit(text, rect)
+            victory_rect = victory_surface.get_rect(center=(config.WIDTH // 2, config.HEIGHT // 2 - 140 * self.scale))
             
+            # Subtle glow effect
+            glow_surf = pygame.Surface((victory_rect.width + 40, victory_rect.height + 40), pygame.SRCALPHA)
+            glow_alpha = int(50 + 30 * math.sin(current_time / 300))
+            pygame.draw.rect(glow_surf, (255, 223, 0, glow_alpha), glow_surf.get_rect(), border_radius=10)
+            glow_rect = glow_surf.get_rect(center=victory_rect.center)
+            self.screen.blit(glow_surf, glow_rect)
+            
+            self.screen.blit(victory_surface, victory_rect)
+            
+            # Clean reward display section
+            if hasattr(board, 'victory_reward') and board.victory_reward > 0:
+                reward_y = config.HEIGHT // 2 - 60 * self.scale
+                
+                # Background card for reward
+                card_width = 280 * self.scale
+                card_height = 50 * self.scale
+                card_rect = pygame.Rect(config.WIDTH // 2 - card_width // 2, reward_y - card_height // 2, 
+                                      card_width, card_height)
+                
+                # Card background with gradient effect
+                card_surface = pygame.Surface((card_width, card_height), pygame.SRCALPHA)
+                pygame.draw.rect(card_surface, (30, 30, 30, 240), card_surface.get_rect(), border_radius=25)
+                pygame.draw.rect(card_surface, (255, 223, 0, 180), card_surface.get_rect(), 2, border_radius=25)
+                self.screen.blit(card_surface, card_rect)
+                
+                # Reward text
+                reward_text = f"+ ${board.victory_reward}"
+                text_surface = self.pixel_fonts['large'].render(reward_text, True, (255, 255, 255))
+                text_rect = text_surface.get_rect(center=(config.WIDTH // 2, reward_y))
+                self.screen.blit(text_surface, text_rect)
+            
+            # Story mode dialogue (if applicable)
             if hasattr(board, 'is_story_mode') and board.is_story_mode and hasattr(board, 'story_battle'):
                 battle = board.story_battle
                 if "victory" in battle:
-                    victory_dialogue_y = config.HEIGHT // 2
+                    dialogue_y = config.HEIGHT // 2 + 10 * self.scale
                     for line in battle["victory"]:
                         if line:
-                            line_surface = self.pixel_fonts['small'].render(line, True, (200, 200, 200))
-                            line_rect = line_surface.get_rect(center=(config.WIDTH // 2, victory_dialogue_y))
+                            line_surface = self.pixel_fonts['small'].render(line, True, (220, 220, 220))
+                            line_rect = line_surface.get_rect(center=(config.WIDTH // 2, dialogue_y))
                             self.screen.blit(line_surface, line_rect)
-                            victory_dialogue_y += 25
+                            dialogue_y += 25
             
+            # Unlock notification (cleaner design)
             if hasattr(board, 'selected_difficulty') and not hasattr(board, 'is_story_mode'):
                 progress = config.load_progress()
                 current_index = config.AI_DIFFICULTIES.index(board.selected_difficulty) if board.selected_difficulty in config.AI_DIFFICULTIES else -1
@@ -1237,39 +1344,64 @@ class Renderer:
                     next_diff = config.AI_DIFFICULTIES[current_index + 1]
                     if next_diff not in progress.get("unlocked_difficulties", []):
                         unlock_y = config.HEIGHT // 2 + 20 * self.scale
-                        self._draw_unlock_icon(config.WIDTH // 2 - 100 * self.scale, unlock_y)
                         
-                        unlock_text = f"{config.AI_DIFFICULTY_NAMES[next_diff]} DIFFICULTY UNLOCKED!"
-                        text = self.pixel_fonts['medium'].render(unlock_text, True, (255, 215, 0))
-                        rect = text.get_rect(center=(config.WIDTH // 2 + 20 * self.scale, unlock_y))
+                        # Unlock notification card
+                        unlock_card_width = 400 * self.scale
+                        unlock_card_height = 40 * self.scale
+                        unlock_rect = pygame.Rect(config.WIDTH // 2 - unlock_card_width // 2, 
+                                                unlock_y - unlock_card_height // 2,
+                                                unlock_card_width, unlock_card_height)
+                        
+                        pygame.draw.rect(self.screen, (20, 40, 20), unlock_rect, border_radius=20)
+                        pygame.draw.rect(self.screen, (100, 255, 100), unlock_rect, 2, border_radius=20)
+                        
+                        unlock_text = f"NEW: {config.AI_DIFFICULTY_NAMES[next_diff]} Mode"
+                        text = self.pixel_fonts['medium'].render(unlock_text, True, (100, 255, 100))
+                        rect = text.get_rect(center=(config.WIDTH // 2, unlock_y))
                         self.screen.blit(text, rect)
             
+            # Clean stats display
             stats_y = config.HEIGHT // 2 + 80 * self.scale
-            stats_width = 300 * self.scale
-            stats_height = 80 * self.scale
-            stats_x = config.WIDTH // 2 - stats_width // 2
             
-            pygame.draw.rect(self.screen, (40, 40, 40), 
-                           (stats_x, stats_y, stats_width, stats_height), 
-                           border_radius=10)
-            pygame.draw.rect(self.screen, (255, 215, 0), 
-                           (stats_x, stats_y, stats_width, stats_height), 2, 
-                           border_radius=10)
+            # Stats container
+            stats_container_width = 320 * self.scale
+            stats_container_height = 100 * self.scale
+            stats_rect = pygame.Rect(config.WIDTH // 2 - stats_container_width // 2,
+                                   stats_y,
+                                   stats_container_width,
+                                   stats_container_height)
             
+            # Glass-like effect for stats
+            stats_surface = pygame.Surface((stats_container_width, stats_container_height), pygame.SRCALPHA)
+            pygame.draw.rect(stats_surface, (40, 40, 40, 200), stats_surface.get_rect(), border_radius=15)
+            pygame.draw.rect(stats_surface, (100, 100, 100, 100), stats_surface.get_rect(), 1, border_radius=15)
+            self.screen.blit(stats_surface, stats_rect)
+            
+            # Stats content
             pieces_captured = len(board.captured_pieces["black"])
             pieces_lost = len(board.captured_pieces["white"])
             
-            stats_text = [
-                f"Pieces Captured: {pieces_captured}",
-                f"Pieces Lost: {pieces_lost}"
-            ]
+            # Title
+            title_text = self.pixel_fonts['small'].render("BATTLE STATS", True, (180, 180, 180))
+            title_rect = title_text.get_rect(center=(config.WIDTH // 2, stats_y + 20 * self.scale))
+            self.screen.blit(title_text, title_rect)
             
-            y_offset = stats_y + 20 * self.scale
-            for stat in stats_text:
-                text = self.pixel_fonts['small'].render(stat, True, (200, 200, 200))
-                rect = text.get_rect(center=(config.WIDTH // 2, y_offset))
-                self.screen.blit(text, rect)
-                y_offset += 25 * self.scale
+            # Stats in two columns
+            stat_y = stats_y + 50 * self.scale
+            
+            # Captured pieces
+            captured_icon = "⚔"
+            captured_text = f"{captured_icon} {pieces_captured} captured"
+            text = self.pixel_fonts['small'].render(captured_text, True, (120, 255, 120))
+            rect = text.get_rect(center=(config.WIDTH // 2 - 80 * self.scale, stat_y))
+            self.screen.blit(text, rect)
+            
+            # Lost pieces
+            lost_icon = "☠"
+            lost_text = f"{lost_icon} {pieces_lost} lost"
+            text = self.pixel_fonts['small'].render(lost_text, True, (255, 120, 120))
+            rect = text.get_rect(center=(config.WIDTH // 2 + 80 * self.scale, stat_y))
+            self.screen.blit(text, rect)
                 
         else:
             defeat_text = "DEFEAT"
@@ -1293,30 +1425,60 @@ class Renderer:
                     rect = text.get_rect(center=(config.WIDTH // 2, config.HEIGHT // 2 - 20 * self.scale))
                     self.screen.blit(text, rect)
         
-        button_y = config.HEIGHT // 2 + 160 * self.scale
-        button_width = 140 * self.scale
-        button_height = 40 * self.scale
-        button_spacing = 20 * self.scale
+        # Clean button design
+        button_y = config.HEIGHT // 2 + 200 * self.scale
+        button_width = 160 * self.scale
+        button_height = 45 * self.scale
+        button_spacing = 30 * self.scale
         
+        # Restart button
         restart_x = config.WIDTH // 2 - button_width - button_spacing // 2
         restart_rect = pygame.Rect(restart_x, button_y, button_width, button_height)
-        restart_color = (70, 150, 70) if restart_rect.collidepoint(pygame.mouse.get_pos()) else (50, 100, 50)
-        pygame.draw.rect(self.screen, restart_color, restart_rect, border_radius=5)
-        pygame.draw.rect(self.screen, (255, 255, 255), restart_rect, 2, border_radius=5)
         
-        restart_text = self.pixel_fonts['small'].render("RESTART (R)", True, (255, 255, 255))
+        # Modern button style with hover effect
+        mouse_pos = pygame.mouse.get_pos()
+        restart_hover = restart_rect.collidepoint(mouse_pos)
+        
+        # Button background
+        restart_surface = pygame.Surface((button_width, button_height), pygame.SRCALPHA)
+        if restart_hover:
+            pygame.draw.rect(restart_surface, (60, 120, 60, 220), restart_surface.get_rect(), border_radius=22)
+            pygame.draw.rect(restart_surface, (100, 200, 100, 255), restart_surface.get_rect(), 2, border_radius=22)
+        else:
+            pygame.draw.rect(restart_surface, (40, 80, 40, 200), restart_surface.get_rect(), border_radius=22)
+            pygame.draw.rect(restart_surface, (80, 160, 80, 200), restart_surface.get_rect(), 2, border_radius=22)
+        self.screen.blit(restart_surface, restart_rect)
+        
+        # Restart text
+        restart_text = self.pixel_fonts['medium'].render("PLAY AGAIN", True, (255, 255, 255))
         restart_text_rect = restart_text.get_rect(center=restart_rect.center)
         self.screen.blit(restart_text, restart_text_rect)
         
+        # Menu button
         menu_x = config.WIDTH // 2 + button_spacing // 2
         menu_rect = pygame.Rect(menu_x, button_y, button_width, button_height)
-        menu_color = (150, 70, 70) if menu_rect.collidepoint(pygame.mouse.get_pos()) else (100, 50, 50)
-        pygame.draw.rect(self.screen, menu_color, menu_rect, border_radius=5)
-        pygame.draw.rect(self.screen, (255, 255, 255), menu_rect, 2, border_radius=5)
+        menu_hover = menu_rect.collidepoint(mouse_pos)
         
-        menu_text = self.pixel_fonts['small'].render("MENU (ESC)", True, (255, 255, 255))
+        # Button background
+        menu_surface = pygame.Surface((button_width, button_height), pygame.SRCALPHA)
+        if menu_hover:
+            pygame.draw.rect(menu_surface, (80, 80, 80, 220), menu_surface.get_rect(), border_radius=22)
+            pygame.draw.rect(menu_surface, (160, 160, 160, 255), menu_surface.get_rect(), 2, border_radius=22)
+        else:
+            pygame.draw.rect(menu_surface, (50, 50, 50, 200), menu_surface.get_rect(), border_radius=22)
+            pygame.draw.rect(menu_surface, (120, 120, 120, 200), menu_surface.get_rect(), 2, border_radius=22)
+        self.screen.blit(menu_surface, menu_rect)
+        
+        # Menu text
+        menu_text = self.pixel_fonts['medium'].render("MAIN MENU", True, (255, 255, 255))
         menu_text_rect = menu_text.get_rect(center=menu_rect.center)
         self.screen.blit(menu_text, menu_text_rect)
+        
+        # Keyboard shortcuts hint
+        hint_y = button_y + button_height + 20 * self.scale
+        hint_text = self.pixel_fonts['tiny'].render("Press R to restart • ESC for menu", True, (150, 150, 150))
+        hint_rect = hint_text.get_rect(center=(config.WIDTH // 2, hint_y))
+        self.screen.blit(hint_text, hint_rect)
         
     def _draw_star(self, x, y, size, color):
         """Helper method to draw a star."""
@@ -1706,16 +1868,16 @@ class Renderer:
         self._draw_button(tutorial_buttons['back'], "BACK TO MENU", (150, 70, 70), (200, 100, 100), mouse_pos)
         
     def draw_arms_dealer(self, powerup_system, shop_buttons, back_button, mouse_pos, dialogue_index=0, dialogues=None):
-        """Draw the arms dealer shop with Tariq character."""
+        """Draw the arms dealer shop with simple design."""
+        current_time = pygame.time.get_ticks()
+        
+        # Simple background
         if hasattr(self.assets, 'arms_background') and self.assets.arms_background:
             scaled_bg = pygame.transform.scale(self.assets.arms_background, (config.WIDTH, config.HEIGHT))
             self.screen.blit(scaled_bg, (0, 0))
         else:
-            self.draw_parallax_background(0.6)
-            
-        overlay = pygame.Surface((config.WIDTH, config.HEIGHT), pygame.SRCALPHA)
-        overlay.fill((0, 0, 0, 100))
-        self.screen.blit(overlay, (0, 0))
+            # Simple dark background
+            self.screen.fill((30, 30, 40))
         
         if config.SCALE != 1.0:
             game_center_x = config.GAME_OFFSET_X + (config.BASE_WIDTH * config.SCALE) // 2
@@ -1724,10 +1886,12 @@ class Renderer:
             game_center_x = config.WIDTH // 2
             game_center_y = config.HEIGHT // 2
         
+        # Simple Tariq character
         if hasattr(self.assets, 'tariq_image') and self.assets.tariq_image:
-            tariq_height = int(450 * config.SCALE)
+            tariq_height = int(400 * config.SCALE)
             aspect_ratio = self.assets.tariq_image.get_width() / self.assets.tariq_image.get_height()
             tariq_width = int(tariq_height * aspect_ratio)
+            
             scaled_tariq = pygame.transform.smoothscale(self.assets.tariq_image, (tariq_width, tariq_height))
             
             tariq_x = int(50 * config.SCALE)
@@ -1737,34 +1901,48 @@ class Renderer:
             
             self.tariq_rect = pygame.Rect(tariq_x, tariq_y, tariq_width, tariq_height)
             
+            # Simple speech bubble
             if dialogues and 0 <= dialogue_index < len(dialogues):
                 dialogue = dialogues[dialogue_index]
-                bubble_width = int(300 * config.SCALE)
+                bubble_width = int(320 * config.SCALE)
                 tariq_center_x = tariq_x + tariq_width // 2
                 bubble_x = tariq_center_x - bubble_width // 2
-                bubble_y = tariq_y - int(120 * config.SCALE)
+                bubble_y = tariq_y - int(140 * config.SCALE)
                 self._draw_speech_bubble(bubble_x, bubble_y, 
                                        dialogue, bubble_width, point_down=True)
         
-        title = self.pixel_fonts['huge'].render("ARMS DEALER", True, (255, 100, 100))
-        title_rect = title.get_rect(center=(game_center_x, game_center_y - 280 * config.SCALE))
-        self.screen.blit(title, title_rect)
+        # Simple title
+        title_text = "TARIQ'S ARMORY"
+        title_y = game_center_y - 280 * config.SCALE
         
+        title_surface = self.pixel_fonts['huge'].render(title_text, True, (255, 255, 255))
+        title_rect = title_surface.get_rect(center=(game_center_x, title_y))
+        self.screen.blit(title_surface, title_rect)
+        
+        # Simple money display
         progress = config.load_progress()
         money = progress.get("money", 0)
-        money_text = self.pixel_fonts['large'].render(f"FUNDS: ${money}", True, (255, 215, 0))
-        money_rect = money_text.get_rect(center=(game_center_x, game_center_y - 220 * config.SCALE))
-        self.screen.blit(money_text, money_rect)
+        
+        money_text = f"Money: ${money:,}"
+        money_surface = self.pixel_fonts['large'].render(money_text, True, (255, 215, 0))
+        money_rect = money_surface.get_rect(center=(game_center_x, title_y + 60))
+        self.screen.blit(money_surface, money_rect)
         
         unlocked = progress.get("unlocked_powerups", ["shield"])
         
-        card_width = int(120 * self.scale)
-        card_height = int(160 * self.scale)
-        card_spacing = int(15 * self.scale)
+        # Simple powerup display
+        unlocked = progress.get("unlocked_powerups", ["shield"])
         
+        # Simple rectangular card layout
         powerup_keys = ["shield", "gun", "airstrike", "paratroopers", "chopper"]
+        
+        # Calculate positions for simple row arrangement
+        card_width = 140 * self.scale
+        card_height = 180 * self.scale
+        card_spacing = 20 * self.scale
         total_width = len(powerup_keys) * card_width + (len(powerup_keys) - 1) * card_spacing
-        start_x = game_center_x - total_width // 2 + int(100 * self.scale)
+        start_x = game_center_x - total_width / 2
+        card_y = game_center_y - 50 * self.scale
         
         shop_buttons.clear()
         
@@ -1774,90 +1952,75 @@ class Renderer:
             is_unlocked = powerup_key in unlocked
             can_afford = money >= price and not is_unlocked
             
+            # Calculate card position
             card_x = start_x + i * (card_width + card_spacing)
-            card_y = game_center_y - 40 * self.scale
-            
             card_rect = pygame.Rect(card_x, card_y, card_width, card_height)
             shop_buttons[powerup_key] = card_rect
             
+            # Check hover
+            is_hover = card_rect.collidepoint(mouse_pos) and not is_unlocked
+            
+            # Simple card colors
             if is_unlocked:
-                card_color = (50, 100, 50)
-                border_color = (100, 255, 100)
+                card_color = (50, 150, 50)
+                border_color = (0, 255, 0)
             elif can_afford:
-                card_color = (70, 70, 40)
+                card_color = (100, 80, 20)
                 border_color = (255, 215, 0)
             else:
-                card_color = (40, 40, 40)
-                border_color = (80, 80, 80)
+                card_color = (60, 60, 60)
+                border_color = (150, 150, 150)
             
-            if card_rect.collidepoint(mouse_pos) and not is_unlocked:
-                card_color = tuple(min(255, c + 20) for c in card_color)
+            # Draw card background
+            pygame.draw.rect(self.screen, card_color, card_rect)
+            pygame.draw.rect(self.screen, border_color, card_rect, 3)
             
-            pygame.draw.rect(self.screen, card_color, card_rect, border_radius=10)
-            pygame.draw.rect(self.screen, border_color, card_rect, 3, border_radius=10)
+            # Simple hover effect
+            if is_hover:
+                hover_rect = card_rect.inflate(10, 10)
+                pygame.draw.rect(self.screen, border_color, hover_rect, 2)
+            
+            # Simple powerup icons
+            icon_y = card_rect.centery - 20
             
             if powerup_key == "gun" and hasattr(self, 'assets') and hasattr(self.assets, 'revolver_image') and self.assets.revolver_image:
-                icon_size = 25
+                icon_size = 40
                 scaled_revolver = pygame.transform.scale(self.assets.revolver_image, (icon_size, icon_size))
-                
-                if not can_afford:
-                    gray_surface = pygame.Surface((icon_size, icon_size), pygame.SRCALPHA)
-                    for x in range(icon_size):
-                        for y in range(icon_size):
-                            r, g, b, a = scaled_revolver.get_at((x, y))
-                            gray = int(0.3 * r + 0.59 * g + 0.11 * b)
-                            gray_surface.set_at((x, y), (gray, gray, gray, a))
-                    scaled_revolver = gray_surface
-                
-                icon_rect = scaled_revolver.get_rect(centerx=card_rect.centerx, y=card_rect.y + 12)
+                icon_rect = scaled_revolver.get_rect(center=(card_rect.centerx, icon_y))
                 self.screen.blit(scaled_revolver, icon_rect)
+            elif powerup_key == "shield":
+                self._draw_shield_icon(self.screen, card_rect, icon_y, can_afford or is_unlocked)
+            elif powerup_key == "airstrike":
+                self._draw_missile_icon(self.screen, card_rect, icon_y, can_afford or is_unlocked)
+            elif powerup_key == "paratroopers":
+                self._draw_parachute_icon(self.screen, card_rect, icon_y, can_afford or is_unlocked)
             elif powerup_key == "chopper":
-                self._draw_helicopter_icon(card_rect, can_afford)
-            else:
-                icon_size = 30
-                icon_surface = pygame.Surface((icon_size, icon_size), pygame.SRCALPHA)
-                icon_surface.fill((0, 0, 0, 0))
-                
-                if powerup_key == "airstrike":
-                    self._draw_missile_icon(icon_surface, icon_size, can_afford)
-                elif powerup_key == "shield":
-                    self._draw_shield_icon(icon_surface, icon_size, can_afford)
-                elif powerup_key == "paratroopers":
-                    self._draw_parachute_icon(icon_surface, icon_size, can_afford)
-                else:
-                    icon_color = config.WHITE if can_afford else (80, 80, 80)
-                    icon_surface = self.pixel_fonts['large'].render(powerup["icon"], True, icon_color)
-                
-                icon_rect = icon_surface.get_rect(centerx=card_rect.centerx, y=card_rect.y + 10)
-                self.screen.blit(icon_surface, icon_rect)
+                self._draw_helicopter_icon(self.screen, card_rect, icon_y, can_afford or is_unlocked)
             
-            name_color = (0, 255, 0) if can_afford else (80, 80, 80)
-            name_surface = self.pixel_fonts['small'].render(powerup["name"], True, name_color)
-            name_rect = name_surface.get_rect(centerx=card_rect.centerx, y=card_rect.y + 35)
+            # Simple powerup name
+            name_surface = self.pixel_fonts['medium'].render(powerup["name"], True, (255, 255, 255))
+            name_rect = name_surface.get_rect(center=(card_rect.centerx, card_rect.centery + 20))
             self.screen.blit(name_surface, name_rect)
             
-            cost_text = f"Cost: {powerup['cost']}"
-            cost_color = (255, 204, 0) if can_afford else (80, 80, 80)
-            cost_surface = self.pixel_fonts['tiny'].render(cost_text, True, cost_color)
-            cost_rect = cost_surface.get_rect(centerx=card_rect.centerx, y=card_rect.y + 55)
-            self.screen.blit(cost_surface, cost_rect)
-            
+            # Simple price/status display
             if is_unlocked:
-                status_text = "OWNED"
-                status_color = (100, 255, 100)
+                owned_text = self.pixel_fonts['small'].render("OWNED", True, (100, 255, 100))
+                owned_rect = owned_text.get_rect(center=(card_rect.centerx, card_rect.bottom - 30))
+                self.screen.blit(owned_text, owned_rect)
             else:
-                status_text = f"${price}"
-                status_color = (255, 215, 0) if can_afford else (200, 100, 100)
-            
-            status_surface = self.pixel_fonts['medium'].render(status_text, True, status_color)
-            status_rect = status_surface.get_rect(center=(card_rect.centerx, card_rect.bottom - 15 * self.scale))
-            self.screen.blit(status_surface, status_rect)
+                price_text = f"${price}"
+                price_color = (255, 255, 255) if can_afford else (150, 150, 150)
+                price_surface = self.pixel_fonts['medium'].render(price_text, True, price_color)
+                price_rect = price_surface.get_rect(center=(card_rect.centerx, card_rect.bottom - 30))
+                self.screen.blit(price_surface, price_rect)
         
+        # Simple instruction text
         inst_text = "Click on items to purchase. Click Tariq for more info!"
-        inst_surface = self.pixel_fonts['small'].render(inst_text, True, (200, 200, 200))
-        inst_rect = inst_surface.get_rect(center=(game_center_x, game_center_y + 170 * self.scale))
+        inst_surface = self.pixel_fonts['small'].render(inst_text, True, (255, 255, 255))
+        inst_rect = inst_surface.get_rect(center=(game_center_x, game_center_y + 180 * self.scale))
         self.screen.blit(inst_surface, inst_rect)
         
+        # Simple back button
         self._draw_button(back_button, "BACK TO GAME", (150, 70, 70), (200, 100, 100), mouse_pos)
 
     def _draw_speech_bubble(self, x, y, text, width, point_down=False):
@@ -1908,77 +2071,75 @@ class Renderer:
                                              y=y + padding + i * line_height)
             self.screen.blit(text_surface, text_rect)
 
-    def _draw_shield_icon(self, surface, size, enabled=True):
+    def _draw_shield_icon(self, screen, card_rect, icon_y, enabled=True):
         """Draw a shield icon."""
         color = (200, 200, 200) if enabled else (80, 80, 80)
-        center = size // 2
+        size = 40
+        x = card_rect.centerx - size // 2
+        y = icon_y - size // 2
         
         points = [
-            (center, 5),
-            (size - 5, 10),
-            (size - 5, size // 2),
-            (center, size - 5),
-            (5, size // 2),
-            (5, 10)
+            (x + size // 2, y + 5),
+            (x + size - 5, y + 10),
+            (x + size - 5, y + size // 2),
+            (x + size // 2, y + size - 5),
+            (x + 5, y + size // 2),
+            (x + 5, y + 10)
         ]
-        pygame.draw.polygon(surface, color, points)
-        pygame.draw.polygon(surface, (0, 0, 0), points, 2)
+        pygame.draw.polygon(screen, color, points)
+        pygame.draw.polygon(screen, (0, 0, 0), points, 2)
 
-    def _draw_missile_icon(self, surface, size, enabled=True):
+    def _draw_missile_icon(self, screen, card_rect, icon_y, enabled=True):
         """Draw a missile/airstrike icon."""
         color = (200, 50, 50) if enabled else (80, 80, 80)
-        center = size // 2
+        cx = card_rect.centerx
+        cy = icon_y
         
-        pygame.draw.rect(surface, color, (center - 3, 8, 6, 15))
+        pygame.draw.rect(screen, color, (cx - 3, cy - 10, 6, 15))
         
-        pygame.draw.polygon(surface, color, [
-            (center - 3, 8),
-            (center, 3),
-            (center + 3, 8)
+        pygame.draw.polygon(screen, color, [
+            (cx - 3, cy - 10),
+            (cx, cy - 15),
+            (cx + 3, cy - 10)
         ])
         
-        pygame.draw.polygon(surface, color, [
-            (center - 6, 20),
-            (center - 3, 23),
-            (center - 3, 18)
+        pygame.draw.polygon(screen, color, [
+            (cx - 6, cy + 2),
+            (cx - 3, cy + 5),
+            (cx - 3, cy)
         ])
-        pygame.draw.polygon(surface, color, [
-            (center + 6, 20),
-            (center + 3, 23),
-            (center + 3, 18)
+        pygame.draw.polygon(screen, color, [
+            (cx + 6, cy + 2),
+            (cx + 3, cy + 5),
+            (cx + 3, cy)
         ])
 
-    def _draw_parachute_icon(self, surface, size, enabled=True):
+    def _draw_parachute_icon(self, screen, card_rect, icon_y, enabled=True):
         """Draw a parachute icon."""
         color = (100, 150, 200) if enabled else (80, 80, 80)
-        center = size // 2
+        cx = card_rect.centerx
+        cy = icon_y
         
-        pygame.draw.arc(surface, color, (5, 5, size - 10, size // 2), 0, 3.14, 3)
+        pygame.draw.arc(screen, color, (cx - 15, cy - 15, 30, 15), 0, 3.14, 3)
         
-        for x in [8, center, size - 8]:
-            pygame.draw.line(surface, color, (x, 5 + size // 4), 
-                           (center, size - 8), 1)
+        for x in [cx - 10, cx, cx + 10]:
+            pygame.draw.line(screen, color, (x, cy - 8), 
+                           (cx, cy + 8), 1)
         
-        pygame.draw.circle(surface, color, (center, size - 8), 3)
+        pygame.draw.circle(screen, color, (cx, cy + 8), 3)
 
-    def _draw_helicopter_icon(self, card_rect, enabled=True):
-        """Draw a helicopter icon directly on screen."""
+    def _draw_helicopter_icon(self, screen, card_rect, icon_y, enabled=True):
+        """Draw a helicopter icon."""
         color = (100, 100, 150) if enabled else (80, 80, 80)
+        cx = card_rect.centerx
+        cy = icon_y
         
-        heli_x = card_rect.centerx
-        heli_y = card_rect.y + 20
+        # Rotor
+        pygame.draw.line(screen, color, (cx - 20, cy - 10), (cx + 20, cy - 10), 2)
         
-        body_rect = pygame.Rect(heli_x - 15, heli_y, 30, 15)
-        pygame.draw.ellipse(self.screen, color, body_rect)
+        # Body
+        body_rect = pygame.Rect(cx - 15, cy - 5, 30, 15)
+        pygame.draw.ellipse(screen, color, body_rect)
         
-        pygame.draw.rect(self.screen, color, (heli_x + 10, heli_y + 5, 20, 5))
-        pygame.draw.polygon(self.screen, color, [
-            (heli_x + 25, heli_y),
-            (heli_x + 30, heli_y + 5),
-            (heli_x + 30, heli_y + 10)
-        ])
-        
-        pygame.draw.line(self.screen, color, (heli_x - 20, heli_y - 3), 
-                        (heli_x + 20, heli_y - 3), 2)
-        
-        pygame.draw.circle(self.screen, color, (heli_x + 30, heli_y + 5), 4, 1)
+        # Tail
+        pygame.draw.rect(screen, color, (cx + 10, cy, 15, 5))

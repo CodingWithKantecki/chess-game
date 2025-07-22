@@ -12,6 +12,8 @@ class StoryMode:
         self.current_chapter = 0
         self.current_battle = 0
         self.save_file = "story_progress.json"
+        self.completed_battles = []
+        self.unlocked_chapters = [True, False, False, False, False]
         
         # Story chapters with battles
         self.chapters = [
@@ -408,14 +410,10 @@ class StoryMode:
             
         # Starting powerups
         if "enemy_starting_powerup" in rules:
-            # Give AI a free powerup to use
+            # Give AI enough points to use the powerup
             powerup = rules["enemy_starting_powerup"]
             if powerup in powerup_system.powerups:
-                powerup_system.pending_streak_rewards["black"].append({
-                    "powerup": powerup,
-                    "streak": 0,
-                    "name": "Starting bonus"
-                })
+                powerup_system.points["black"] += powerup_system.powerups[powerup]["cost"]
                 
         # Both start with powerups
         if rules.get("both_start_with_powerups"):
