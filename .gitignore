@@ -8,3 +8,4 @@ __pycache__/
 env/
 venv/
 chess_progress.json
+story_progress.json
