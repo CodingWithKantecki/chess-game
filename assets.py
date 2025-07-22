@@ -260,6 +260,15 @@ class AssetManager:
                 print(f"✗ Error loading helicopter blade sound: {str(e)}")
         else:
             print(f"✗ helicopta.wav not found at {helicopter_blade_path}")
+            
+        # Load click sound for menu buttons
+        click_path = os.path.join(ASSETS_DIR, "click.mp3")
+        if os.path.exists(click_path):
+            try:
+                self.sounds['click'] = pygame.mixer.Sound(click_path)
+                print("✓ Loaded click sound")
+            except Exception as e:
+                print(f"✗ Error loading click sound: {str(e)}")
                 
     def load_explosion_frames(self):
         """Load explosion animation frames."""

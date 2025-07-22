@@ -585,27 +585,44 @@ class ChessGame:
             self.assets.sounds['helicopter'].set_volume(self.sfx_volume * 0.5)  # Helicopter at 50% of SFX volume
         if 'helicopter_blade' in self.assets.sounds:
             self.assets.sounds['helicopter_blade'].set_volume(self.sfx_volume * 0.8)  # Helicopter blade at 80% of SFX volume
+        if 'click' in self.assets.sounds:
+            self.assets.sounds['click'].set_volume(self.sfx_volume * 0.5)  # Click at 50% of SFX volume
                 
     def handle_click(self, pos):
         """Handle mouse click."""
         # Don't process other clicks during fade
         if self.fade_active:
             return
+        
+        # Helper function to play click sound
+        def play_click_sound():
+            if 'click' in self.assets.sounds:
+                try:
+                    # Apply SFX volume to click sound
+                    self.assets.sounds['click'].set_volume(self.sfx_volume * 0.5)  # 50% of SFX volume
+                    self.assets.sounds['click'].play()
+                except Exception as e:
+                    print(f"Error playing click sound: {e}")
             
         if self.current_screen == config.SCREEN_START:
             if self.play_button.collidepoint(pos):
+                play_click_sound()
                 self.start_fade(config.SCREEN_START, "mode_select")
             elif self.tutorial_button.collidepoint(pos):
+                play_click_sound()
                 self.start_fade(config.SCREEN_START, "tutorial")
             elif self.beta_button.collidepoint(pos):
+                play_click_sound()
                 self.start_fade(config.SCREEN_START, config.SCREEN_BETA)
             elif self.credits_button.collidepoint(pos):
+                play_click_sound()
                 self.start_fade(config.SCREEN_START, config.SCREEN_CREDITS)
                 
         elif self.current_screen == "mode_select":
             # Handle mode selection
             for mode_key, button_rect in self.mode_buttons.items():
                 if button_rect.collidepoint(pos):
+                    play_click_sound()
                     self.current_mode = mode_key
                     
                     if mode_key == "classic":
@@ -617,23 +634,27 @@ class ChessGame:
                         print(f"Mode {mode_key} coming soon!")
                         
             if self.back_button.collidepoint(pos):
+                play_click_sound()
                 self.start_fade("mode_select", config.SCREEN_START)
                 
         elif self.current_screen == "story_select":
             # Handle story chapter selection
             for chapter_index, button_rect in self.story_chapter_buttons.items():
                 if button_rect.collidepoint(pos) and self.story_mode.unlocked_chapters[chapter_index]:
+                    play_click_sound()
                     self.story_mode.current_chapter = chapter_index
                     self.story_mode.current_battle = 0
                     self.start_fade("story_select", "story_chapter")
                     
             if self.story_back_button and self.story_back_button.collidepoint(pos):
+                play_click_sound()
                 self.start_fade("story_select", "mode_select")
                 
         elif self.current_screen == "story_chapter":
             # Handle battle selection within chapter
             for battle_index, button_rect in self.story_battle_buttons.items():
                 if button_rect.collidepoint(pos):
+                    play_click_sound()
                     self.story_mode.current_battle = battle_index
                     battle_data = self.story_mode.get_current_battle()
                     if battle_data:
@@ -643,24 +664,30 @@ class ChessGame:
                         self.start_fade("story_chapter", "story_dialogue")
                         
             if self.story_back_button and self.story_back_button.collidepoint(pos):
+                play_click_sound()
                 self.start_fade("story_chapter", "story_select")
                 
         elif self.current_screen == "story_dialogue":
             # Click to advance dialogue or start battle
             if hasattr(self, 'dialogue_complete') and self.dialogue_complete:
+                play_click_sound()
                 self.start_fade("story_dialogue", config.SCREEN_GAME)
             else:
                 # Advance dialogue
                 if hasattr(self, 'current_dialogue_index'):
+                    play_click_sound()
                     self.current_dialogue_index += 1
                     
         elif self.current_screen == "tutorial":
             # Handle tutorial navigation
             if self.prev_button.collidepoint(pos) and self.tutorial_page > 0:
+                play_click_sound()
                 self.tutorial_page -= 1
             elif self.next_button.collidepoint(pos) and self.tutorial_page < len(self.tutorial_pages) - 1:
+                play_click_sound()
                 self.tutorial_page += 1
             elif self.back_button.collidepoint(pos):
+                play_click_sound()
                 self.tutorial_page = 0  # Reset to first page
                 self.start_fade("tutorial", config.SCREEN_START)
                 
@@ -674,17 +701,21 @@ class ChessGame:
                     if powerup_key not in unlocked:
                         price = self.powerup_system.powerup_prices[powerup_key]
                         if config.spend_money(price):
+                            play_click_sound()
                             config.unlock_powerup(powerup_key)
                             print(f"Purchased {powerup_key}!")
                         else:
+                            # Different sound for insufficient funds could go here
                             print("Not enough money!")
             
             # Click on Tariq to cycle dialogue
             if hasattr(self.renderer, 'tariq_rect') and self.renderer.tariq_rect.collidepoint(pos):
+                play_click_sound()
                 self.tariq_dialogue_index = (self.tariq_dialogue_index + 1) % len(self.tariq_dialogues)
             
             # Back button - restore game state instead of starting new game
             if self.back_button.collidepoint(pos):
+                play_click_sound()
                 if self.stored_game_state:
                     # Restore the game state
                     self.restore_game_state()
@@ -701,6 +732,7 @@ class ChessGame:
             # Check difficulty buttons
             for difficulty, button in self.difficulty_buttons.items():
                 if button.collidepoint(pos) and difficulty in unlocked:
+                    play_click_sound()
                     self.selected_difficulty = difficulty
                     self.ai = ChessAI(difficulty)
                     
@@ -712,19 +744,23 @@ class ChessGame:
                     
             # Back button
             if self.back_button.collidepoint(pos):
+                play_click_sound()
                 self.start_fade(config.SCREEN_DIFFICULTY, "mode_select")
                 
         elif self.current_screen == config.SCREEN_CREDITS:
             if self.back_button.collidepoint(pos):
+                play_click_sound()
                 self.start_fade(config.SCREEN_CREDITS, config.SCREEN_START)
                 
         elif self.current_screen == config.SCREEN_BETA:
             if self.back_button.collidepoint(pos):
+                play_click_sound()
                 self.start_fade(config.SCREEN_BETA, config.SCREEN_START)
                 
         elif self.current_screen == config.SCREEN_GAME:
             # Check Arms Dealer button
             if self.arms_dealer_game_button and self.arms_dealer_game_button.collidepoint(pos):
+                play_click_sound()
                 # Store current game state before going to shop
                 self.store_game_state()
                 self.start_fade(config.SCREEN_GAME, config.SCREEN_ARMS_DEALER)
@@ -735,6 +771,7 @@ class ChessGame:
                 for powerup_key, button_rect in self.powerup_system.button_rects.items():
                     if button_rect.collidepoint(pos):
                         if self.powerup_system.activate_powerup("white", powerup_key):
+                            play_click_sound()
                             return
                             
             # Handle active powerup clicks
@@ -753,12 +790,13 @@ class ChessGame:
             if self.board.promoting:
                 for rect, piece_type in self.promotion_rects:
                     if rect.collidepoint(pos):
+                        play_click_sound()
                         self.board.promote_pawn(piece_type)
                         if 'capture' in self.assets.sounds:
                             self.assets.sounds['capture'].play()
                         return
                         
-            # Normal game clicks
+            # Normal game clicks (piece movement) - no click sound for these
             if not self.board.animating and not self.board.promoting:
                 row, col = self.board.get_square_from_pos(pos)
                 if row >= 0 and col >= 0 and self.board.is_valid_selection(row, col):
