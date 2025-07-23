@@ -48,12 +48,59 @@ class Renderer:
         self.typewriter_speed = 30  # Characters per second
         self.typewriter_added_texts = set()  # Track which texts have been added
         
+        # Performance optimization: Cache frequently used surfaces
+        self._cached_overlays = {}
+        self._cached_text_surfaces = {}
+        self._text_cache_max_size = 100
+        
+        # Particle surface pool for performance
+        self._particle_surface_pool = []
+        self._max_pool_size = 50
+        
     def update_scale(self, scale):
         """Update scale factor for fullscreen mode."""
         self.scale = scale
         self.pixel_fonts = self.load_pixel_fonts()
-        self.board_surface_cache = None
-        self.board_cache_scale = None
+        # Clear caches when scale changes
+        self._cached_overlays.clear()
+        self._cached_text_surfaces.clear()
+        
+    def _get_cached_overlay(self, width, height, color, alpha):
+        """Get a cached overlay surface to avoid recreating it every frame."""
+        cache_key = (width, height, color, alpha)
+        if cache_key not in self._cached_overlays:
+            overlay = pygame.Surface((width, height), pygame.SRCALPHA)
+            overlay.fill((*color, alpha))
+            self._cached_overlays[cache_key] = overlay
+        return self._cached_overlays[cache_key]
+        
+    def _get_cached_text(self, text, font_key, color):
+        """Get a cached text surface to avoid re-rendering every frame."""
+        cache_key = (text, font_key, color)
+        if cache_key not in self._cached_text_surfaces:
+            if len(self._cached_text_surfaces) > self._text_cache_max_size:
+                # Remove oldest cached text to prevent memory issues
+                self._cached_text_surfaces.pop(next(iter(self._cached_text_surfaces)))
+            font = self.pixel_fonts.get(font_key, self.pixel_fonts['medium'])
+            self._cached_text_surfaces[cache_key] = font.render(text, True, color)
+        return self._cached_text_surfaces[cache_key]
+        
+    def _get_particle_surface(self, size):
+        """Get a particle surface from the pool or create a new one."""
+        # Try to find a surface of the right size in the pool
+        for i, (surf_size, surf) in enumerate(self._particle_surface_pool):
+            if surf_size == size:
+                # Remove from pool and return it
+                return self._particle_surface_pool.pop(i)[1]
+        
+        # Create new surface if none available
+        return pygame.Surface((size * 2, size * 2), pygame.SRCALPHA)
+    
+    def _return_particle_surface(self, size, surface):
+        """Return a particle surface to the pool for reuse."""
+        if len(self._particle_surface_pool) < self._max_pool_size:
+            surface.fill((0, 0, 0, 0))  # Clear the surface
+            self._particle_surface_pool.append((size, surface))
         
     def load_pixel_fonts(self):
         """Load pixel-style fonts with fallbacks."""
@@ -131,8 +178,7 @@ class Renderer:
         """Draw all active typewriter texts."""
         for text_data in self.typewriter_texts:
             if text_data['current_text']:
-                font = self.pixel_fonts[text_data['font_key']]
-                text_surface = font.render(text_data['current_text'], True, text_data['color'])
+                text_surface = self._get_cached_text(text_data['current_text'], text_data['font_key'], text_data['color'])
                 
                 if text_data['center']:
                     text_rect = text_surface.get_rect(center=text_data['position'])
@@ -182,9 +228,8 @@ class Renderer:
         """Draw game mode selection screen."""
         self.draw_parallax_background(1.0)
         
-        # Overlay
-        overlay = pygame.Surface((config.WIDTH, config.HEIGHT), pygame.SRCALPHA)
-        overlay.fill((0, 0, 0, 120))
+        # Overlay - use cached version
+        overlay = self._get_cached_overlay(config.WIDTH, config.HEIGHT, (0, 0, 0), 120)
         self.screen.blit(overlay, (0, 0))
         
         # Title with typewriter effect
@@ -307,8 +352,7 @@ class Renderer:
         self.draw_parallax_background(0.8)
         
         # Overlay
-        overlay = pygame.Surface((config.WIDTH, config.HEIGHT), pygame.SRCALPHA)
-        overlay.fill((0, 0, 0, 100))
+        overlay = self._get_cached_overlay(config.WIDTH, config.HEIGHT, (0, 0, 0), 100)
         self.screen.blit(overlay, (0, 0))
         
         # Title
@@ -405,8 +449,7 @@ class Renderer:
         self.draw_parallax_background(0.8)
         
         # Overlay
-        overlay = pygame.Surface((config.WIDTH, config.HEIGHT), pygame.SRCALPHA)
-        overlay.fill((0, 0, 0, 100))
+        overlay = self._get_cached_overlay(config.WIDTH, config.HEIGHT, (0, 0, 0), 100)
         self.screen.blit(overlay, (0, 0))
         
         # Chapter title
@@ -550,8 +593,7 @@ class Renderer:
         self.draw_parallax_background(0.6)
         
         # Dark overlay
-        overlay = pygame.Surface((config.WIDTH, config.HEIGHT), pygame.SRCALPHA)
-        overlay.fill((0, 0, 0, 180))
+        overlay = self._get_cached_overlay(config.WIDTH, config.HEIGHT, (0, 0, 0), 180)
         self.screen.blit(overlay, (0, 0))
         
         # Character portrait
@@ -681,13 +723,13 @@ class Renderer:
         """Draw UI elements specific to story battles."""
         # Battle name in top left
         battle_text = f"BATTLE: {battle_data['opponent']}"
-        battle_surface = self.pixel_fonts['medium'].render(battle_text, True, (255, 215, 0))
+        battle_surface = self._get_cached_text(battle_text, 'medium', (255, 215, 0))
         self.screen.blit(battle_surface, (20, 20))
         
         # Special rules indicator
         if battle_data.get("special_rules"):
             rules_text = "SPECIAL RULES ACTIVE"
-            rules_surface = self.pixel_fonts['small'].render(rules_text, True, (255, 100, 100))
+            rules_surface = self._get_cached_text(rules_text, 'small', (255, 100, 100))
             self.screen.blit(rules_surface, (20, 50))
             
     def _wrap_text(self, text, font, max_width):
@@ -951,13 +993,14 @@ class Renderer:
                         alpha = int(smoke['life'] * smoke['opacity'] * 120)
                         size = int(smoke['size'] * self.scale)
                         
-                        smoke_surf = pygame.Surface((size * 2, size * 2), pygame.SRCALPHA)
+                        smoke_surf = self._get_particle_surface(size)
                         for i in range(2):
                             offset_x = random.randint(-3, 3)
                             offset_y = random.randint(-3, 3)
                             pygame.draw.circle(smoke_surf, (*smoke_color, alpha // 2), 
                                              (size + offset_x, size + offset_y), size)
                         fire_surface.blit(smoke_surf, (screen_x - size, screen_y - size))
+                        self._return_particle_surface(size, smoke_surf)
         
         for smoke in smoke_to_remove:
             if smoke in self.smoke_particles:
@@ -1661,8 +1704,7 @@ class Renderer:
         """Draw difficulty selection menu."""
         self.draw_parallax_background(1.0)
         
-        overlay = pygame.Surface((config.WIDTH, config.HEIGHT), pygame.SRCALPHA)
-        overlay.fill((0, 0, 0, 100))
+        overlay = self._get_cached_overlay(config.WIDTH, config.HEIGHT, (0, 0, 0), 100)
         self.screen.blit(overlay, (0, 0))
         
         if config.SCALE != 1.0:
@@ -1736,8 +1778,8 @@ class Renderer:
         else:
             self.draw_parallax_background(1.2)
         
-        overlay = pygame.Surface((config.WIDTH, config.HEIGHT), pygame.SRCALPHA)
-        overlay.fill((0, 0, 0, 80 if screen_type == config.SCREEN_START else 120))
+        overlay_alpha = 80 if screen_type == config.SCREEN_START else 120
+        overlay = self._get_cached_overlay(config.WIDTH, config.HEIGHT, (0, 0, 0), overlay_alpha)
         self.screen.blit(overlay, (0, 0))
         
         if config.SCALE != 1.0:
@@ -1971,8 +2013,7 @@ class Renderer:
         current_index = tutorial_page_data['current_index']
         total_pages = tutorial_page_data['total_pages']
         
-        overlay = pygame.Surface((config.WIDTH, config.HEIGHT), pygame.SRCALPHA)
-        overlay.fill((0, 0, 0, 120))
+        overlay = self._get_cached_overlay(config.WIDTH, config.HEIGHT, (0, 0, 0), 120)
         self.screen.blit(overlay, (0, 0))
         
         if config.SCALE != 1.0:

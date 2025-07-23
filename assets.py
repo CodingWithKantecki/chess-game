@@ -121,7 +121,7 @@ class AssetManager:
             filepath = os.path.join(ASSETS_DIR, texture)
             if os.path.exists(filepath):
                 try:
-                    self.board_texture_original = pygame.image.load(filepath)
+                    self.board_texture_original = pygame.image.load(filepath).convert_alpha()
                     self.board_texture = pygame.transform.scale(
                         self.board_texture_original, (BOARD_SIZE, BOARD_SIZE))
                     print(f"✓ Loaded board texture")

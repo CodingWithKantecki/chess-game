@@ -22,7 +22,7 @@ class ChessGame:
         self.screen_info = pygame.display.Info()
         
         # Create screen (windowed mode only)
-        self.screen = pygame.display.set_mode((config.WIDTH, config.HEIGHT))
+        self.screen = pygame.display.set_mode((config.WIDTH, config.HEIGHT), pygame.DOUBLEBUF)
         pygame.display.set_caption("Checkmate Protocol - BETA")
         self.clock = pygame.time.Clock()
         
@@ -38,6 +38,13 @@ class ChessGame:
         # Intro screen
         self.intro_screen = IntroScreen(self.screen, self.renderer)
         self.intro_complete = False
+        
+        # Cache fade surface for performance
+        self._fade_surface = pygame.Surface((config.WIDTH, config.HEIGHT))
+        self._fade_surface.fill(config.BLACK)
+        
+        # Cache game surface for screen shake
+        self._shake_surface = pygame.Surface((config.WIDTH, config.HEIGHT))
         
         # Create powerup system
         self.powerup_system = PowerupSystem()
@@ -480,8 +487,10 @@ class ChessGame:
         if action["type"] == "shield":
             # AI shields a piece
             row, col = action["target"]
+            # Create lightning strike animation first
+            self.powerup_system._create_lightning_effect(row, col, self.board)
             self.powerup_system.shielded_pieces[(row, col)] = 3
-            self.powerup_system._create_shield_effect(row, col, self.board)
+            self.powerup_system._create_shield_effect(row, col, self.board, delay=500)
             
         elif action["type"] == "gun":
             # AI shoots a piece
@@ -1421,13 +1430,12 @@ class ChessGame:
         if self.current_screen == config.SCREEN_GAME and not self.fade_active:
             shake_x, shake_y = self.powerup_system.get_screen_shake_offset()
         
-        # Create a temporary surface for the game content
+        # Use cached surface for screen shake
         if shake_x != 0 or shake_y != 0:
-            game_surface = pygame.Surface((config.WIDTH, config.HEIGHT))
             original_screen = self.screen
-            self.screen = game_surface
-            self.renderer.screen = game_surface
-            self.powerup_renderer.screen = game_surface
+            self.screen = self._shake_surface
+            self.renderer.screen = self._shake_surface
+            self.powerup_renderer.screen = self._shake_surface
         
         # Handle fade transitions
         if self.fade_active:
@@ -1438,18 +1446,14 @@ class ChessGame:
                 # Fade out
                 self.draw_screen(self.fade_from)
                 alpha = int(255 * (progress * 2))
-                fade_surface = pygame.Surface((config.WIDTH, config.HEIGHT))
-                fade_surface.fill(config.BLACK)
-                fade_surface.set_alpha(alpha)
-                self.screen.blit(fade_surface, (0, 0))
+                self._fade_surface.set_alpha(alpha)
+                self.screen.blit(self._fade_surface, (0, 0))
             else:
                 # Fade in
                 self.draw_screen(self.fade_to)
                 alpha = int(255 * (2 - progress * 2))
-                fade_surface = pygame.Surface((config.WIDTH, config.HEIGHT))
-                fade_surface.fill(config.BLACK)
-                fade_surface.set_alpha(alpha)
-                self.screen.blit(fade_surface, (0, 0))
+                self._fade_surface.set_alpha(alpha)
+                self.screen.blit(self._fade_surface, (0, 0))
         else:
             # Normal drawing (no fade)
             self.draw_screen(self.current_screen)
@@ -1470,7 +1474,7 @@ class ChessGame:
             self.screen.fill(config.BLACK)
             
             # Blit the game surface with shake offset
-            self.screen.blit(game_surface, (shake_x, shake_y))
+            self.screen.blit(self._shake_surface, (shake_x, shake_y))
             
         pygame.display.flip()
             

@@ -7,6 +7,7 @@ import random
 import pygame
 import time
 import math
+import numpy as np
 from config import *
 
 class ChessAI:
@@ -57,7 +58,8 @@ class ChessAI:
         }
         
         # Position tables for better evaluation (from white's perspective)
-        self.pawn_table = [
+        # Using NumPy arrays for faster access and operations
+        self.pawn_table = np.array([
             [0,  0,  0,  0,  0,  0,  0,  0],
             [50, 50, 50, 50, 50, 50, 50, 50],
             [10, 10, 20, 30, 30, 20, 10, 10],
@@ -66,9 +68,9 @@ class ChessAI:
             [5, -5,-10,  0,  0,-10, -5,  5],
             [5, 10, 10,-20,-20, 10, 10,  5],
             [0,  0,  0,  0,  0,  0,  0,  0]
-        ]
+        ], dtype=np.int16)
         
-        self.knight_table = [
+        self.knight_table = np.array([
             [-50,-40,-30,-30,-30,-30,-40,-50],
             [-40,-20,  0,  0,  0,  0,-20,-40],
             [-30,  0, 10, 15, 15, 10,  0,-30],
@@ -77,9 +79,9 @@ class ChessAI:
             [-30,  5, 10, 15, 15, 10,  5,-30],
             [-40,-20,  0,  5,  5,  0,-20,-40],
             [-50,-40,-30,-30,-30,-30,-40,-50]
-        ]
+        ], dtype=np.int16)
         
-        self.bishop_table = [
+        self.bishop_table = np.array([
             [-20,-10,-10,-10,-10,-10,-10,-20],
             [-10,  0,  0,  0,  0,  0,  0,-10],
             [-10,  0,  5, 10, 10,  5,  0,-10],
@@ -88,9 +90,9 @@ class ChessAI:
             [-10, 10, 10, 10, 10, 10, 10,-10],
             [-10,  5,  0,  0,  0,  0,  5,-10],
             [-20,-10,-10,-10,-10,-10,-10,-20]
-        ]
+        ], dtype=np.int16)
         
-        self.rook_table = [
+        self.rook_table = np.array([
             [0,  0,  0,  0,  0,  0,  0,  0],
             [5, 10, 10, 10, 10, 10, 10,  5],
             [-5,  0,  0,  0,  0,  0,  0, -5],
@@ -99,9 +101,9 @@ class ChessAI:
             [-5,  0,  0,  0,  0,  0,  0, -5],
             [-5,  0,  0,  0,  0,  0,  0, -5],
             [0,  0,  0,  5,  5,  0,  0,  0]
-        ]
+        ], dtype=np.int16)
         
-        self.queen_table = [
+        self.queen_table = np.array([
             [-20,-10,-10, -5, -5,-10,-10,-20],
             [-10,  0,  0,  0,  0,  0,  0,-10],
             [-10,  0,  5,  5,  5,  5,  0,-10],
@@ -110,9 +112,9 @@ class ChessAI:
             [-10,  5,  5,  5,  5,  5,  0,-10],
             [-10,  0,  5,  0,  0,  0,  0,-10],
             [-20,-10,-10, -5, -5,-10,-10,-20]
-        ]
+        ], dtype=np.int16)
         
-        self.king_table = [
+        self.king_table = np.array([
             [-30,-40,-40,-50,-50,-40,-40,-30],
             [-30,-40,-40,-50,-50,-40,-40,-30],
             [-30,-40,-40,-50,-50,-40,-40,-30],
@@ -121,10 +123,10 @@ class ChessAI:
             [-10,-20,-20,-20,-20,-20,-20,-10],
             [20, 20,  0,  0,  0,  0, 20, 20],
             [20, 30, 10,  0,  0, 10, 30, 20]
-        ]
+        ], dtype=np.int16)
         
         # Endgame king table (more active)
-        self.king_endgame_table = [
+        self.king_endgame_table = np.array([
             [-50,-40,-30,-20,-20,-30,-40,-50],
             [-30,-20,-10,  0,  0,-10,-20,-30],
             [-30,-10, 20, 30, 30, 20,-10,-30],
@@ -133,7 +135,7 @@ class ChessAI:
             [-30,-10, 20, 30, 30, 20,-10,-30],
             [-30,-30,  0,  0,  0,  0,-30,-30],
             [-50,-30,-30,-30,-30,-30,-30,-50]
-        ]
+        ], dtype=np.int16)
         
     def _calculate_powerup_weights(self):
         """Calculate strategic weights for powerup selection based on ELO."""

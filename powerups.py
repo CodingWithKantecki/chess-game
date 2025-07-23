@@ -210,11 +210,14 @@ class PowerupSystem:
             # Spend points
             self.points[player] -= self.powerups["shield"]["cost"]
             
-            # Apply shield
+            # Create lightning strike animation first
+            self._create_lightning_effect(row, col, board)
+            
+            # Apply shield after a delay (when lightning animation finishes)
             self.shielded_pieces[(row, col)] = 3
             
-            # Create shield effect
-            self._create_shield_effect(row, col, board)
+            # Create shield effect after lightning
+            self._create_shield_effect(row, col, board, delay=500)
             
             # Clear powerup state
             self.active_powerup = None
@@ -504,7 +507,7 @@ class PowerupSystem:
             "col": col
         })
             
-    def _create_shield_effect(self, row, col, board):
+    def _create_shield_effect(self, row, col, board, delay=0):
         """Create visual effect for shield."""
         current_time = pygame.time.get_ticks()
         x, y = board.get_square_pos(row, col)
@@ -513,8 +516,23 @@ class PowerupSystem:
             "type": "shield",
             "x": x,
             "y": y,
-            "start_time": current_time,
+            "start_time": current_time + delay,
             "duration": 1000,
+            "row": row,
+            "col": col
+        })
+        
+    def _create_lightning_effect(self, row, col, board):
+        """Create lightning strike effect before shield."""
+        current_time = pygame.time.get_ticks()
+        x, y = board.get_square_pos(row, col)
+        
+        self.animations.append({
+            "type": "lightning",
+            "x": x,
+            "y": y,
+            "start_time": current_time,
+            "duration": 500,
             "row": row,
             "col": col
         })

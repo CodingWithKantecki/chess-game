@@ -13,6 +13,21 @@ class PowerupRenderer:
         self.renderer = renderer  # Reference to main renderer for fonts
         self.powerup_system = powerup_system
         self.explosion_frames_scaled = {}  # Cache for scaled explosion frames
+        # Performance: Cache progress to avoid file I/O every frame
+        self._cached_progress = None
+        self._progress_cache_time = 0
+        self._progress_cache_duration = 1000  # Refresh cache every second
+        # Cache scaled revolver image
+        self._scaled_revolver_cache = {}
+        
+    def _get_cached_progress(self):
+        """Get cached progress data to avoid file I/O every frame."""
+        current_time = pygame.time.get_ticks()
+        if (self._cached_progress is None or 
+            current_time - self._progress_cache_time > self._progress_cache_duration):
+            self._cached_progress = load_progress()
+            self._progress_cache_time = current_time
+        return self._cached_progress
         
     def draw_powerup_menu(self, board, mouse_pos):
         """Draw the powerup menu on the right side of the screen."""
@@ -66,8 +81,8 @@ class PowerupRenderer:
         turn_rect = turn_surface.get_rect(centerx=menu_x + menu_width // 2, y=menu_y + 85)
         self.screen.blit(turn_surface, turn_rect)
         
-        # Get unlocked powerups
-        progress = load_progress()
+        # Get unlocked powerups - use cached version
+        progress = self._get_cached_progress()
         unlocked_powerups = progress.get("unlocked_powerups", ["shield"])
         
         # Filter powerups to only show unlocked ones
@@ -141,7 +156,11 @@ class PowerupRenderer:
             if key == "gun" and hasattr(self.renderer, 'assets') and hasattr(self.renderer.assets, 'revolver_image') and self.renderer.assets.revolver_image:
                 # Use the actual revolver image for gun powerup
                 icon_size = 25
-                scaled_revolver = pygame.transform.scale(self.renderer.assets.revolver_image, (icon_size, icon_size))
+                # Cache scaled revolver to avoid scaling every frame
+                cache_key = (icon_size, icon_size)
+                if cache_key not in self._scaled_revolver_cache:
+                    self._scaled_revolver_cache[cache_key] = pygame.transform.scale(self.renderer.assets.revolver_image, cache_key)
+                scaled_revolver = self._scaled_revolver_cache[cache_key]
                 
                 # Apply grayscale effect if can't afford
                 if not can_afford:
@@ -481,7 +500,11 @@ class PowerupRenderer:
             if hasattr(self.renderer, 'assets') and hasattr(self.renderer.assets, 'revolver_image') and self.renderer.assets.revolver_image:
                 # Scale the revolver
                 revolver_size = int(SQUARE_SIZE * 0.4)
-                scaled_revolver = pygame.transform.scale(self.renderer.assets.revolver_image, (revolver_size, revolver_size))
+                # Cache scaled revolver to avoid scaling every frame
+                cache_key = (revolver_size, revolver_size)
+                if cache_key not in self._scaled_revolver_cache:
+                    self._scaled_revolver_cache[cache_key] = pygame.transform.scale(self.renderer.assets.revolver_image, cache_key)
+                scaled_revolver = self._scaled_revolver_cache[cache_key]
                 
                 # Position it at the top-right of the piece
                 revolver_x = shooter_x + SQUARE_SIZE - revolver_size - 5
@@ -646,6 +669,8 @@ class PowerupRenderer:
                 self._draw_airstrike_animation(anim, progress, board)
             elif anim["type"] == "shield":
                 self._draw_shield_animation(anim, progress)
+            elif anim["type"] == "lightning":
+                self._draw_lightning_animation(anim, progress)
             elif anim["type"] == "gunshot":
                 self._draw_gunshot_animation(anim, progress)
             elif anim["type"] == "paratrooper":
@@ -834,6 +859,77 @@ class PowerupRenderer:
         shield_surface.set_alpha(alpha)
         self.screen.blit(shield_surface, (x, y))
         
+    def _draw_lightning_animation(self, anim, progress):
+        """Draw lightning strike effect before shield."""
+        x, y = anim["x"], anim["y"]
+        center_x = x + SQUARE_SIZE // 2
+        center_y = y + SQUARE_SIZE // 2
+        
+        # Lightning comes from above
+        start_y = y - SQUARE_SIZE * 2
+        
+        # Create multiple lightning bolts for dramatic effect
+        if progress < 0.7:  # Lightning strikes phase
+            # Main lightning bolt
+            segments = 8
+            bolt_x = center_x
+            bolt_y = start_y
+            
+            # Generate jagged lightning path
+            import random
+            random.seed(int(anim["start_time"]))  # Consistent randomness for this bolt
+            
+            points = [(center_x, start_y)]
+            for i in range(segments):
+                progress_segment = (i + 1) / segments
+                next_y = start_y + (center_y - start_y) * progress_segment
+                # Zigzag left and right
+                offset = random.randint(-20, 20)
+                next_x = center_x + offset
+                points.append((next_x, next_y))
+            
+            # Draw the lightning bolt with glow effect
+            for width, color, alpha_mult in [(8, (255, 255, 255), 0.3), 
+                                            (5, (200, 200, 255), 0.5), 
+                                            (2, (255, 255, 255), 1.0)]:
+                if len(points) > 1:
+                    # Create surface for this lightning layer
+                    bolt_surface = pygame.Surface((self.screen.get_width(), self.screen.get_height()), pygame.SRCALPHA)
+                    bolt_surface.fill((0, 0, 0, 0))
+                    
+                    # Draw connected segments
+                    visible_points = points[:int(len(points) * (progress / 0.7))]
+                    if len(visible_points) > 1:
+                        for i in range(len(visible_points) - 1):
+                            pygame.draw.line(bolt_surface, color, visible_points[i], visible_points[i + 1], width)
+                    
+                    # Apply alpha
+                    alpha = int(255 * alpha_mult * (1 - progress / 0.7))
+                    bolt_surface.set_alpha(alpha)
+                    self.screen.blit(bolt_surface, (0, 0))
+            
+            # Add smaller branch bolts
+            if progress > 0.2 and len(visible_points) > 2:
+                for _ in range(2):
+                    max_idx = len(visible_points) - 1
+                    if max_idx > 2:
+                        branch_start_idx = random.randint(2, min(5, max_idx))
+                        if branch_start_idx < len(visible_points):
+                            branch_start = visible_points[branch_start_idx]
+                            branch_end_x = branch_start[0] + random.randint(-30, 30)
+                            branch_end_y = branch_start[1] + random.randint(20, 40)
+                            pygame.draw.line(self.screen, (200, 200, 255), branch_start, (branch_end_x, branch_end_y), 2)
+        
+        # Flash effect at impact point
+        if 0.5 < progress < 0.9:
+            flash_alpha = int(255 * (1 - (progress - 0.5) / 0.4))
+            flash_radius = int(SQUARE_SIZE * 0.8)
+            flash_surface = pygame.Surface((flash_radius * 2, flash_radius * 2), pygame.SRCALPHA)
+            flash_surface.fill((0, 0, 0, 0))
+            pygame.draw.circle(flash_surface, (255, 255, 255), (flash_radius, flash_radius), flash_radius)
+            flash_surface.set_alpha(flash_alpha)
+            self.screen.blit(flash_surface, (center_x - flash_radius, center_y - flash_radius))
+        
     def _draw_gunshot_animation(self, anim, progress):
         """Draw bullet/laser effect with revolver."""
         # Draw the revolver at the start position for the first part of the animation
@@ -841,7 +937,11 @@ class PowerupRenderer:
             # Calculate revolver position (it should appear to recoil)
             recoil = int(10 * progress * 3)  # Quick recoil effect
             revolver_size = int(SQUARE_SIZE * 0.4)
-            scaled_revolver = pygame.transform.scale(self.renderer.assets.revolver_image, (revolver_size, revolver_size))
+            # Cache scaled revolver to avoid scaling every frame
+            cache_key = (revolver_size, revolver_size)
+            if cache_key not in self._scaled_revolver_cache:
+                self._scaled_revolver_cache[cache_key] = pygame.transform.scale(self.renderer.assets.revolver_image, cache_key)
+            scaled_revolver = self._scaled_revolver_cache[cache_key]
             
             # Position based on the starting position
             revolver_x = anim["start_x"] - revolver_size // 2 - recoil
