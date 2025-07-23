@@ -47,7 +47,7 @@ class StoryMode:
                             "TRAINING BOT: RECOMMEND ADDITIONAL PRACTICE."
                         ],
                         "special_rules": {
-                            "player_starting_points": 5,
+                            "player_starting_points": 0,
                             "tutorial_hints": True
                         },
                         "reward_money": 100,
@@ -295,30 +295,14 @@ class StoryMode:
         self.load_progress()
         
     def load_progress(self):
-        """Load story mode progress from save file."""
-        if os.path.exists(self.save_file):
-            try:
-                with open(self.save_file, 'r') as f:
-                    data = json.load(f)
-                    self.current_chapter = data.get("current_chapter", 0)
-                    self.current_battle = data.get("current_battle", 0)
-                    self.completed_battles = data.get("completed_battles", [])
-                    self.unlocked_chapters = data.get("unlocked_chapters", [True, False, False, False, False])
-            except:
-                self.reset_progress()
-        else:
-            self.reset_progress()
+        """Load story mode progress - DISABLED, always start fresh."""
+        # Always reset to beginning (no file saving/loading)
+        self.reset_progress()
             
     def save_progress(self):
-        """Save story mode progress."""
-        data = {
-            "current_chapter": self.current_chapter,
-            "current_battle": self.current_battle,
-            "completed_battles": self.completed_battles,
-            "unlocked_chapters": self.unlocked_chapters
-        }
-        with open(self.save_file, 'w') as f:
-            json.dump(data, f)
+        """Save story mode progress - DISABLED."""
+        # Progress saving disabled - no file operations
+        pass
             
     def reset_progress(self):
         """Reset story progress to beginning."""
@@ -326,7 +310,7 @@ class StoryMode:
         self.current_battle = 0
         self.completed_battles = []
         self.unlocked_chapters = [True, False, False, False, False]
-        self.save_progress()
+        # No save call - saving disabled
         
     def get_current_chapter(self):
         """Get current chapter data."""
@@ -361,7 +345,7 @@ class StoryMode:
                 self.current_chapter += 1
                 self.current_battle = 0
                 
-        self.save_progress()
+        # Save disabled - no save call
         
     def get_chapter_progress(self, chapter_index):
         """Get completion percentage for a chapter."""
@@ -381,6 +365,26 @@ class StoryMode:
     def is_battle_completed(self, battle_id):
         """Check if a battle has been completed."""
         return battle_id in self.completed_battles
+    
+    def is_battle_unlocked(self, chapter_index, battle_index):
+        """Check if a battle is unlocked based on sequential completion."""
+        # First battle of first chapter is always unlocked
+        if chapter_index == 0 and battle_index == 0:
+            return True
+            
+        # For other battles, check if the previous battle in the chapter is completed
+        if battle_index > 0:
+            # Check previous battle in same chapter
+            previous_battle = self.chapters[chapter_index]["battles"][battle_index - 1]
+            return self.is_battle_completed(previous_battle["id"])
+        else:
+            # First battle of a chapter - check if last battle of previous chapter is completed
+            if chapter_index > 0:
+                previous_chapter = self.chapters[chapter_index - 1]
+                last_battle = previous_chapter["battles"][-1]
+                return self.is_battle_completed(last_battle["id"])
+        
+        return False
         
     def get_total_progress(self):
         """Get overall story completion percentage."""

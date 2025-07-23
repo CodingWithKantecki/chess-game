@@ -6,4 +6,5 @@ A 2D chess game built with Pygame. Includes piece dragging, AI, powerups, music,
 ```bash
 python main.py
 
-#this is a test
+#my tummy hurt so bad rn
+

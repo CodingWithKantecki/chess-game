@@ -166,73 +166,59 @@ INITIAL_BOARD = [
 ]
 
 # Progress tracking functions
+# Tutorial state - global variable to track tutorial unlocks
+tutorial_unlocked_powerups = []
+
 def load_progress():
-    """Load player progress from save file."""
-    if os.path.exists(SAVE_FILE):
-        try:
-            with open(SAVE_FILE, 'r') as f:
-                data = json.load(f)
-                # Ensure all fields exist
-                if "money" not in data:
-                    data["money"] = 0
-                if "unlocked_powerups" not in data:
-                    data["unlocked_powerups"] = ["shield"]  # Start with shield only
-                if "unlocked_difficulties" not in data:
-                    data["unlocked_difficulties"] = ["easy"]
-                return data
-        except:
-            return {
-                "unlocked_difficulties": ["easy"],
-                "money": 0,
-                "unlocked_powerups": ["shield"]
-            }
+    """Load player progress from save file - DISABLED, returns defaults."""
+    # Always return default progress (no file saving/loading)
+    # Use tutorial state if available
+    global tutorial_unlocked_powerups
     return {
-        "unlocked_difficulties": ["easy"],
-        "money": 0,
-        "unlocked_powerups": ["shield"]
+        "unlocked_difficulties": ["easy", "medium", "hard", "very_hard"],  # All difficulties unlocked
+        "money": 9999,  # Lots of money for testing
+        "unlocked_powerups": tutorial_unlocked_powerups  # Use tutorial state
     }
 
 def save_progress(progress):
-    """Save player progress to file."""
-    with open(SAVE_FILE, 'w') as f:
-        json.dump(progress, f)
+    """Save player progress to file - DISABLED."""
+    # Progress saving disabled to prevent glitches
+    pass
 
 def unlock_next_difficulty(current_difficulty):
-    """Unlock the next difficulty level."""
-    progress = load_progress()
-    
-    # Find the next difficulty
-    current_index = AI_DIFFICULTIES.index(current_difficulty)
-    if current_index < len(AI_DIFFICULTIES) - 1:
-        next_difficulty = AI_DIFFICULTIES[current_index + 1]
-        if next_difficulty not in progress["unlocked_difficulties"]:
-            progress["unlocked_difficulties"].append(next_difficulty)
-            save_progress(progress)
-            return next_difficulty
+    """Unlock the next difficulty level - DISABLED."""
+    # Always return None (no progression saving)
     return None
 
 def add_money(amount):
-    """Add money to player's account."""
-    progress = load_progress()
-    progress["money"] = progress.get("money", 0) + amount
-    save_progress(progress)
-    return progress["money"]
+    """Add money to player's account - DISABLED."""
+    # Always return a large amount (no saving)
+    return 9999
 
 def spend_money(amount):
-    """Spend money if player has enough."""
-    progress = load_progress()
-    current_money = progress.get("money", 0)
-    if current_money >= amount:
-        progress["money"] = current_money - amount
-        save_progress(progress)
-        return True
-    return False
+    """Spend money if player has enough - DISABLED."""
+    # Always return True (unlimited money, no saving)
+    return True
 
 def unlock_powerup(powerup_key):
-    """Unlock a powerup."""
-    progress = load_progress()
-    if powerup_key not in progress.get("unlocked_powerups", []):
-        progress["unlocked_powerups"].append(powerup_key)
-        save_progress(progress)
-        return True
-    return False
+    """Unlock a powerup for tutorial."""
+    global tutorial_unlocked_powerups
+    if powerup_key not in tutorial_unlocked_powerups:
+        tutorial_unlocked_powerups.append(powerup_key)
+        print(f"Unlocked powerup: {powerup_key}")
+        print(f"Currently unlocked: {tutorial_unlocked_powerups}")
+    return True
+
+def unlock_all_powerups_for_tutorial():
+    """Unlock all powerups for tutorial."""
+    global tutorial_unlocked_powerups
+    tutorial_unlocked_powerups = ["shield", "gun", "airstrike", "paratroopers", "chopper"]
+    print(f"Tutorial: ALL POWERUPS UNLOCKED: {tutorial_unlocked_powerups}")
+    return True
+
+def reset_tutorial_powerups():
+    """Reset powerups to empty list for tutorial start."""
+    global tutorial_unlocked_powerups
+    tutorial_unlocked_powerups = []
+    print(f"Tutorial: Reset powerups to: {tutorial_unlocked_powerups}")
+    return True

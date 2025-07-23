@@ -43,6 +43,11 @@ class Renderer:
         self.falling_bombs = []
         self.smoke_particles = []
         
+        # Typewriter effect system
+        self.typewriter_texts = []
+        self.typewriter_speed = 30  # Characters per second
+        self.typewriter_added_texts = set()  # Track which texts have been added
+        
     def update_scale(self, scale):
         """Update scale factor for fullscreen mode."""
         self.scale = scale
@@ -86,6 +91,93 @@ class Renderer:
         
         return fonts
         
+    def add_typewriter_text(self, text, position, font_key='medium', color=config.WHITE, center=False, callback=None):
+        """Add a text to be displayed with typewriter effect."""
+        self.typewriter_texts.append({
+            'full_text': text,
+            'current_text': '',
+            'position': position,
+            'font_key': font_key,
+            'color': color,
+            'center': center,
+            'start_time': pygame.time.get_ticks(),
+            'char_index': 0,
+            'callback': callback,
+            'completed': False
+        })
+        
+    def update_typewriter_texts(self):
+        """Update all active typewriter texts."""
+        current_time = pygame.time.get_ticks()
+        
+        for text_data in self.typewriter_texts[:]:
+            if text_data['completed']:
+                continue
+                
+            # Calculate how many characters should be shown
+            elapsed_time = (current_time - text_data['start_time']) / 1000.0
+            chars_to_show = int(elapsed_time * self.typewriter_speed)
+            
+            if chars_to_show > text_data['char_index']:
+                text_data['char_index'] = min(chars_to_show, len(text_data['full_text']))
+                text_data['current_text'] = text_data['full_text'][:text_data['char_index']]
+                
+                if text_data['char_index'] >= len(text_data['full_text']):
+                    text_data['completed'] = True
+                    if text_data['callback']:
+                        text_data['callback']()
+                        
+    def draw_typewriter_texts(self):
+        """Draw all active typewriter texts."""
+        for text_data in self.typewriter_texts:
+            if text_data['current_text']:
+                font = self.pixel_fonts[text_data['font_key']]
+                text_surface = font.render(text_data['current_text'], True, text_data['color'])
+                
+                if text_data['center']:
+                    text_rect = text_surface.get_rect(center=text_data['position'])
+                    self.screen.blit(text_surface, text_rect)
+                else:
+                    self.screen.blit(text_surface, text_data['position'])
+                    
+    def clear_typewriter_texts(self, preserve_ids=None):
+        """Clear all typewriter texts.
+        
+        Args:
+            preserve_ids: Optional set of text IDs to preserve (won't be cleared)
+        """
+        if preserve_ids:
+            # Keep only the texts with IDs in preserve_ids
+            self.typewriter_texts = [text for text in self.typewriter_texts 
+                                   if any(text.get('text', '').find(pid) != -1 or 
+                                         str(text.get('position', '')).find(pid) != -1 
+                                         for pid in preserve_ids)]
+            # Remove preserved IDs from added set so they can be re-added if needed
+            self.typewriter_added_texts = self.typewriter_added_texts.difference(preserve_ids)
+        else:
+            self.typewriter_texts = []
+            self.typewriter_added_texts.clear()
+        
+    def draw_text_typewriter(self, text, position, font_key='medium', color=config.WHITE, center=False, instant=False, text_id=None):
+        """Draw text with typewriter effect (immediate version for single frame)."""
+        if instant:
+            font = self.pixel_fonts[font_key]
+            text_surface = font.render(text, True, color)
+            if center:
+                text_rect = text_surface.get_rect(center=position)
+                self.screen.blit(text_surface, text_rect)
+            else:
+                self.screen.blit(text_surface, position)
+        else:
+            # Use text_id or create one from text and position
+            if text_id is None:
+                text_id = f"{text}_{position}"
+            
+            # Only add if not already added
+            if text_id not in self.typewriter_added_texts:
+                self.add_typewriter_text(text, position, font_key, color, center)
+                self.typewriter_added_texts.add(text_id)
+        
     def draw_mode_select(self, mode_buttons, back_button, mouse_pos):
         """Draw game mode selection screen."""
         self.draw_parallax_background(1.0)
@@ -95,10 +187,8 @@ class Renderer:
         overlay.fill((0, 0, 0, 120))
         self.screen.blit(overlay, (0, 0))
         
-        # Title
-        title = self.pixel_fonts['huge'].render("SELECT GAME MODE", True, config.WHITE)
-        title_rect = title.get_rect(center=(config.WIDTH // 2, 100))
-        self.screen.blit(title, title_rect)
+        # Title with typewriter effect
+        self.draw_text_typewriter("SELECT GAME MODE", (config.WIDTH // 2, 100), 'huge', config.WHITE, center=True, text_id="mode_select_title")
         
         # Mode cards - removed blitz and puzzle
         modes = [
@@ -172,6 +262,42 @@ class Renderer:
                 line_rect = line_surface.get_rect(center=(rect.centerx, y_offset))
                 self.screen.blit(line_surface, line_rect)
                 y_offset += 25
+                
+            # Add glowing "RECOMMENDED" text under Story Mode
+            if mode["key"] == "story":
+                current_time = pygame.time.get_ticks()
+                # Create pulsing glow effect
+                pulse = (math.sin(current_time / 300) + 1) / 2  # Value between 0 and 1
+                glow_intensity = 0.3 + pulse * 0.4  # Gentler pulsing between 0.3 and 0.7
+                
+                # Draw glowing background
+                rec_text = "⭐ RECOMMENDED ⭐"
+                rec_font = self.pixel_fonts['small']
+                
+                # Draw darker background box first
+                text_width = rec_font.size(rec_text)[0]
+                text_height = rec_font.size(rec_text)[1]
+                bg_rect = pygame.Rect(rect.centerx - text_width//2 - 15, rect.bottom + 10, 
+                                    text_width + 30, text_height + 10)
+                pygame.draw.rect(self.screen, (20, 20, 30), bg_rect, border_radius=5)
+                
+                # Draw subtle glow effect
+                for i in range(2):
+                    glow_surf = pygame.Surface((bg_rect.width + 10 + i*8, bg_rect.height + 10 + i*8), pygame.SRCALPHA)
+                    glow_alpha = int(60 * glow_intensity / (i + 1))
+                    glow_color = (100, 200, 255, glow_alpha)  # Soft blue glow instead of yellow
+                    pygame.draw.rect(glow_surf, glow_color, glow_surf.get_rect(), border_radius=8)
+                    glow_rect = glow_surf.get_rect(center=bg_rect.center)
+                    self.screen.blit(glow_surf, glow_rect)
+                
+                # Draw border
+                border_alpha = int(180 + 75 * pulse)
+                pygame.draw.rect(self.screen, (100, 200, 255, border_alpha), bg_rect, 2, border_radius=5)
+                
+                # Draw the text itself in white for better contrast
+                rec_surface = rec_font.render(rec_text, True, (255, 255, 255))
+                rec_rect = rec_surface.get_rect(center=(rect.centerx, rect.bottom + 20))
+                self.screen.blit(rec_surface, rec_rect)
                 
         # Back button
         self._draw_button(back_button, "BACK", (150, 70, 70), (200, 100, 100), mouse_pos)
@@ -311,12 +437,18 @@ class Renderer:
             card_rect = pygame.Rect(card_x, card_y, card_width, card_height)
             battle_buttons[i] = card_rect
             
-            # Check if completed
+            # Check if completed and unlocked
             is_completed = story_mode.is_battle_completed(battle["id"])
-            is_hover = card_rect.collidepoint(mouse_pos)
+            # Get chapter index to check unlock status
+            chapter_index = next((idx for idx, ch in enumerate(story_mode.chapters) if ch["id"] == chapter["id"]), 0)
+            is_unlocked = story_mode.is_battle_unlocked(chapter_index, i)
+            is_hover = card_rect.collidepoint(mouse_pos) and is_unlocked
             
             # Card color
-            if is_completed:
+            if not is_unlocked:
+                card_color = (30, 30, 30)  # Dark gray for locked
+                border_color = (80, 80, 80)
+            elif is_completed:
                 card_color = (40, 60, 40)  # Green tint
                 border_color = (100, 200, 100)
             else:
@@ -386,8 +518,23 @@ class Renderer:
             reward_rect = reward_surface.get_rect(midleft=(card_x + 100, card_rect.centery + 30))
             self.screen.blit(reward_surface, reward_rect)
             
-            # Completion status
-            if is_completed:
+            # Completion/Lock status
+            if not is_unlocked:
+                # Draw lock icon
+                lock_text = "🔒 LOCKED"
+                lock_surface = self.pixel_fonts['medium'].render(lock_text, True, (150, 150, 150))
+                lock_rect = lock_surface.get_rect(midright=(card_x + card_width - 20, card_rect.centery))
+                self.screen.blit(lock_surface, lock_rect)
+                
+                # Draw unlock requirement
+                if i == 0 and chapter_index > 0:
+                    req_text = "Complete previous chapter"
+                else:
+                    req_text = "Complete previous battle"
+                req_surface = self.pixel_fonts['tiny'].render(req_text, True, (100, 100, 100))
+                req_rect = req_surface.get_rect(midright=(card_x + card_width - 20, card_rect.centery + 20))
+                self.screen.blit(req_surface, req_rect)
+            elif is_completed:
                 complete_text = "✓ COMPLETE"
                 complete_surface = self.pixel_fonts['medium'].render(complete_text, True, (100, 255, 100))
                 complete_rect = complete_surface.get_rect(midright=(card_x + card_width - 20, card_rect.centery))
@@ -501,16 +648,22 @@ class Renderer:
                            (dialogue_x, dialogue_y, dialogue_width, dialogue_height), 
                            3, border_radius=10)
             
-            # Dialogue text
+            # Dialogue text with typewriter effect
             current_line = dialogue_lines[dialogue_index]
             wrapped_lines = self._wrap_text(current_line, self.pixel_fonts['medium'], dialogue_width - 40)
             
-            text_y = dialogue_y + 20
-            for line in wrapped_lines:
-                line_surface = self.pixel_fonts['medium'].render(line, True, config.WHITE)
-                line_rect = line_surface.get_rect(center=(config.WIDTH // 2, text_y))
-                self.screen.blit(line_surface, line_rect)
-                text_y += 30
+            # Check if we need to add this dialogue to typewriter
+            dialogue_key = f"story_dialogue_{dialogue_index}"
+            
+            # Only add dialogue if it hasn't been added yet
+            if dialogue_key not in self.typewriter_added_texts:
+                # Clear ALL typewriter texts when showing new dialogue
+                self.clear_typewriter_texts()
+                text_y = dialogue_y + 20
+                for i, line in enumerate(wrapped_lines):
+                    self.add_typewriter_text(line, (config.WIDTH // 2, text_y), 'medium', config.WHITE, center=True)
+                    text_y += 30
+                self.typewriter_added_texts.add(dialogue_key)
                 
         # Instructions
         if dialogue_complete:
@@ -1711,9 +1864,9 @@ class Renderer:
                             (bomb['x'] + bomb_width//2, bomb['y'] - bomb_height//2 + 2)
                         ])
                 
-            text = self.pixel_fonts['huge'].render("CHECKMATE PROTOCOL", True, config.WHITE)
-            rect = text.get_rect(center=(game_center_x, game_center_y - 150 * config.SCALE))
-            self.screen.blit(text, rect)
+            # Title with typewriter effect
+            title_pos = (game_center_x, game_center_y - 150 * config.SCALE)
+            self.draw_text_typewriter("CHECKMATE PROTOCOL", title_pos, 'huge', config.WHITE, center=True, text_id="main_title")
             
             if hasattr(self.assets, 'beta_badge') and self.assets.beta_badge:
                 badge_height = int(80 * config.SCALE)
@@ -1723,8 +1876,10 @@ class Renderer:
                 scaled_badge = pygame.transform.scale(self.assets.beta_badge, (badge_width, badge_height))
                 rotated_badge = pygame.transform.rotate(scaled_badge, -15)
                 
-                badge_x = rect.right - int(20 * config.SCALE)
-                badge_y = rect.top - int(70 * config.SCALE)
+                # Calculate badge position based on title
+                title_width = self.pixel_fonts['huge'].size("CHECKMATE PROTOCOL")[0]
+                badge_x = game_center_x + title_width // 2 - int(20 * config.SCALE)
+                badge_y = game_center_y - 150 * config.SCALE - int(70 * config.SCALE)
                 
                 self.screen.blit(rotated_badge, (badge_x, badge_y))
             
@@ -1867,7 +2022,174 @@ class Renderer:
         
         self._draw_button(tutorial_buttons['back'], "BACK TO MENU", (150, 70, 70), (200, 100, 100), mouse_pos)
         
-    def draw_arms_dealer(self, powerup_system, shop_buttons, back_button, mouse_pos, dialogue_index=0, dialogues=None):
+    def draw_tutorial_hints(self, story_tutorial):
+        """Draw tutorial hints and highlights."""
+        # Draw highlighted squares
+        for col, row in story_tutorial.get_highlight_squares():
+            # Use the same positioning as pieces and board squares
+            x = config.BOARD_OFFSET_X + config.BOARD_BORDER_LEFT + col * config.SQUARE_SIZE
+            y = config.BOARD_OFFSET_Y + config.BOARD_BORDER_TOP + row * config.SQUARE_SIZE
+            
+            # Create pulsing highlight
+            pulse = (pygame.time.get_ticks() // 200) % 10
+            alpha = 100 + (pulse * 15)
+            
+            highlight_surf = pygame.Surface((config.SQUARE_SIZE, config.SQUARE_SIZE), pygame.SRCALPHA)
+            highlight_surf.fill((255, 215, 0, alpha))  # Gold color
+            self.screen.blit(highlight_surf, (x, y))
+            
+            # Add a border
+            pygame.draw.rect(self.screen, (255, 215, 0), 
+                           (x, y, config.SQUARE_SIZE, config.SQUARE_SIZE), 4)
+        
+        # Draw highlight for powerup buttons
+        highlighted_powerup = story_tutorial.get_highlight_powerup()
+        if highlighted_powerup:
+            # Calculate powerup menu position (from powerup_renderer)
+            menu_width = 300
+            menu_x = config.WIDTH - menu_width - 20
+            menu_y = config.BOARD_OFFSET_Y + 50
+            
+            # Define powerup order (same as in powerup_renderer)
+            powerup_keys = ["shield", "gun", "airstrike", "paratroopers", "chopper"]
+            
+            # Find the index of the highlighted powerup
+            if highlighted_powerup in powerup_keys:
+                index = powerup_keys.index(highlighted_powerup)
+                card_height = 120
+                card_y = menu_y + index * (card_height + 10)
+                
+                # Draw pulsing highlight around the powerup card
+                pulse = (pygame.time.get_ticks() // 200) % 10
+                thickness = 4 + (pulse // 3)
+                
+                # Create glowing effect
+                for i in range(3):
+                    alpha = 150 - (i * 50)
+                    glow_surf = pygame.Surface((menu_width + i*8, card_height + i*8), pygame.SRCALPHA)
+                    pygame.draw.rect(glow_surf, (255, 215, 0, alpha), 
+                                   (0, 0, menu_width + i*8, card_height + i*8), 
+                                   thickness + i*2, border_radius=10)
+                    self.screen.blit(glow_surf, (menu_x - i*4, card_y - i*4))
+                
+                # Draw main highlight border
+                pygame.draw.rect(self.screen, (255, 215, 0), 
+                               (menu_x, card_y, menu_width, card_height), 
+                               thickness, border_radius=10)
+        
+        # Draw instruction panel
+        instruction = story_tutorial.get_current_instruction()
+        if instruction:
+            panel_width = 700
+            panel_height = 100
+            panel_x = (config.WIDTH - panel_width) // 2
+            panel_y = config.HEIGHT - panel_height - 10
+            
+            # Panel background
+            panel_surf = pygame.Surface((panel_width, panel_height), pygame.SRCALPHA)
+            panel_surf.fill((0, 0, 0, 220))
+            pygame.draw.rect(panel_surf, (255, 215, 0), panel_surf.get_rect(), 3)
+            self.screen.blit(panel_surf, (panel_x, panel_y))
+            
+            # Tutorial text
+            lines = self._wrap_text(instruction, self.pixel_fonts['medium'], panel_width - 20)
+            y_offset = 15
+            for line in lines:
+                text_surf = self.pixel_fonts['medium'].render(line, True, (255, 255, 255))
+                text_rect = text_surf.get_rect(centerx=config.WIDTH // 2, y=panel_y + y_offset)
+                self.screen.blit(text_surf, text_rect)
+                y_offset += 25
+                
+    def _wrap_text(self, text, font, max_width):
+        """Wrap text to fit within a given width."""
+        words = text.split()
+        lines = []
+        current_line = []
+        
+        for word in words:
+            current_line.append(word)
+            line_text = ' '.join(current_line)
+            
+            if font.size(line_text)[0] > max_width:
+                if len(current_line) > 1:
+                    current_line.pop()
+                    lines.append(' '.join(current_line))
+                    current_line = [word]
+                else:
+                    lines.append(word)
+                    current_line = []
+                    
+        if current_line:
+            lines.append(' '.join(current_line))
+            
+        return lines
+        
+    def draw_hint_system(self, hint_system):
+        """Draw hints for new players."""
+        if not hint_system or not hint_system.active:
+            return
+            
+        # Draw highlighted squares
+        highlights = hint_system.get_highlights()
+        for col, row in highlights:
+            x = config.BOARD_OFFSET_X + config.BOARD_BORDER_LEFT + col * config.SQUARE_SIZE
+            y = config.BOARD_OFFSET_Y + config.BOARD_BORDER_TOP + row * config.SQUARE_SIZE
+            
+            # Create soft blue highlight
+            pulse = (pygame.time.get_ticks() // 300) % 10
+            alpha = 50 + (pulse * 10)
+            
+            highlight_surf = pygame.Surface((config.SQUARE_SIZE, config.SQUARE_SIZE), pygame.SRCALPHA)
+            highlight_surf.fill((100, 150, 255, alpha))  # Blue color
+            self.screen.blit(highlight_surf, (x, y))
+            
+            # Add a soft border
+            pygame.draw.rect(self.screen, (100, 150, 255), 
+                           (x, y, config.SQUARE_SIZE, config.SQUARE_SIZE), 2)
+        
+        # Draw powerup highlight
+        highlighted_powerup = hint_system.get_powerup_highlights()
+        if highlighted_powerup:
+            # Calculate powerup menu position
+            menu_width = 300
+            menu_x = config.WIDTH - menu_width - 20
+            menu_y = config.BOARD_OFFSET_Y + 50
+            
+            powerup_keys = ["shield", "gun", "airstrike", "paratroopers", "chopper"]
+            
+            if highlighted_powerup in powerup_keys:
+                index = powerup_keys.index(highlighted_powerup)
+                card_height = 120
+                card_y = menu_y + index * (card_height + 10)
+                
+                # Draw soft blue highlight
+                pulse = (pygame.time.get_ticks() // 300) % 10
+                thickness = 2 + (pulse // 4)
+                
+                pygame.draw.rect(self.screen, (100, 150, 255), 
+                               (menu_x, card_y, menu_width, card_height), 
+                               thickness, border_radius=10)
+        
+        # Draw hint text
+        hint_text = hint_system.get_hint_text()
+        if hint_text:
+            panel_width = 500
+            panel_height = 60
+            panel_x = (config.WIDTH - panel_width) // 2
+            panel_y = config.HEIGHT - panel_height - 120
+            
+            # Panel background
+            panel_surf = pygame.Surface((panel_width, panel_height), pygame.SRCALPHA)
+            panel_surf.fill((0, 0, 0, 180))
+            pygame.draw.rect(panel_surf, (100, 150, 255), panel_surf.get_rect(), 2)
+            self.screen.blit(panel_surf, (panel_x, panel_y))
+            
+            # Hint text
+            text_surf = self.pixel_fonts['small'].render(hint_text, True, (255, 255, 255))
+            text_rect = text_surf.get_rect(center=(config.WIDTH // 2, panel_y + panel_height // 2))
+            self.screen.blit(text_surf, text_rect)
+        
+    def draw_arms_dealer(self, powerup_system, shop_buttons, back_button, mouse_pos, dialogue_index=0, dialogues=None, story_tutorial=None):
         """Draw the arms dealer shop with simple design."""
         current_time = pygame.time.get_ticks()
         
@@ -1909,7 +2231,8 @@ class Renderer:
                 bubble_x = tariq_center_x - bubble_width // 2
                 bubble_y = tariq_y - int(140 * config.SCALE)
                 self._draw_speech_bubble(bubble_x, bubble_y, 
-                                       dialogue, bubble_width, point_down=True)
+                                       dialogue, bubble_width, point_down=True, 
+                                       use_typewriter=True, text_id=f"tariq_dialogue_{dialogue_index}")
         
         # Simple title
         title_text = "TARIQ'S ARMORY"
@@ -1928,10 +2251,14 @@ class Renderer:
         money_rect = money_surface.get_rect(center=(game_center_x, title_y + 60))
         self.screen.blit(money_surface, money_rect)
         
-        unlocked = progress.get("unlocked_powerups", ["shield"])
+        # Check if in tutorial mode and use tutorial unlocked powerups
+        if story_tutorial and story_tutorial.active:
+            import config as tutorial_config
+            unlocked = tutorial_config.tutorial_unlocked_powerups
+        else:
+            unlocked = progress.get("unlocked_powerups", ["shield"])
         
         # Simple powerup display
-        unlocked = progress.get("unlocked_powerups", ["shield"])
         
         # Simple rectangular card layout
         powerup_keys = ["shield", "gun", "airstrike", "paratroopers", "chopper"]
@@ -1980,6 +2307,29 @@ class Renderer:
                 hover_rect = card_rect.inflate(10, 10)
                 pygame.draw.rect(self.screen, border_color, hover_rect, 2)
             
+            # Tutorial highlighting for shield
+            if story_tutorial and story_tutorial.active and powerup_key == "shield" and not is_unlocked:
+                # Draw pulsing golden highlight
+                pulse = (pygame.time.get_ticks() // 200) % 10
+                thickness = 4 + (pulse // 3)
+                
+                # Create glowing effect
+                for i in range(3):
+                    alpha = 150 - (i * 50)
+                    glow_surf = pygame.Surface((card_width + i*8, card_height + i*8), pygame.SRCALPHA)
+                    pygame.draw.rect(glow_surf, (255, 215, 0, alpha), 
+                                   (0, 0, card_width + i*8, card_height + i*8), 
+                                   thickness + i*2, border_radius=5)
+                    self.screen.blit(glow_surf, (card_x - i*4, card_y - i*4))
+                
+                # Draw main highlight border
+                pygame.draw.rect(self.screen, (255, 215, 0), card_rect, thickness, border_radius=5)
+                
+                # Add "CLICK ME!" text
+                click_text = self.pixel_fonts['small'].render("CLICK TO UNLOCK!", True, (255, 215, 0))
+                click_rect = click_text.get_rect(center=(card_rect.centerx, card_rect.top - 20))
+                self.screen.blit(click_text, click_rect)
+            
             # Simple powerup icons
             icon_y = card_rect.centery - 20
             
@@ -2023,8 +2373,17 @@ class Renderer:
         # Simple back button
         self._draw_button(back_button, "BACK TO GAME", (150, 70, 70), (200, 100, 100), mouse_pos)
 
-    def _draw_speech_bubble(self, x, y, text, width, point_down=False):
-        """Draw a speech bubble with text."""
+    def _draw_speech_bubble(self, x, y, text, width, point_down=False, use_typewriter=False, text_id=None):
+        """Draw a speech bubble with text.
+        
+        Args:
+            x, y: Position of the bubble
+            text: Text to display
+            width: Width of the bubble
+            point_down: Whether to draw a tail pointing down
+            use_typewriter: Whether to use typewriter effect for the text
+            text_id: ID for typewriter effect tracking
+        """
         padding = int(20 * self.scale)
         line_height = int(20 * self.scale)
         
@@ -2065,11 +2424,24 @@ class Renderer:
                              tail_points[1],
                              (tail_points[2][0], tail_points[2][1] - 1)], 3)
         
-        for i, line in enumerate(lines):
-            text_surface = self.pixel_fonts['small'].render(line, True, config.BLACK)
-            text_rect = text_surface.get_rect(centerx=x + width // 2, 
-                                             y=y + padding + i * line_height)
-            self.screen.blit(text_surface, text_rect)
+        if use_typewriter:
+            # Use typewriter effect for dialogue
+            full_text = '\n'.join(lines)
+            if text_id is None:
+                text_id = f"dialogue_{x}_{y}_{text[:20]}"
+            
+            # Draw the text with typewriter effect
+            for i, line in enumerate(lines):
+                line_y = y + padding + i * line_height
+                self.draw_text_typewriter(line, (x + width // 2, line_y), 'small', config.BLACK, 
+                                        center=True, text_id=f"{text_id}_line_{i}")
+        else:
+            # Draw text normally
+            for i, line in enumerate(lines):
+                text_surface = self.pixel_fonts['small'].render(line, True, config.BLACK)
+                text_rect = text_surface.get_rect(centerx=x + width // 2, 
+                                                 y=y + padding + i * line_height)
+                self.screen.blit(text_surface, text_rect)
 
     def _draw_shield_icon(self, screen, card_rect, icon_y, enabled=True):
         """Draw a shield icon."""

@@ -13,6 +13,8 @@ from powerup_renderer import PowerupRenderer
 from chopper_gunner import ChopperGunnerMode
 from intro_screen import IntroScreen
 from story_mode import StoryMode
+from simple_tutorial import SimpleTutorial
+from hint_system import HintSystem
 
 class ChessGame:
     def __init__(self):
@@ -57,6 +59,14 @@ class ChessGame:
         self.story_mode = StoryMode()
         self.current_story_battle = None
         
+        # Story Tutorial System
+        self.story_tutorial = SimpleTutorial(self, self.board, self.powerup_system)
+        self.in_tutorial_battle = False
+        
+        # Hint system for new players
+        self.hint_system = HintSystem()
+        self.tutorial_completed = False
+        
         # Game state - start with intro
         self.running = True
         self.current_screen = "intro"  # Start with intro screen
@@ -99,59 +109,132 @@ class ChessGame:
                 ]
             },
             {
-                "title": "BASIC CHESS RULES",
+                "title": "HOW TO PLAY CHESS",
                 "content": [
+                    "MOVING PIECES:",
                     "• Click a piece to select it",
-                    "• Valid moves will be highlighted",
-                    "• Click a highlighted square to move",
+                    "• Valid moves will be highlighted in green",
+                    "• Click a highlighted square to move there",
                     "• Capture enemy pieces by moving to their square",
                     "",
-                    "SPECIAL MOVES:",
-                    "• Pawns can move 2 squares on first move",
-                    "• Pawns promote when reaching the end",
+                    "WINNING THE GAME:",
+                    "• Checkmate the enemy King to win",
                     "• Protect your King at all costs!"
                 ]
             },
             {
-                "title": "EARNING POINTS",
+                "title": "HOW PIECES MOVE - PART 1",
                 "content": [
-                    "Capture enemy pieces to earn powerup points:",
+                    "PAWN: Moves forward 1 square (2 on first move)",
+                    "       Captures diagonally forward",
+                    "",
+                    "ROOK: Moves any distance horizontally or vertically",
+                    "",
+                    "BISHOP: Moves any distance diagonally",
+                    "",
+                    "KNIGHT: Moves in an 'L' shape (2+1 squares)",
+                    "        Can jump over other pieces"
+                ]
+            },
+            {
+                "title": "HOW PIECES MOVE - PART 2",
+                "content": [
+                    "QUEEN: Moves like Rook + Bishop combined",
+                    "       Most powerful piece!",
+                    "",
+                    "KING: Moves 1 square in any direction",
+                    "      Must be protected!",
+                    "",
+                    "SPECIAL MOVES:",
+                    "• Castling: King + Rook special move",
+                    "• En Passant: Special pawn capture",
+                    "• Promotion: Pawn reaches end = Queen"
+                ]
+            },
+            {
+                "title": "EARNING POWERUP POINTS",
+                "content": [
+                    "Capture enemy pieces to earn points:",
                     "",
                     "• Pawn = 1 point",
                     "• Knight/Bishop = 3 points",
                     "• Rook = 5 points",
                     "• Queen = 9 points",
                     "",
-                    "Points are shown in the powerup menu",
-                    "on the right side of the game board."
+                    "Your points appear in the powerup menu",
+                    "on the right side of the game board.",
+                    "",
+                    "Click powerups to activate them!"
                 ]
             },
             {
-                "title": "POWERUPS",
+                "title": "POWERUPS EXPLAINED",
                 "content": [
-                    "SHIELD (5 pts): Protects a piece for 3 turns",
+                    "SHIELD (5 pts):",
+                    "• Protects a piece for 3 turns",
+                    "• Shielded pieces cannot be captured",
                     "",
-                    "GUN (7 pts): Shoot any enemy in line of sight",
-                    "",
-                    "AIRSTRIKE (10 pts): Bomb a 3x3 area",
-                    "",
-                    "PARATROOPERS (10 pts): Drop 3 pawns anywhere",
-                    "",
-                    "CHOPPER GUNNER (25 pts): Ultimate destruction!"
+                    "GUN (7 pts):",
+                    "• Click shooter, then click target",
+                    "• Must have clear line of sight",
+                    "• One-shot kill on any piece"
                 ]
             },
             {
-                "title": "PROGRESSION",
+                "title": "MORE POWERUPS",
                 "content": [
-                    "Beat AI opponents to progress:",
+                    "AIRSTRIKE (10 pts):",
+                    "• Click to target a 3x3 area",
+                    "• Destroys all pieces in the zone",
+                    "• Even your own pieces!",
                     "",
-                    "• Win to unlock the next difficulty",
-                    "• Earn money based on difficulty",
-                    "• Visit the Arms Dealer to buy powerups",
+                    "PARATROOPERS (10 pts):",
+                    "• Drop 3 pawns on empty squares",
+                    "• Click 3 times to place them",
+                    "• Great for surprise attacks!"
+                ]
+            },
+            {
+                "title": "ULTIMATE POWERUP",
+                "content": [
+                    "CHOPPER GUNNER (25 pts):",
+                    "• Enter helicopter minigame",
+                    "• Use mouse to aim",
+                    "• Left click to fire minigun",
+                    "• Destroy pieces to damage the board",
                     "",
-                    "REWARDS:",
-                    "Easy: $100 | Medium: $200",
-                    "Hard: $400 | Very Hard: $800"
+                    "This is the most devastating powerup!",
+                    "Save your points for maximum destruction!"
+                ]
+            },
+            {
+                "title": "GAME PROGRESSION",
+                "content": [
+                    "1. Start with EASY difficulty",
+                    "2. Win to unlock harder difficulties",
+                    "3. Earn money for each victory:",
+                    "   • Easy: $100",
+                    "   • Medium: $200", 
+                    "   • Hard: $400",
+                    "   • Very Hard: $800",
+                    "",
+                    "4. Visit Arms Dealer to buy powerups",
+                    "5. Use 'R' key to restart if needed"
+                ]
+            },
+            {
+                "title": "TIPS FOR SUCCESS",
+                "content": [
+                    "• Control the center of the board",
+                    "• Develop knights before bishops",
+                    "• Castle early for King safety",
+                    "• Don't move the same piece twice early",
+                    "",
+                    "• Save powerups for critical moments",
+                    "• Combine powerups for combos",
+                    "• Shield your important pieces",
+                    "",
+                    "Good luck, Commander!"
                 ]
             }
         ]
@@ -188,6 +271,7 @@ class ChessGame:
         
         # Store game state when entering shop mid-game
         self.stored_game_state = None
+        self.returning_from_shop = False
         
         # Track last capture
         self.last_captured_piece = None
@@ -319,7 +403,15 @@ class ChessGame:
             "ai": self.ai,
             "selected_difficulty": self.selected_difficulty,
             "current_mode": self.current_mode,
-            "current_story_battle": self.current_story_battle
+            "current_story_battle": self.current_story_battle,
+            # Store tutorial state
+            "in_tutorial_battle": self.in_tutorial_battle,
+            "tutorial_state": {
+                "active": self.story_tutorial.active if hasattr(self.story_tutorial, 'active') else False,
+                "current_step": self.story_tutorial.current_step if hasattr(self.story_tutorial, 'current_step') else 0,
+                "steps_completed": self.story_tutorial.steps_completed[:] if hasattr(self.story_tutorial, 'steps_completed') else [],
+                "waiting_for": self.story_tutorial.waiting_for if hasattr(self.story_tutorial, 'waiting_for') else None
+            }
         }
         
     def restore_game_state(self):
@@ -339,11 +431,36 @@ class ChessGame:
             self.powerup_system.points = dict(self.stored_game_state["powerup_points"])
             self.powerup_system.shielded_pieces = dict(self.stored_game_state["shielded_pieces"])
             
+            # Special case: ensure tutorial has points
+            if self.in_tutorial_battle and self.story_tutorial.active:
+                if self.powerup_system.points["white"] < 100:
+                    self.powerup_system.points["white"] = 999
+                    print("Game: Restored tutorial points to 999")
+            
             # Restore AI and mode
             self.ai = self.stored_game_state["ai"]
             self.selected_difficulty = self.stored_game_state["selected_difficulty"]
             self.current_mode = self.stored_game_state["current_mode"]
             self.current_story_battle = self.stored_game_state["current_story_battle"]
+            
+            # Restore tutorial state
+            if "in_tutorial_battle" in self.stored_game_state:
+                self.in_tutorial_battle = self.stored_game_state["in_tutorial_battle"]
+                
+                # Restore tutorial system state - but NOT the current step if we're in tutorial
+                # This prevents the tutorial from going backwards when returning from arms dealer
+                if "tutorial_state" in self.stored_game_state:
+                    tutorial_state = self.stored_game_state["tutorial_state"]
+                    if hasattr(self.story_tutorial, 'active'):
+                        self.story_tutorial.active = tutorial_state["active"]
+                    # Don't restore current_step during active tutorial - it should have advanced
+                    if not self.story_tutorial.active:
+                        if hasattr(self.story_tutorial, 'current_step'):
+                            self.story_tutorial.current_step = tutorial_state["current_step"]
+                    if hasattr(self.story_tutorial, 'steps_completed'):
+                        self.story_tutorial.steps_completed = tutorial_state["steps_completed"][:]
+                    if hasattr(self.story_tutorial, 'waiting_for'):
+                        self.story_tutorial.waiting_for = tutorial_state["waiting_for"]
             
             # Clear stored state
             self.stored_game_state = None
@@ -441,6 +558,16 @@ class ChessGame:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.running = False
+                
+            # Handle tutorial timer events
+            if event.type == pygame.USEREVENT + 1:
+                if self.in_tutorial_battle and self.story_tutorial.active:
+                    self.story_tutorial.handle_timer_event()
+                    
+            # Handle AI move completion timer
+            if event.type == pygame.USEREVENT + 2:
+                if self.in_tutorial_battle and self.story_tutorial.active:
+                    self.story_tutorial.handle_ai_move_complete()
                 
             # Handle intro screen events
             if self.current_screen == "intro":
@@ -600,14 +727,22 @@ class ChessGame:
             # Handle battle selection within chapter
             for battle_index, button_rect in self.story_battle_buttons.items():
                 if button_rect.collidepoint(pos):
-                    play_click_sound()
-                    self.story_mode.current_battle = battle_index
-                    battle_data = self.story_mode.get_current_battle()
-                    if battle_data:
-                        self.current_story_battle = battle_data
-                        self.selected_difficulty = battle_data["difficulty"]
-                        self.ai = ChessAI(self.selected_difficulty)
-                        self.start_fade("story_chapter", "story_dialogue")
+                    # Check if battle is unlocked
+                    chapter_index = next((idx for idx, ch in enumerate(self.story_mode.chapters) 
+                                        if ch["id"] == self.story_mode.get_current_chapter()["id"]), 0)
+                    if self.story_mode.is_battle_unlocked(chapter_index, battle_index):
+                        play_click_sound()
+                        self.story_mode.current_battle = battle_index
+                        battle_data = self.story_mode.get_current_battle()
+                        if battle_data:
+                            self.current_story_battle = battle_data
+                            self.selected_difficulty = battle_data["difficulty"]
+                            self.ai = ChessAI(self.selected_difficulty)
+                            self.start_fade("story_chapter", "story_dialogue")
+                    else:
+                        # Play error sound for locked battle
+                        if 'click' in self.assets.sounds:
+                            self.assets.sounds['click'].play()
                         
             if self.story_back_button and self.story_back_button.collidepoint(pos):
                 play_click_sound()
@@ -638,33 +773,101 @@ class ChessGame:
                 self.start_fade("tutorial", config.SCREEN_START)
                 
         elif self.current_screen == config.SCREEN_ARMS_DEALER:
-            # Check purchase buttons
-            for powerup_key, button_rect in self.shop_buttons.items():
-                if button_rect.collidepoint(pos):
-                    progress = config.load_progress()
-                    unlocked = progress.get("unlocked_powerups", ["shield"])
-                    
-                    if powerup_key not in unlocked:
-                        price = self.powerup_system.powerup_prices[powerup_key]
-                        if config.spend_money(price):
+            # Handle tutorial progression in arms dealer
+            if self.in_tutorial_battle and self.story_tutorial.active:
+                # Get current step, handling both SimpleTutorial and StoryTutorial
+                if hasattr(self.story_tutorial, 'steps'):
+                    # SimpleTutorial
+                    if self.story_tutorial.current_step < len(self.story_tutorial.steps):
+                        step = self.story_tutorial.steps[self.story_tutorial.current_step]
+                    else:
+                        step = {}
+                else:
+                    # StoryTutorial
+                    step = self.story_tutorial.tutorial_steps[self.story_tutorial.current_step]
+                
+                # Check if waiting for tutorial specific actions
+                if step.get("wait_for") == "arms_dealer_continue":
+                    play_click_sound()
+                    self.story_tutorial._advance_step()
+                    return
+                elif step.get("wait_for") == "tutorial_gift_complete":
+                    # For SimpleTutorial, just advance past this step
+                    play_click_sound()
+                    if hasattr(self.story_tutorial, 'handle_tutorial_gift_complete'):
+                        self.story_tutorial.handle_tutorial_gift_complete()
+                    else:
+                        self.story_tutorial._advance_step()
+                    return
+                elif step.get("wait_for") == "powerup_purchase":
+                    # Handle tutorial powerup purchases
+                    target_powerup = step.get("target_powerup")
+                    for powerup_key, button_rect in self.shop_buttons.items():
+                        if button_rect.collidepoint(pos) and powerup_key == target_powerup:
                             play_click_sound()
                             config.unlock_powerup(powerup_key)
-                            print(f"Purchased {powerup_key}!")
+                            print(f"Tutorial: Purchased {powerup_key}!")
+                            
+                            # After purchasing shield, unlock all powerups for tutorial
+                            if target_powerup == "shield":
+                                config.tutorial_unlocked_powerups = ["shield", "gun", "airstrike", "paratroopers", "chopper"]
+                                print("Tutorial: All powerups now unlocked!")
+                            
+                            # Advance tutorial step
+                            self.story_tutorial._advance_step()
+                            return
+                elif step.get("wait_for") == "return_to_game":
+                    # Handle "BACK TO GAME" during tutorial
+                    if self.back_button.collidepoint(pos):
+                        play_click_sound()
+                        print("Tutorial: Returning to game...")
+                        # For SimpleTutorial, call handle_back_to_game
+                        if hasattr(self.story_tutorial, 'handle_back_to_game'):
+                            self.story_tutorial.handle_back_to_game()
                         else:
-                            # Different sound for insufficient funds could go here
-                            print("Not enough money!")
+                            self.story_tutorial._advance_step()
+                        # Don't return here - let the back button logic continue
+                        # Fall through to normal back button handling
+            
+            # Check purchase buttons (only for non-tutorial mode)
+            if not self.in_tutorial_battle:
+                for powerup_key, button_rect in self.shop_buttons.items():
+                    if button_rect.collidepoint(pos):
+                        progress = config.load_progress()
+                        unlocked = progress.get("unlocked_powerups", ["shield"])
+                        
+                        if powerup_key not in unlocked:
+                            price = self.powerup_system.powerup_prices[powerup_key]
+                            if config.spend_money(price):
+                                play_click_sound()
+                                config.unlock_powerup(powerup_key)
+                                print(f"Purchased {powerup_key}!")
+                            else:
+                                # Different sound for insufficient funds could go here
+                                print("Not enough money!")
             
             # Click on Tariq to cycle dialogue
             if hasattr(self.renderer, 'tariq_rect') and self.renderer.tariq_rect.collidepoint(pos):
                 play_click_sound()
+                # Clear previous Tariq dialogue typewriter texts
+                tariq_dialogue_ids = {key for key in self.renderer.typewriter_added_texts if key.startswith("tariq_dialogue_")}
+                for text_id in tariq_dialogue_ids:
+                    self.renderer.typewriter_added_texts.discard(text_id)
                 self.tariq_dialogue_index = (self.tariq_dialogue_index + 1) % len(self.tariq_dialogues)
             
             # Back button - restore game state instead of starting new game
             if self.back_button.collidepoint(pos):
                 play_click_sound()
                 if self.stored_game_state:
-                    # Restore the game state
+                    # Handle tutorial gift completion when returning to game
+                    if self.in_tutorial_battle:
+                        step = self.story_tutorial.tutorial_steps[self.story_tutorial.current_step] if self.story_tutorial.active else None
+                        if step and step.get("wait_for") == "tutorial_gift_complete":
+                            self.story_tutorial.handle_tutorial_gift_complete()
+                    
+                    # Restore the game state and set flag
                     self.restore_game_state()
+                    self.returning_from_shop = True
                     self.start_fade(config.SCREEN_ARMS_DEALER, config.SCREEN_GAME)
                 else:
                     # No stored state, go to main menu
@@ -701,9 +904,24 @@ class ChessGame:
                 self.start_fade(config.SCREEN_BETA, config.SCREEN_START)
                 
         elif self.current_screen == config.SCREEN_GAME:
+            # Check if tutorial is waiting for click anywhere
+            if self.in_tutorial_battle and self.story_tutorial.active:
+                if hasattr(self.story_tutorial, 'steps'):
+                    if self.story_tutorial.current_step < len(self.story_tutorial.steps):
+                        step = self.story_tutorial.steps[self.story_tutorial.current_step]
+                        if step.get("wait_for") == "click_anywhere":
+                            play_click_sound()
+                            self.story_tutorial.handle_click_anywhere()
+                            return
+            
             # Check Arms Dealer button
             if self.arms_dealer_game_button and self.arms_dealer_game_button.collidepoint(pos):
                 play_click_sound()
+                
+                # Handle tutorial arms dealer visit
+                if self.in_tutorial_battle:
+                    self.story_tutorial.handle_arms_dealer_visit()
+                
                 # Store current game state before going to shop
                 self.store_game_state()
                 self.start_fade(config.SCREEN_GAME, config.SCREEN_ARMS_DEALER)
@@ -713,6 +931,10 @@ class ChessGame:
             if self.board.current_turn == "white":  # Only player can use powerups
                 for powerup_key, button_rect in self.powerup_system.button_rects.items():
                     if button_rect.collidepoint(pos):
+                        # Handle tutorial powerup selection
+                        if self.in_tutorial_battle:
+                            self.story_tutorial.handle_powerup_select(powerup_key)
+                            
                         if self.powerup_system.activate_powerup("white", powerup_key):
                             play_click_sound()
                             return
@@ -720,6 +942,13 @@ class ChessGame:
             # Handle active powerup clicks
             if self.powerup_system.active_powerup:
                 if self.powerup_system.handle_click(pos, self.board):
+                    # Handle tutorial powerup usage
+                    if self.in_tutorial_battle:
+                        row, col = self.board.get_square_from_pos(pos)
+                        if row >= 0 and col >= 0:
+                            self.story_tutorial.handle_powerup_use(
+                                self.powerup_system.active_powerup, row, col)
+                    
                     # Only play capture sound for destructive powerups
                     active_powerup = self.powerup_system.active_powerup
                     if active_powerup in ["gun", "airstrike"] and 'capture' in self.assets.sounds:
@@ -748,6 +977,11 @@ class ChessGame:
             if not self.board.animating and not self.board.promoting:
                 row, col = self.board.get_square_from_pos(pos)
                 if row >= 0 and col >= 0 and self.board.is_valid_selection(row, col):
+                    # Handle tutorial piece selection and move start
+                    if self.in_tutorial_battle:
+                        self.story_tutorial.handle_piece_select(row, col)
+                        self.story_tutorial.handle_move_start(row, col)
+                    
                     self.board.selected_piece = (row, col)
                     # Always show valid moves
                     self.board.valid_moves = self.board.get_valid_moves(row, col)
@@ -772,6 +1006,18 @@ class ChessGame:
         if (row, col) in self.board.valid_moves:
             # Make move
             from_row, from_col = self.board.selected_piece
+            
+            # Validate tutorial move first
+            if self.in_tutorial_battle:
+                if not self.story_tutorial.validate_player_move(from_row, from_col, row, col):
+                    # Invalid tutorial move - don't allow it
+                    self.board.selected_piece = None
+                    self.board.valid_moves = []
+                    return
+                    
+                # Handle tutorial move
+                self.story_tutorial.handle_move(from_row, from_col, row, col)
+            
             # Always use animation
             self.board.start_move(from_row, from_col, row, col)
             self.board.selected_piece = None
@@ -888,6 +1134,33 @@ class ChessGame:
         self.fade_start = pygame.time.get_ticks()
         self.fade_from = from_screen
         self.fade_to = to_screen
+        # Clear typewriter texts when switching screens, but preserve certain texts
+        preserve_texts = set()
+        
+        # Only preserve title screen text when staying on or returning to start screen
+        if to_screen == config.SCREEN_START:
+            preserve_texts.add("main_title")
+        
+        # Only preserve mode select text when staying on or going to mode select
+        if to_screen == "mode_select":
+            preserve_texts.add("mode_select_title")
+        
+        # Clear story dialogue when transitioning away from story_dialogue screen
+        if from_screen == "story_dialogue":
+            # Clear ALL typewriter texts when leaving story dialogue
+            self.renderer.clear_typewriter_texts()
+        
+        # Also clear when going TO the game screen to ensure clean state
+        if to_screen == config.SCREEN_GAME:
+            # Clear any lingering typewriter texts except preserved ones
+            if from_screen != config.SCREEN_START and from_screen != "mode_select":
+                self.renderer.clear_typewriter_texts()
+            
+        # For other screens, clear everything (dialogue will be re-added as needed)
+        if not preserve_texts:
+            self.renderer.clear_typewriter_texts()
+        else:
+            self.renderer.clear_typewriter_texts(preserve_texts)
         
     def update(self):
         """Update game logic."""
@@ -911,8 +1184,16 @@ class ChessGame:
                 if self.fade_from == "intro":
                     self.intro_screen.active = False
                     self.intro_complete = True  # Mark intro as complete
+                elif self.fade_to == config.SCREEN_ARMS_DEALER:
+                    # Auto-advance tutorial when reaching arms dealer
+                    if self.in_tutorial_battle and self.story_tutorial.active:
+                        self.story_tutorial.handle_at_arms_dealer()
+                        # Ensure tutorial has points
+                        if self.powerup_system.points["white"] < 100:
+                            self.powerup_system.points["white"] = 999
+                            print("Game: Ensured tutorial has 999 points at arms dealer")
                 if self.fade_to == config.SCREEN_GAME:
-                    if not self.stored_game_state:
+                    if not self.returning_from_shop:
                         # Only reset if we're not returning from shop
                         self.board.reset()
                         self.powerup_system = PowerupSystem()  # Reset powerup system
@@ -928,10 +1209,37 @@ class ChessGame:
                                 self.powerup_system,
                                 self.ai
                             )
+                            
+                            # Check if this is the tutorial battle (Chapter 1, Battle 1)
+                            if self.current_story_battle.get("id") == "tutorial_bot":
+                                self.in_tutorial_battle = True
+                                self.story_tutorial.start_tutorial()
+                            else:
+                                self.in_tutorial_battle = False
+                        else:
+                            # Not in story mode - ensure tutorial is disabled
+                            self.in_tutorial_battle = False
+                    else:
+                        # Returning from shop - game state already restored, just clear flag
+                        self.returning_from_shop = False
+                        
+                        # Handle tutorial continuation after returning from shop
+                        if self.in_tutorial_battle and self.story_tutorial.active:
+                            print(f"Game: Tutorial state after shop - step={self.story_tutorial.current_step}, active={self.story_tutorial.active}")
+                            self.story_tutorial.handle_back_to_game()
+                            print("Game: Called handle_back_to_game after shop return")
+                            # Force refresh of tutorial text
+                            if hasattr(self.story_tutorial, 'get_current_instruction'):
+                                current_text = self.story_tutorial.get_current_instruction()
+                                print(f"Game: Current tutorial text: {current_text}")
                 elif self.fade_to == "story_dialogue":
                     # Initialize dialogue state
                     self.current_dialogue_index = 0
                     self.dialogue_complete = False
+                    # Clear any story dialogue typewriter texts when starting new dialogue
+                    story_dialogue_ids = {key for key in self.renderer.typewriter_added_texts if key.startswith("story_dialogue_")}
+                    for text_id in story_dialogue_ids:
+                        self.renderer.typewriter_added_texts.discard(text_id)
         
         # Check if chopper gunner was requested
         if self.powerup_system.chopper_gunner_requested:
@@ -952,10 +1260,48 @@ class ChessGame:
             # Update powerup effects
             self.powerup_system.update_effects(current_time)
             
+            # Check if tutorial just completed
+            if self.in_tutorial_battle and self.story_tutorial.tutorial_complete and not self.tutorial_completed:
+                self.tutorial_completed = True
+                self.hint_system.increment_games_played()
+                
+            # Update hint system for new players
+            # Only show hints if tutorial is actually complete and we're not in tutorial
+            if self.tutorial_completed and not self.in_tutorial_battle:
+                # Double check that the tutorial is really done
+                if hasattr(self.story_tutorial, 'tutorial_complete') and self.story_tutorial.tutorial_complete:
+                    game_state = {
+                        "material_advantage": self._calculate_material_advantage()
+                    }
+                    self.hint_system.update(self.board, self.board.current_turn, 
+                                          self.powerup_system, game_state)
+            
+            # Multiple bulletproof checks for AI moves in tutorial
+            if self.in_tutorial_battle:
+                # Method 1: Check turn changes
+                if hasattr(self, '_last_turn'):
+                    if self._last_turn == "black" and self.board.current_turn == "white":
+                        # AI just finished its turn
+                        self.story_tutorial.handle_ai_move()
+                        self.story_tutorial.force_check_ai_move()  # Backup check
+                        
+                # Method 2: Force check every frame if waiting for AI move
+                self.story_tutorial.force_check_ai_move()
+                
+                # Method 3: Timeout safety net
+                self.story_tutorial.check_timeout()
+                
+            self._last_turn = self.board.current_turn
+            
             # Check animation complete
             if self.board.animating:
                 if current_time - self.board.animation_start >= config.MOVE_ANIMATION_DURATION:
                     captured = self.board.complete_move()
+                    
+                    # Bulletproof AI move detection when animation completes
+                    if self.in_tutorial_battle:
+                        self.story_tutorial.force_check_ai_move()
+                    
                     # Play capture sound immediately when capture happens
                     if captured and 'capture' in self.assets.sounds:
                         try:
@@ -965,6 +1311,10 @@ class ChessGame:
                         
                         # Track last capture
                         self.last_captured_piece = captured
+                        
+                        # Handle tutorial progression for captures by white player
+                        if self.in_tutorial_battle and captured and captured.islower():  # White captured black piece
+                            self.story_tutorial.handle_points_gained()
                         
                         
             # AI turn
@@ -986,11 +1336,36 @@ class ChessGame:
                                 return  # Skip normal move if powerup was used
                         
                         # Otherwise make a normal move
-                        ai_move = self.ai.get_move(self.board)
-                        if ai_move:
-                            from_pos, to_pos = ai_move
-                            # Always use animation
-                            self.board.start_move(from_pos[0], from_pos[1], to_pos[0], to_pos[1])
+                        # Check if tutorial should override AI move
+                        if self.in_tutorial_battle and self.story_tutorial.should_override_ai():
+                            tutorial_move = self.story_tutorial.get_next_ai_move()
+                            if tutorial_move:
+                                from_pos, to_pos = tutorial_move
+                                print(f"Tutorial: AI making predetermined move {from_pos} → {to_pos}")
+                                
+                                # Debug: Check what piece is at the from position
+                                # Note: from_pos is (col, row) but get_piece expects (row, col)
+                                piece_at_from = self.board.get_piece(from_pos[1], from_pos[0])
+                                piece_at_to = self.board.get_piece(to_pos[1], to_pos[0])
+                                print(f"Tutorial: Piece at {from_pos}: '{piece_at_from}', Piece at {to_pos}: '{piece_at_to}'")
+                                
+                                # Handle tutorial AI move (do this before the move)
+                                self.story_tutorial.handle_ai_move()
+                                
+                                # Always use animation
+                                self.board.start_move(from_pos[0], from_pos[1], to_pos[0], to_pos[1])
+                        else:
+                            # Normal AI move
+                            ai_move = self.ai.get_move(self.board)
+                            if ai_move:
+                                from_pos, to_pos = ai_move
+                                
+                                # Handle tutorial AI move (do this before the move)
+                                if self.in_tutorial_battle:
+                                    self.story_tutorial.handle_ai_move()
+                                    
+                                # Always use animation
+                                self.board.start_move(from_pos[0], from_pos[1], to_pos[0], to_pos[1])
                         self.ai.start_thinking = None
                         
             # Check for player victory and unlock next difficulty
@@ -1079,6 +1454,11 @@ class ChessGame:
             # Normal drawing (no fade)
             self.draw_screen(self.current_screen)
             
+        # Update and draw typewriter texts only on appropriate screens
+        if self.current_screen in [config.SCREEN_START, "mode_select", "story_dialogue", config.SCREEN_ARMS_DEALER]:
+            self.renderer.update_typewriter_texts()
+            self.renderer.draw_typewriter_texts()
+            
         # Apply screen shake if active
         if shake_x != 0 or shake_y != 0:
             # Restore original screen
@@ -1163,7 +1543,13 @@ class ChessGame:
         elif screen_type == config.SCREEN_ARMS_DEALER:
             self.renderer.draw_arms_dealer(self.powerup_system, self.shop_buttons, 
                                           self.back_button, self.mouse_pos, 
-                                          self.tariq_dialogue_index, self.tariq_dialogues)
+                                          self.tariq_dialogue_index, self.tariq_dialogues,
+                                          self.story_tutorial if self.in_tutorial_battle else None)
+            
+            # Draw tutorial hints if in tutorial battle
+            if self.in_tutorial_battle and self.story_tutorial.active:
+                self.renderer.draw_tutorial_hints(self.story_tutorial)
+                
             self.draw_volume_sliders()
             
         elif screen_type == config.SCREEN_DIFFICULTY:
@@ -1214,6 +1600,14 @@ class ChessGame:
             # Draw story mode UI if in story mode
             if self.current_mode == "story" and self.current_story_battle:
                 self.renderer.draw_story_battle_ui(self.current_story_battle)
+                
+            # Draw tutorial hints if in tutorial battle
+            if self.in_tutorial_battle and self.story_tutorial.active:
+                self.renderer.draw_tutorial_hints(self.story_tutorial)
+            
+            # Draw hint system for new players after tutorial
+            elif self.tutorial_completed and not self.in_tutorial_battle:
+                self.renderer.draw_hint_system(self.hint_system)
             
             # Overlays
             if self.board.promoting:
@@ -1233,6 +1627,24 @@ class ChessGame:
     def draw_killstreak_ui(self):
         """Placeholder for removed killstreak UI."""
         pass
+        
+    def _calculate_material_advantage(self):
+        """Calculate material advantage for white player."""
+        piece_values = {'P': 1, 'N': 3, 'B': 3, 'R': 5, 'Q': 9, 'K': 0}
+        white_value = 0
+        black_value = 0
+        
+        for row in range(8):
+            for col in range(8):
+                piece = self.board.get_piece(col, row)
+                if piece:
+                    value = piece_values.get(piece[1], 0)
+                    if piece[0] == 'w':
+                        white_value += value
+                    else:
+                        black_value += value
+                        
+        return white_value - black_value
                 
     def draw_volume_sliders(self):
         """Draw both volume sliders."""
@@ -1306,13 +1718,41 @@ class ChessGame:
         
         self.arms_dealer_game_button = pygame.Rect(button_x, button_y, button_width, button_height)
         
+        # Check if tutorial is highlighting this button
+        should_highlight = False
+        if hasattr(self, 'story_tutorial') and self.story_tutorial and self.story_tutorial.active:
+            if self.story_tutorial.current_step < len(self.story_tutorial.steps):
+                current_step = self.story_tutorial.steps[self.story_tutorial.current_step]
+                if current_step.get("wait_for") == "arms_dealer_visit":
+                    should_highlight = True
+        
         # Check if hovering
         is_hover = self.arms_dealer_game_button.collidepoint(self.mouse_pos)
         
+        # Draw highlighting effect if needed
+        if should_highlight:
+            # Draw pulsing glow effect
+            pulse = (pygame.time.get_ticks() // 200) % 10
+            glow_size = 10 + pulse
+            
+            # Draw multiple layers of glow
+            for i in range(3):
+                glow_rect = self.arms_dealer_game_button.inflate(glow_size * 2 - i * 6, glow_size * 2 - i * 6)
+                glow_surf = pygame.Surface((glow_rect.width, glow_rect.height), pygame.SRCALPHA)
+                pygame.draw.rect(glow_surf, (255, 215, 0, 100 - i * 30), glow_surf.get_rect(), border_radius=15)
+                self.screen.blit(glow_surf, glow_rect)
+            
+        
         # Draw button
         button_color = (150, 100, 50) if is_hover else (120, 80, 40)
+        if should_highlight:
+            button_color = (200, 150, 100)  # Brighter when highlighted
         pygame.draw.rect(self.screen, button_color, self.arms_dealer_game_button, border_radius=10)
-        pygame.draw.rect(self.screen, (200, 150, 100), self.arms_dealer_game_button, 3, border_radius=10)
+        
+        # Draw border (thicker and brighter if highlighted)
+        border_color = (255, 215, 0) if should_highlight else (200, 150, 100)
+        border_width = 5 if should_highlight else 3
+        pygame.draw.rect(self.screen, border_color, self.arms_dealer_game_button, border_width, border_radius=10)
         
         # Draw text
         text = self.renderer.pixel_fonts['small'].render("VISIT ARMS DEALER", True, config.WHITE)

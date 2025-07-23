@@ -245,7 +245,7 @@ class ChessBoard:
         
         # Check for capture
         captured = self.get_piece(to_row, to_col)
-        if captured:
+        if captured and piece:
             # Track captured piece
             capturing_color = "white" if piece[0] == 'w' else "black"
             self.captured_pieces[capturing_color].append(captured)
@@ -265,7 +265,7 @@ class ChessBoard:
         self.set_piece(from_row, from_col, "")
         
         # Check for promotion
-        if piece[1] == 'P':
+        if piece and len(piece) >= 2 and piece[1] == 'P':
             if (piece[0] == 'w' and to_row == 0) or (piece[0] == 'b' and to_row == 7):
                 self.promoting = True
                 self.promotion_square = (to_row, to_col)
