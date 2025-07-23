@@ -12,6 +12,7 @@ from powerups import PowerupSystem
 from powerup_renderer import PowerupRenderer
 from chopper_gunner import ChopperGunnerMode
 from intro_screen import IntroScreen
+from post_intro_cutscene import PostIntroCutscene
 from story_mode import StoryMode
 from simple_tutorial import SimpleTutorial
 from hint_system import HintSystem
@@ -38,6 +39,10 @@ class ChessGame:
         # Intro screen
         self.intro_screen = IntroScreen(self.screen, self.renderer)
         self.intro_complete = False
+        
+        # Post-intro cutscene
+        self.post_intro_cutscene = PostIntroCutscene(self.screen, self.assets, self.renderer)
+        self.post_intro_complete = False
         
         # Cache fade surface for performance
         self._fade_surface = pygame.Surface((config.WIDTH, config.HEIGHT))
@@ -585,7 +590,15 @@ class ChessGame:
                         # Skip intro
                         self.intro_screen.skip()
                         if not self.fade_active:
-                            self.start_fade("intro", config.SCREEN_START)
+                            self.start_fade("intro", "post_intro")
+                            
+            # Handle post-intro cutscene events
+            if self.current_screen == "post_intro":
+                if event.type == pygame.KEYDOWN or event.type == pygame.MOUSEBUTTONDOWN:
+                    # Skip cutscene on any key or click
+                    self.post_intro_cutscene.skip()
+                    if not self.fade_active:
+                        self.start_fade("post_intro", config.SCREEN_START)
                         
             if event.type == pygame.MOUSEMOTION:
                 self.mouse_pos = event.pos
@@ -1179,9 +1192,17 @@ class ChessGame:
         if self.current_screen == "intro" and not self.fade_active:
             self.intro_screen.update()
             if self.intro_screen.complete and not self.intro_complete:
-                # Start fade transition to main menu
-                self.start_fade("intro", config.SCREEN_START)
+                # Start fade transition to post-intro cutscene
+                self.start_fade("intro", "post_intro")
                 self.intro_complete = True  # Prevent multiple fade starts
+                
+        # Update post-intro cutscene
+        if self.current_screen == "post_intro" and not self.fade_active:
+            self.post_intro_cutscene.update()
+            if self.post_intro_cutscene.complete and not self.post_intro_complete:
+                # Start fade transition to main menu
+                self.start_fade("post_intro", config.SCREEN_START)
+                self.post_intro_complete = True  # Prevent multiple fade starts
         
         # Update fade
         if self.fade_active:
@@ -1193,6 +1214,12 @@ class ChessGame:
                 if self.fade_from == "intro":
                     self.intro_screen.active = False
                     self.intro_complete = True  # Mark intro as complete
+                    # Start the post-intro cutscene
+                    if self.fade_to == "post_intro":
+                        self.post_intro_cutscene.start()
+                elif self.fade_from == "post_intro":
+                    self.post_intro_cutscene.active = False
+                    self.post_intro_complete = True
                 elif self.fade_to == config.SCREEN_ARMS_DEALER:
                     # Auto-advance tutorial when reaching arms dealer
                     if self.in_tutorial_battle and self.story_tutorial.active:
@@ -1489,6 +1516,9 @@ class ChessGame:
                 skip_rect = skip_text.get_rect(bottomright=(config.WIDTH - 20, config.HEIGHT - 20))
                 skip_text.set_alpha(150)
                 self.screen.blit(skip_text, skip_rect)
+                
+        elif screen_type == "post_intro":
+            self.post_intro_cutscene.draw()
                 
         elif screen_type == config.SCREEN_START:
             buttons = {
