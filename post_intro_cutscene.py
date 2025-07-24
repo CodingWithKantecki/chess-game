@@ -23,7 +23,7 @@ class PostIntroCutscene:
         # Jet properties
         self.jet_x = -200  # Start off-screen left
         self.jet_y = config.HEIGHT // 2 - 50
-        self.jet_speed = 8.0  # Much faster for dramatic effect
+        self.jet_speed = 18.0  # Much faster for dramatic effect
         self.jet_frame = 0
         self.jet_animation_timer = 0
         self.jet_animation_speed = 140  # Milliseconds per frame for animation
@@ -104,7 +104,7 @@ class PostIntroCutscene:
         self.logo_text2 = "PROTOCOL"
         self.logo_letters_shown = 0
         self.logo_letter_timer = 0
-        self.logo_letter_speed = 100  # Milliseconds per letter
+        self.logo_letter_speed = 60  # Milliseconds per letter
         self.logo_complete = False
         
         # Binary code streams
@@ -185,7 +185,7 @@ class PostIntroCutscene:
                 'x': random.randint(0, config.WIDTH),
                 'y': random.randint(0, config.HEIGHT),
                 'speed': random.uniform(0.2, 0.5),
-                'opacity': random.randint(20, 60),
+                'opacity': random.randint(20, 50),
                 'font_size': random.choice(['tiny', 'tiny', 'small'])
             })
             
@@ -199,7 +199,7 @@ class PostIntroCutscene:
                 'x': random.randint(0, config.WIDTH),
                 'y': random.randint(-config.HEIGHT, config.HEIGHT * 2),
                 'speed': random.uniform(0.3, 0.8),
-                'opacity': random.randint(15, 40),
+                'opacity': random.randint(15, 35),
                 'direction': random.choice([-1, 1])  # -1 for up, 1 for down
             })
             
@@ -420,16 +420,16 @@ class PostIntroCutscene:
         # Apply darkening for storm atmosphere
         dark_overlay = pygame.Surface((config.WIDTH, config.HEIGHT))
         dark_overlay.fill((0, 0, 0))
-        dark_overlay.set_alpha(120)
+        dark_overlay.set_alpha(60)
         self.screen.blit(dark_overlay, (0, 0))
         
-        # Draw lightning flash
-        if self.lightning_active:
-            flash_surface = pygame.Surface((config.WIDTH, config.HEIGHT))
-            flash_surface.fill((255, 255, 255))
-            flash_alpha = 100 if (pygame.time.get_ticks() // 50) % 2 == 0 else 50
-            flash_surface.set_alpha(flash_alpha)
-            self.screen.blit(flash_surface, (0, 0))
+        # Draw lightning flash - DISABLED
+        # if self.lightning_active:
+        #     flash_surface = pygame.Surface((config.WIDTH, config.HEIGHT))
+        #     flash_surface.fill((255, 255, 255))
+        #     flash_alpha = 100 if (pygame.time.get_ticks() // 50) % 2 == 0 else 50
+        #     flash_surface.set_alpha(flash_alpha)
+        #     self.screen.blit(flash_surface, (0, 0))
             
         # Draw rain
         rain_surface = pygame.Surface((config.WIDTH, config.HEIGHT), pygame.SRCALPHA)
@@ -535,27 +535,27 @@ class PostIntroCutscene:
                         logo2_rect = logo_text2.get_rect(center=(config.WIDTH // 2, config.HEIGHT // 2 + 20))
                         self.screen.blit(logo_text2, logo2_rect)
                     
-                # Draw cleared area lightning
-                if self.cleared_lightning_active and clear_rect.width > 0:
-                    # Create vertical lightning bolts in cleared area
-                    for i in range(3):  # Multiple bolts
-                        bolt_x = random.randint(50, min(clear_rect.width - 50, config.WIDTH - 50))
-                        bolt_segments = []
-                        current_x = bolt_x
-                        current_y = 0
-                        
-                        while current_y < config.HEIGHT:
-                            next_x = current_x + random.randint(-20, 20)
-                            next_y = current_y + random.randint(30, 60)
-                            bolt_segments.append(((current_x, current_y), (next_x, next_y)))
-                            current_x = next_x
-                            current_y = next_y
-                            
-                        # Draw the lightning bolt
-                        for segment in bolt_segments:
-                            pygame.draw.line(self.screen, (200, 200, 255), segment[0], segment[1], 2)
-                            # Glow effect
-                            pygame.draw.line(self.screen, (150, 150, 255, 100), segment[0], segment[1], 4)
+                # Draw cleared area lightning - DISABLED
+                # if self.cleared_lightning_active and clear_rect.width > 0:
+                #     # Create vertical lightning bolts in cleared area
+                #     for i in range(3):  # Multiple bolts
+                #         bolt_x = random.randint(50, min(clear_rect.width - 50, config.WIDTH - 50))
+                #         bolt_segments = []
+                #         current_x = bolt_x
+                #         current_y = 0
+                #         
+                #         while current_y < config.HEIGHT:
+                #             next_x = current_x + random.randint(-20, 20)
+                #             next_y = current_y + random.randint(30, 60)
+                #             bolt_segments.append(((current_x, current_y), (next_x, next_y)))
+                #             current_x = next_x
+                #             current_y = next_y
+                #             
+                #         # Draw the lightning bolt
+                #         for segment in bolt_segments:
+                #             pygame.draw.line(self.screen, (200, 200, 255), segment[0], segment[1], 2)
+                #             # Glow effect
+                #             pygame.draw.line(self.screen, (150, 150, 255, 100), segment[0], segment[1], 4)
                 
             # Draw the edge of the clearing with a glowing effect
             edge_x = clear_width

@@ -25,6 +25,8 @@ class AssetManager:
         self.chopper_activation_overlay = None  # Store chopper activation overlay
         self.airstrike_sequence = []  # Store helicopter takeoff sequence
         self.beta_badge = None  # Store beta badge image
+        self.bot_image = None  # Store bot character image
+        self.capy_image = None  # Store capybara image
         
     def load_all(self):
         """Load all game assets."""
@@ -43,6 +45,8 @@ class AssetManager:
         self.load_chopper_activation_overlay()
         self.load_airstrike_sequence()
         self.load_beta_badge()
+        self.load_bot()
+        self.load_capy()
         print("Assets loaded!")
         
     def load_pieces(self):
@@ -419,3 +423,27 @@ class AssetManager:
                 print(f"✗ Error loading beta badge: {str(e)}")
         else:
             print("✗ Beta badge not found")
+    
+    def load_bot(self):
+        """Load bot character image."""
+        bot_path = os.path.join(ASSETS_DIR, "bot.png")
+        if os.path.exists(bot_path):
+            try:
+                self.bot_image = pygame.image.load(bot_path).convert_alpha()
+                print("✓ Loaded bot character")
+            except Exception as e:
+                print(f"✗ Error loading bot character: {str(e)}")
+        else:
+            print("✗ Bot character not found")
+    
+    def load_capy(self):
+        """Load capybara image."""
+        capy_path = os.path.join(ASSETS_DIR, "capy.png")
+        if os.path.exists(capy_path):
+            try:
+                self.capy_image = pygame.image.load(capy_path).convert_alpha()
+                print("✓ Loaded capybara")
+            except Exception as e:
+                print(f"✗ Error loading capybara: {str(e)}")
+        else:
+            print("✗ Capybara image not found")

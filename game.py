@@ -3,6 +3,7 @@ Main Game Class - Enhanced with Tutorial, Victory Screen, and Story Mode
 """
 
 import pygame
+import os
 import config
 from assets import AssetManager
 from board import ChessBoard
@@ -260,7 +261,7 @@ class ChessGame:
         self.update_ui_positions()
         
         # Volume control
-        self.music_volume = 0.75
+        self.music_volume = 0.4
         self.sfx_volume = 0.75
         self.dragging_music_slider = False
         self.dragging_sfx_slider = False
@@ -291,6 +292,21 @@ class ChessGame:
         # Story dialogue state
         self.current_dialogue_index = 0
         self.dialogue_complete = False
+        
+        # Music fade state
+        self.music_fade_active = False
+        self.music_fade_start_time = 0
+        self.music_fade_duration = 1000  # 1 second fade
+        self.music_fade_out = False  # True for fade out, False for fade in
+        self.music_fade_target_volume = 0
+        self.music_fade_start_volume = 0
+        self.switching_to_tariq = False
+        self.current_music = "main"  # "main" or "tariq"
+        
+        # Music position tracking
+        self.main_music_position = 0
+        self.tariq_music_position = 0
+        self.music_start_time = pygame.time.get_ticks()
         
         # Start music immediately when game loads
         pygame.mixer.music.play(-1)
@@ -682,6 +698,81 @@ class ChessGame:
             self.assets.sounds['helicopter_blade'].set_volume(self.sfx_volume * 0.8)  # Helicopter blade at 80% of SFX volume
         if 'click' in self.assets.sounds:
             self.assets.sounds['click'].set_volume(self.sfx_volume * 0.5)  # Click at 50% of SFX volume
+    
+    def update_music_fade(self):
+        """Update music fade in/out."""
+        if not self.music_fade_active:
+            return
+            
+        current_time = pygame.time.get_ticks()
+        elapsed = current_time - self.music_fade_start_time
+        
+        if elapsed >= self.music_fade_duration:
+            # Fade complete
+            self.music_fade_active = False
+            pygame.mixer.music.set_volume(self.music_fade_target_volume * self.music_volume)
+            
+            # If we were switching to tariq music, load and play it now
+            if self.switching_to_tariq and self.music_fade_out:
+                # Store current position of main music
+                self.main_music_position = pygame.mixer.music.get_pos()
+                if self.main_music_position == -1:  # Music not playing
+                    self.main_music_position = 0
+                else:
+                    # Add elapsed time since music started
+                    self.main_music_position += (pygame.time.get_ticks() - self.music_start_time)
+                
+                tariq_path = os.path.join(config.ASSETS_DIR, config.TARIQ_MUSIC_FILE)
+                if os.path.exists(tariq_path):
+                    pygame.mixer.music.stop()
+                    pygame.mixer.music.load(tariq_path)
+                    # Start from saved position or beginning
+                    start_pos = self.tariq_music_position / 1000.0  # Convert to seconds
+                    pygame.mixer.music.play(-1, start_pos)
+                    self.current_music = "tariq"
+                    self.music_start_time = pygame.time.get_ticks() - self.tariq_music_position
+                    # Start fade in
+                    self.start_music_fade(0, 1, 1000)
+                    self.switching_to_tariq = False
+            # If we were switching back to main music
+            elif not self.switching_to_tariq and self.music_fade_out and self.current_music == "tariq":
+                # Store current position of tariq music
+                self.tariq_music_position = pygame.mixer.music.get_pos()
+                if self.tariq_music_position == -1:  # Music not playing
+                    self.tariq_music_position = 0
+                else:
+                    # Add elapsed time since music started
+                    self.tariq_music_position += (pygame.time.get_ticks() - self.music_start_time)
+                
+                main_path = os.path.join(config.ASSETS_DIR, config.MUSIC_FILE)
+                if os.path.exists(main_path):
+                    pygame.mixer.music.stop()
+                    pygame.mixer.music.load(main_path)
+                    # Start from saved position or beginning
+                    start_pos = self.main_music_position / 1000.0  # Convert to seconds
+                    pygame.mixer.music.play(-1, start_pos)
+                    self.current_music = "main"
+                    self.music_start_time = pygame.time.get_ticks() - self.main_music_position
+                    # Start fade in
+                    self.start_music_fade(0, 1, 1000)
+        else:
+            # Calculate current volume
+            progress = elapsed / self.music_fade_duration
+            if self.music_fade_out:
+                current_volume = self.music_fade_start_volume * (1 - progress)
+            else:
+                current_volume = self.music_fade_target_volume * progress
+            
+            pygame.mixer.music.set_volume(current_volume * self.music_volume)
+    
+    def start_music_fade(self, start_volume, target_volume, duration):
+        """Start a music fade."""
+        self.music_fade_active = True
+        self.music_fade_start_time = pygame.time.get_ticks()
+        self.music_fade_duration = duration
+        self.music_fade_start_volume = start_volume
+        self.music_fade_target_volume = target_volume
+        self.music_fade_out = target_volume < start_volume
                 
     def handle_click(self, pos):
         """Handle mouse click."""
@@ -1156,6 +1247,16 @@ class ChessGame:
         self.fade_start = pygame.time.get_ticks()
         self.fade_from = from_screen
         self.fade_to = to_screen
+        
+        # Handle music transitions
+        if to_screen == config.SCREEN_ARMS_DEALER and self.current_music == "main":
+            # Fade out main music when entering arms dealer
+            self.switching_to_tariq = True
+            self.start_music_fade(1, 0, 1000)
+        elif from_screen == config.SCREEN_ARMS_DEALER and to_screen in [config.SCREEN_GAME, config.SCREEN_START] and self.current_music == "tariq":
+            # Fade out tariq music when leaving arms dealer
+            self.switching_to_tariq = False
+            self.start_music_fade(1, 0, 1000)
         # Clear typewriter texts when switching screens, but preserve certain texts
         preserve_texts = set()
         
@@ -1187,6 +1288,9 @@ class ChessGame:
     def update(self):
         """Update game logic."""
         current_time = pygame.time.get_ticks()
+        
+        # Update music fade
+        self.update_music_fade()
         
         # Update intro screen
         if self.current_screen == "intro" and not self.fade_active:

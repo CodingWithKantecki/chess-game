@@ -1,7 +1,7 @@
 """
 Intro Screen Implementation for Checkmate Protocol
 Displays credits with fade in/out sequences FINAL
-Total duration: 11.5 seconds
+Total duration: 9.7 seconds
 """
 
 import pygame
@@ -14,10 +14,10 @@ class IntroScreen:
         self.active = True
         self.complete = False
         
-        # Timing configuration (11.5 seconds total)
-        self.fade_duration = 1000  # 1 second fade in/out
-        self.display_duration = 2000  # 2 seconds display time
-        self.between_fade = 500  # 0.5 seconds between screens
+        # Timing configuration (10 seconds total)
+        self.fade_duration = 800  # 0.8 second fade in/out
+        self.display_duration = 1500  # 1.5 seconds display time
+        self.between_fade = 400  # 0.4 seconds between screens
         
         # Credit screens
         self.credits = [
@@ -29,12 +29,12 @@ class IntroScreen:
             {
                 "text": "MUSIC CREATED BY",
                 "name": "THOMAS KANTECKI",
-                "start_time": 4000  # Start at 4 seconds
+                "start_time": 3300  # Start at 3.3 seconds
             },
             {
                 "text": "ART CREATED BY",
                 "name": "EDER MUNIZ AND DANI MACCARI",
-                "start_time": 8000  # Start at 8 seconds
+                "start_time": 6600  # Start at 6.6 seconds
             }
         ]
         
@@ -68,9 +68,9 @@ class IntroScreen:
         elapsed = current_time - self.start_time
         
         # Check if we should start the fade to menu
-        # The last credit starts at 8000ms and lasts 4000ms (1s fade in + 2s display + 1s fade out)
-        # So we complete at 12000ms (12 seconds)
-        if elapsed >= 12000 and not self.final_fade_started:
+        # The last credit starts at 6600ms and lasts 3100ms (0.8s fade in + 1.5s display + 0.8s fade out)
+        # So we complete at 9700ms (9.7 seconds)
+        if elapsed >= 9700 and not self.final_fade_started:
             self.final_fade_started = True
             self.complete = True
             

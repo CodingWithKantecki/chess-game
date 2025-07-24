@@ -33,6 +33,11 @@ class StoryMode:
                         "opponent": "Training Bot Alpha",
                         "difficulty": "easy",
                         "portrait": "BOT",
+                        "affiliation": "HELIX ACADEMY",
+                        "rank": "TRAINING UNIT",
+                        "threat_level": "MINIMAL",
+                        "classification": "TUTORIAL",
+                        "specialization": "Basic Tactics Training",
                         "pre_battle": [
                             "TRAINING BOT: GREETINGS, RECRUIT.",
                             "TRAINING BOT: I AM PROGRAMMED TO TEST BASIC TACTICS.",
@@ -58,6 +63,11 @@ class StoryMode:
                         "opponent": "Sergeant Mills", 
                         "difficulty": "easy",
                         "portrait": "SGT",
+                        "affiliation": "HELIX DEFENSE FORCE",
+                        "rank": "SERGEANT",
+                        "threat_level": "LOW",
+                        "classification": "FRIENDLY",
+                        "specialization": "Field Combat Training",
                         "pre_battle": [
                             "SGT. MILLS: So you're the new recruit?",
                             "SGT. MILLS: The academy may have taught you the basics,",

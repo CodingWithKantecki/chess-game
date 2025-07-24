@@ -135,6 +135,7 @@ BOARD_TEXTURES = ["board.png", "board_plain_05.png"]
 
 # Sound files
 MUSIC_FILE = "music.mp3"
+TARIQ_MUSIC_FILE = "tariq.mp3"
 CAPTURE_SOUND = "slash.mp3"
 
 # Parallax layers - UPDATED TO MATCH YOUR FILES

@@ -138,7 +138,7 @@ class Renderer:
         
         return fonts
         
-    def add_typewriter_text(self, text, position, font_key='medium', color=config.WHITE, center=False, callback=None):
+    def add_typewriter_text(self, text, position, font_key='medium', color=config.WHITE, center=False, callback=None, speed=None):
         """Add a text to be displayed with typewriter effect."""
         self.typewriter_texts.append({
             'full_text': text,
@@ -150,7 +150,8 @@ class Renderer:
             'start_time': pygame.time.get_ticks(),
             'char_index': 0,
             'callback': callback,
-            'completed': False
+            'completed': False,
+            'speed': speed if speed is not None else self.typewriter_speed
         })
         
     def update_typewriter_texts(self):
@@ -163,7 +164,8 @@ class Renderer:
                 
             # Calculate how many characters should be shown
             elapsed_time = (current_time - text_data['start_time']) / 1000.0
-            chars_to_show = int(elapsed_time * self.typewriter_speed)
+            speed = text_data.get('speed', self.typewriter_speed)
+            chars_to_show = int(elapsed_time * speed)
             
             if chars_to_show > text_data['char_index']:
                 text_data['char_index'] = min(chars_to_show, len(text_data['full_text']))
@@ -203,8 +205,15 @@ class Renderer:
         else:
             self.typewriter_texts = []
             self.typewriter_added_texts.clear()
+            
+        # Reset badge fade timer
+        if hasattr(self, 'badge_fade_start'):
+            delattr(self, 'badge_fade_start')
+        # Reset buttons fade timer
+        if hasattr(self, 'buttons_fade_start'):
+            delattr(self, 'buttons_fade_start')
         
-    def draw_text_typewriter(self, text, position, font_key='medium', color=config.WHITE, center=False, instant=False, text_id=None):
+    def draw_text_typewriter(self, text, position, font_key='medium', color=config.WHITE, center=False, instant=False, text_id=None, speed=None):
         """Draw text with typewriter effect (immediate version for single frame)."""
         if instant:
             font = self.pixel_fonts[font_key]
@@ -221,7 +230,7 @@ class Renderer:
             
             # Only add if not already added
             if text_id not in self.typewriter_added_texts:
-                self.add_typewriter_text(text, position, font_key, color, center)
+                self.add_typewriter_text(text, position, font_key, color, center, speed=speed)
                 self.typewriter_added_texts.add(text_id)
         
     def draw_mode_select(self, mode_buttons, back_button, mouse_pos):
@@ -355,6 +364,9 @@ class Renderer:
         overlay = self._get_cached_overlay(config.WIDTH, config.HEIGHT, (0, 0, 0), 100)
         self.screen.blit(overlay, (0, 0))
         
+        # Draw walking capybaras
+        self._draw_walking_capybaras()
+        
         # Title
         title = self.pixel_fonts['huge'].render("STORY MODE", True, config.WHITE)
         title_rect = title.get_rect(center=(config.WIDTH // 2, 50))
@@ -452,6 +464,9 @@ class Renderer:
         overlay = self._get_cached_overlay(config.WIDTH, config.HEIGHT, (0, 0, 0), 100)
         self.screen.blit(overlay, (0, 0))
         
+        # Draw walking capybaras
+        self._draw_walking_capybaras()
+        
         # Chapter title
         title = self.pixel_fonts['huge'].render(chapter["title"], True, config.WHITE)
         title_rect = title.get_rect(center=(config.WIDTH // 2, 50))
@@ -505,37 +520,46 @@ class Renderer:
             portrait_text = battle.get("portrait", "X")
             
             if portrait_text == "BOT":
-                # Draw mini robot icon
-                robot_x = card_x + 60
-                robot_y = card_rect.centery
-                robot_color = (100, 200, 255)
-                
-                # Mini robot head
-                head_rect = pygame.Rect(robot_x - 20, robot_y - 25, 40, 30)
-                pygame.draw.rect(self.screen, robot_color, head_rect, border_radius=5)
-                pygame.draw.rect(self.screen, (150, 230, 255), head_rect, 2, border_radius=5)
-                
-                # Eyes
-                pygame.draw.circle(self.screen, (255, 100, 100), (robot_x - 10, robot_y - 15), 6)
-                pygame.draw.circle(self.screen, (255, 100, 100), (robot_x + 10, robot_y - 15), 6)
-                pygame.draw.circle(self.screen, (0, 0, 0), (robot_x - 10, robot_y - 15), 2)
-                pygame.draw.circle(self.screen, (0, 0, 0), (robot_x + 10, robot_y - 15), 2)
-                
-                # Mouth
-                pygame.draw.rect(self.screen, (50, 50, 50), (robot_x - 12, robot_y - 5, 24, 5))
-                
-                # Antenna
-                pygame.draw.line(self.screen, robot_color, (robot_x, robot_y - 25), (robot_x, robot_y - 35), 2)
-                pygame.draw.circle(self.screen, (255, 255, 100), (robot_x, robot_y - 35), 3)
-                
-                # Body
-                body_rect = pygame.Rect(robot_x - 18, robot_y + 5, 36, 25)
-                pygame.draw.rect(self.screen, robot_color, body_rect, border_radius=3)
-                pygame.draw.rect(self.screen, (150, 230, 255), body_rect, 2, border_radius=3)
-                
-                # Lights
-                pygame.draw.circle(self.screen, (0, 255, 0), (robot_x - 8, robot_y + 15), 3)
-                pygame.draw.circle(self.screen, (255, 0, 0), (robot_x + 8, robot_y + 15), 3)
+                # Use bot.png image if available, otherwise draw mini robot icon
+                if self.assets.bot_image:
+                    # Scale bot image to fit card portrait area
+                    mini_bot_size = 80
+                    bot_scaled = pygame.transform.smoothscale(self.assets.bot_image, 
+                                                            (mini_bot_size, mini_bot_size))
+                    bot_rect = bot_scaled.get_rect(center=(card_x + 60, card_rect.centery))
+                    self.screen.blit(bot_scaled, bot_rect)
+                else:
+                    # Fallback to drawn mini robot
+                    robot_x = card_x + 60
+                    robot_y = card_rect.centery
+                    robot_color = (100, 200, 255)
+                    
+                    # Mini robot head
+                    head_rect = pygame.Rect(robot_x - 20, robot_y - 25, 40, 30)
+                    pygame.draw.rect(self.screen, robot_color, head_rect, border_radius=5)
+                    pygame.draw.rect(self.screen, (150, 230, 255), head_rect, 2, border_radius=5)
+                    
+                    # Eyes
+                    pygame.draw.circle(self.screen, (255, 100, 100), (robot_x - 10, robot_y - 15), 6)
+                    pygame.draw.circle(self.screen, (255, 100, 100), (robot_x + 10, robot_y - 15), 6)
+                    pygame.draw.circle(self.screen, (0, 0, 0), (robot_x - 10, robot_y - 15), 2)
+                    pygame.draw.circle(self.screen, (0, 0, 0), (robot_x + 10, robot_y - 15), 2)
+                    
+                    # Mouth
+                    pygame.draw.rect(self.screen, (50, 50, 50), (robot_x - 12, robot_y - 5, 24, 5))
+                    
+                    # Antenna
+                    pygame.draw.line(self.screen, robot_color, (robot_x, robot_y - 25), (robot_x, robot_y - 35), 2)
+                    pygame.draw.circle(self.screen, (255, 255, 100), (robot_x, robot_y - 35), 3)
+                    
+                    # Body
+                    body_rect = pygame.Rect(robot_x - 18, robot_y + 5, 36, 25)
+                    pygame.draw.rect(self.screen, robot_color, body_rect, border_radius=3)
+                    pygame.draw.rect(self.screen, (150, 230, 255), body_rect, 2, border_radius=3)
+                    
+                    # Lights
+                    pygame.draw.circle(self.screen, (0, 255, 0), (robot_x - 8, robot_y + 15), 3)
+                    pygame.draw.circle(self.screen, (255, 0, 0), (robot_x + 8, robot_y + 15), 3)
             else:
                 # Regular portrait
                 portrait_surface = self.pixel_fonts['huge'].render(portrait_text, True, config.WHITE)
@@ -596,16 +620,38 @@ class Renderer:
         overlay = self._get_cached_overlay(config.WIDTH, config.HEIGHT, (0, 0, 0), 180)
         self.screen.blit(overlay, (0, 0))
         
+        # Draw tech grid background
+        self._draw_tech_grid()
+        
+        # Get current time for animations
+        current_time = pygame.time.get_ticks()
+        
+        # Draw digital rain effect (behind everything else)
+        self._draw_digital_rain(current_time)
+        
         # Character portrait
         portrait_size = 200
         portrait_x = config.WIDTH // 2 - portrait_size // 2
         portrait_y = 100
         
-        # Portrait background
-        pygame.draw.rect(self.screen, (40, 40, 40), 
+        # Draw scanner effect around portrait
+        self._draw_scanner_effect(portrait_x - 20, portrait_y - 20, portrait_size + 40, portrait_size + 40, current_time)
+        
+        # Portrait background with tech style
+        # Outer glow
+        for i in range(3):
+            glow_alpha = 100 - i * 30
+            glow_surf = pygame.Surface((portrait_size + 40 + i*10, portrait_size + 40 + i*10), pygame.SRCALPHA)
+            pygame.draw.rect(glow_surf, (0, 255, 255, glow_alpha), 
+                           (0, 0, portrait_size + 40 + i*10, portrait_size + 40 + i*10), 
+                           3, border_radius=15)
+            self.screen.blit(glow_surf, (portrait_x - 20 - i*5, portrait_y - 20 - i*5))
+        
+        # Main portrait background
+        pygame.draw.rect(self.screen, (20, 30, 40), 
                        (portrait_x - 10, portrait_y - 10, portrait_size + 20, portrait_size + 20), 
                        border_radius=10)
-        pygame.draw.rect(self.screen, (200, 200, 200), 
+        pygame.draw.rect(self.screen, (0, 200, 255), 
                        (portrait_x - 10, portrait_y - 10, portrait_size + 20, portrait_size + 20), 
                        3, border_radius=10)
         
@@ -613,82 +659,158 @@ class Renderer:
         portrait_text = battle_data.get("portrait", "X")
         
         if portrait_text == "BOT":
-            # Draw a custom robot icon instead of BOT text
-            robot_color = (100, 200, 255)
-            robot_center_x = portrait_x + portrait_size // 2
-            robot_center_y = portrait_y + portrait_size // 2
-            
-            # Robot head
-            head_rect = pygame.Rect(robot_center_x - 40, robot_center_y - 50, 80, 60)
-            pygame.draw.rect(self.screen, robot_color, head_rect, border_radius=10)
-            pygame.draw.rect(self.screen, (150, 230, 255), head_rect, 3, border_radius=10)
-            
-            # Robot eyes
-            eye_size = 15
-            eye_y = robot_center_y - 35
-            # Left eye
-            pygame.draw.circle(self.screen, (255, 100, 100), (robot_center_x - 20, eye_y), eye_size)
-            pygame.draw.circle(self.screen, (255, 255, 255), (robot_center_x - 20, eye_y), eye_size - 5)
-            pygame.draw.circle(self.screen, (0, 0, 0), (robot_center_x - 20, eye_y), 5)
-            # Right eye
-            pygame.draw.circle(self.screen, (255, 100, 100), (robot_center_x + 20, eye_y), eye_size)
-            pygame.draw.circle(self.screen, (255, 255, 255), (robot_center_x + 20, eye_y), eye_size - 5)
-            pygame.draw.circle(self.screen, (0, 0, 0), (robot_center_x + 20, eye_y), 5)
-            
-            # Robot mouth
-            mouth_rect = pygame.Rect(robot_center_x - 25, robot_center_y - 15, 50, 10)
-            pygame.draw.rect(self.screen, (50, 50, 50), mouth_rect)
-            for i in range(5):
-                pygame.draw.line(self.screen, (150, 230, 255), 
-                               (robot_center_x - 25 + i * 12, robot_center_y - 15),
-                               (robot_center_x - 25 + i * 12, robot_center_y - 5), 2)
-            
-            # Robot antenna
-            pygame.draw.line(self.screen, robot_color, 
-                           (robot_center_x, robot_center_y - 50),
-                           (robot_center_x, robot_center_y - 70), 3)
-            pygame.draw.circle(self.screen, (255, 255, 100), 
-                             (robot_center_x, robot_center_y - 70), 6)
-            
-            # Robot body
-            body_rect = pygame.Rect(robot_center_x - 35, robot_center_y + 10, 70, 50)
-            pygame.draw.rect(self.screen, robot_color, body_rect, border_radius=5)
-            pygame.draw.rect(self.screen, (150, 230, 255), body_rect, 3, border_radius=5)
-            
-            # Body details
-            for i in range(3):
-                for j in range(2):
-                    light_x = robot_center_x - 20 + i * 20
-                    light_y = robot_center_y + 25 + j * 15
-                    light_color = (0, 255, 0) if (i + j) % 2 == 0 else (255, 0, 0)
-                    pygame.draw.circle(self.screen, light_color, (light_x, light_y), 4)
+            # Use bot.png image if available, otherwise fall back to drawn robot
+            if self.assets.bot_image:
+                # Scale bot image to fit portrait area
+                bot_scaled = pygame.transform.smoothscale(self.assets.bot_image, 
+                                                         (portrait_size - 20, portrait_size - 20))
+                bot_rect = bot_scaled.get_rect(center=(portrait_x + portrait_size // 2, 
+                                                      portrait_y + portrait_size // 2))
+                self.screen.blit(bot_scaled, bot_rect)
+            else:
+                # Fallback to drawn robot if image not loaded
+                robot_color = (100, 200, 255)
+                robot_center_x = portrait_x + portrait_size // 2
+                robot_center_y = portrait_y + portrait_size // 2
+                
+                # Robot head
+                head_rect = pygame.Rect(robot_center_x - 40, robot_center_y - 50, 80, 60)
+                pygame.draw.rect(self.screen, robot_color, head_rect, border_radius=10)
+                pygame.draw.rect(self.screen, (150, 230, 255), head_rect, 3, border_radius=10)
+                
+                # Robot eyes
+                eye_size = 15
+                eye_y = robot_center_y - 35
+                # Left eye
+                pygame.draw.circle(self.screen, (255, 100, 100), (robot_center_x - 20, eye_y), eye_size)
+                pygame.draw.circle(self.screen, (255, 255, 255), (robot_center_x - 20, eye_y), eye_size - 5)
+                pygame.draw.circle(self.screen, (0, 0, 0), (robot_center_x - 20, eye_y), 5)
+                # Right eye
+                pygame.draw.circle(self.screen, (255, 100, 100), (robot_center_x + 20, eye_y), eye_size)
+                pygame.draw.circle(self.screen, (255, 255, 255), (robot_center_x + 20, eye_y), eye_size - 5)
+                pygame.draw.circle(self.screen, (0, 0, 0), (robot_center_x + 20, eye_y), 5)
+                
+                # Robot mouth
+                mouth_rect = pygame.Rect(robot_center_x - 25, robot_center_y - 15, 50, 10)
+                pygame.draw.rect(self.screen, (50, 50, 50), mouth_rect)
+                for i in range(5):
+                    pygame.draw.line(self.screen, (150, 230, 255), 
+                                   (robot_center_x - 25 + i * 12, robot_center_y - 15),
+                                   (robot_center_x - 25 + i * 12, robot_center_y - 5), 2)
+                
+                # Robot antenna
+                pygame.draw.line(self.screen, robot_color, 
+                               (robot_center_x, robot_center_y - 50),
+                               (robot_center_x, robot_center_y - 70), 3)
+                pygame.draw.circle(self.screen, (255, 255, 100), 
+                                 (robot_center_x, robot_center_y - 70), 6)
+                
+                # Robot body
+                body_rect = pygame.Rect(robot_center_x - 35, robot_center_y + 10, 70, 50)
+                pygame.draw.rect(self.screen, robot_color, body_rect, border_radius=5)
+                pygame.draw.rect(self.screen, (150, 230, 255), body_rect, 3, border_radius=5)
+                
+                # Body details
+                for i in range(3):
+                    for j in range(2):
+                        light_x = robot_center_x - 20 + i * 20
+                        light_y = robot_center_y + 25 + j * 15
+                        light_color = (0, 255, 0) if (i + j) % 2 == 0 else (255, 0, 0)
+                        pygame.draw.circle(self.screen, light_color, (light_x, light_y), 4)
         else:
             # Regular emoji/text portrait
             portrait_surface = pygame.font.Font(None, 120).render(portrait_text, True, config.WHITE)
             portrait_rect = portrait_surface.get_rect(center=(portrait_x + portrait_size // 2, portrait_y + portrait_size // 2))
             self.screen.blit(portrait_surface, portrait_rect)
         
-        # Character name
+        # Character name with tech styling
         name_text = battle_data["opponent"]
-        name_surface = self.pixel_fonts['large'].render(name_text, True, (255, 215, 0))
-        name_rect = name_surface.get_rect(center=(config.WIDTH // 2, portrait_y + portrait_size + 40))
+        name_y = portrait_y + portrait_size + 40
+        
+        # Name background panel
+        name_width = len(name_text) * 20 + 60
+        name_height = 40
+        name_x = config.WIDTH // 2 - name_width // 2
+        
+        # Draw tech panel for name
+        pygame.draw.rect(self.screen, (10, 20, 30), 
+                       (name_x, name_y - 20, name_width, name_height), 
+                       border_radius=5)
+        pygame.draw.rect(self.screen, (0, 255, 200), 
+                       (name_x, name_y - 20, name_width, name_height), 
+                       2, border_radius=5)
+        
+        # Draw corner brackets
+        bracket_size = 15
+        bracket_color = (0, 255, 255)
+        # Top left
+        pygame.draw.lines(self.screen, bracket_color, False, 
+                         [(name_x, name_y - 20 + bracket_size), (name_x, name_y - 20), (name_x + bracket_size, name_y - 20)], 2)
+        # Top right
+        pygame.draw.lines(self.screen, bracket_color, False, 
+                         [(name_x + name_width - bracket_size, name_y - 20), (name_x + name_width, name_y - 20), (name_x + name_width, name_y - 20 + bracket_size)], 2)
+        # Bottom left
+        pygame.draw.lines(self.screen, bracket_color, False, 
+                         [(name_x, name_y + 20 - bracket_size), (name_x, name_y + 20), (name_x + bracket_size, name_y + 20)], 2)
+        # Bottom right
+        pygame.draw.lines(self.screen, bracket_color, False, 
+                         [(name_x + name_width - bracket_size, name_y + 20), (name_x + name_width, name_y + 20), (name_x + name_width, name_y + 20 - bracket_size)], 2)
+        
+        # Character name with glow
+        name_surface = self.pixel_fonts['large'].render(name_text, True, (255, 255, 255))
+        name_rect = name_surface.get_rect(center=(config.WIDTH // 2, name_y))
+        
+        # Draw glow behind text
+        glow_surf = self.pixel_fonts['large'].render(name_text, True, (0, 255, 255))
+        for offset in [(0, -2), (0, 2), (-2, 0), (2, 0)]:
+            glow_rect = glow_surf.get_rect(center=(config.WIDTH // 2 + offset[0], name_y + offset[1]))
+            glow_surf.set_alpha(100)
+            self.screen.blit(glow_surf, glow_rect)
+        
         self.screen.blit(name_surface, name_rect)
+        
+        # Character Information Sheet
+        self._draw_character_info_sheet(battle_data, portrait_x - 50, name_y + 50)
         
         # Dialogue box
         dialogue_lines = battle_data.get("pre_battle", [])
         if 0 <= dialogue_index < len(dialogue_lines):
-            # Dialogue background
-            dialogue_width = 600
-            dialogue_height = 150
+            # Dialogue background with tech styling
+            dialogue_width = 700
+            dialogue_height = 160
             dialogue_x = (config.WIDTH - dialogue_width) // 2
-            dialogue_y = config.HEIGHT - 250
+            dialogue_y = config.HEIGHT - 260
             
-            pygame.draw.rect(self.screen, (20, 20, 30), 
+            # Dialogue box glow effect
+            for i in range(2):
+                glow_alpha = 80 - i * 40
+                glow_surf = pygame.Surface((dialogue_width + i*6, dialogue_height + i*6), pygame.SRCALPHA)
+                pygame.draw.rect(glow_surf, (0, 200, 255, glow_alpha), 
+                               (0, 0, dialogue_width + i*6, dialogue_height + i*6), 
+                               3, border_radius=10)
+                self.screen.blit(glow_surf, (dialogue_x - i*3, dialogue_y - i*3))
+            
+            # Main dialogue background
+            pygame.draw.rect(self.screen, (10, 15, 25), 
                            (dialogue_x, dialogue_y, dialogue_width, dialogue_height), 
                            border_radius=10)
-            pygame.draw.rect(self.screen, (100, 100, 120), 
+            pygame.draw.rect(self.screen, (0, 150, 200), 
                            (dialogue_x, dialogue_y, dialogue_width, dialogue_height), 
-                           3, border_radius=10)
+                           2, border_radius=10)
+            
+            # Tech corner details
+            corner_size = 20
+            corner_color = (0, 255, 255)
+            # Top left corner
+            pygame.draw.lines(self.screen, corner_color, False,
+                            [(dialogue_x + 10, dialogue_y + 10 + corner_size), 
+                             (dialogue_x + 10, dialogue_y + 10), 
+                             (dialogue_x + 10 + corner_size, dialogue_y + 10)], 2)
+            # Top right corner
+            pygame.draw.lines(self.screen, corner_color, False,
+                            [(dialogue_x + dialogue_width - 10 - corner_size, dialogue_y + 10), 
+                             (dialogue_x + dialogue_width - 10, dialogue_y + 10), 
+                             (dialogue_x + dialogue_width - 10, dialogue_y + 10 + corner_size)], 2)
             
             # Dialogue text with typewriter effect
             current_line = dialogue_lines[dialogue_index]
@@ -766,6 +888,34 @@ class Renderer:
         text_surface = self.pixel_fonts['medium'].render(text, True, config.WHITE)
         text_rect = text_surface.get_rect(center=rect.center)
         self.screen.blit(text_surface, text_rect)
+        
+    def _draw_button_with_alpha(self, rect, text, base_color, hover_color, mouse_pos, alpha):
+        """Helper method to draw a button with alpha transparency."""
+        if alpha <= 0:
+            return
+            
+        # Create a surface for the button
+        button_surface = pygame.Surface((rect.width, rect.height), pygame.SRCALPHA)
+        
+        is_hover = rect.collidepoint(mouse_pos)
+        color = hover_color if is_hover else base_color
+        
+        # Apply alpha to colors
+        color_with_alpha = (*color, alpha)
+        border_color_with_alpha = (*config.WHITE, alpha)
+        
+        # Draw button on the surface
+        pygame.draw.rect(button_surface, color_with_alpha, (0, 0, rect.width, rect.height), border_radius=10)
+        pygame.draw.rect(button_surface, border_color_with_alpha, (0, 0, rect.width, rect.height), 3, border_radius=10)
+        
+        # Draw text
+        text_surface = self.pixel_fonts['medium'].render(text, True, config.WHITE)
+        text_surface.set_alpha(alpha)
+        text_rect = text_surface.get_rect(center=(rect.width // 2, rect.height // 2))
+        button_surface.blit(text_surface, text_rect)
+        
+        # Blit the button surface to screen
+        self.screen.blit(button_surface, rect)
         
     def draw_parallax_background(self, brightness=1.0):
         """Draw scrolling background."""
@@ -1774,9 +1924,9 @@ class Renderer:
         self.current_screen = screen_type
         
         if screen_type == config.SCREEN_START:
-            self.draw_parallax_background_with_fire(1.2)
+            self.draw_parallax_background_with_fire(1.0)
         else:
-            self.draw_parallax_background(1.2)
+            self.draw_parallax_background(1.0)
         
         overlay_alpha = 80 if screen_type == config.SCREEN_START else 120
         overlay = self._get_cached_overlay(config.WIDTH, config.HEIGHT, (0, 0, 0), overlay_alpha)
@@ -1906,11 +2056,18 @@ class Renderer:
                             (bomb['x'] + bomb_width//2, bomb['y'] - bomb_height//2 + 2)
                         ])
                 
-            # Title with typewriter effect
+            # Title with typewriter effect - slower speed for dramatic effect
             title_pos = (game_center_x, game_center_y - 150 * config.SCALE)
-            self.draw_text_typewriter("CHECKMATE PROTOCOL", title_pos, 'huge', config.WHITE, center=True, text_id="main_title")
+            self.draw_text_typewriter("CHECKMATE PROTOCOL", title_pos, 'huge', config.WHITE, center=True, text_id="main_title", speed=15)
             
-            if hasattr(self.assets, 'beta_badge') and self.assets.beta_badge:
+            # Check if main title typewriter effect is complete
+            main_title_complete = False
+            for text_data in self.typewriter_texts:
+                if text_data.get('full_text') == "CHECKMATE PROTOCOL" and text_data.get('completed', False):
+                    main_title_complete = True
+                    break
+            
+            if hasattr(self.assets, 'beta_badge') and self.assets.beta_badge and main_title_complete:
                 badge_height = int(80 * config.SCALE)
                 aspect_ratio = self.assets.beta_badge.get_width() / self.assets.beta_badge.get_height()
                 badge_width = int(badge_height * aspect_ratio)
@@ -1920,15 +2077,38 @@ class Renderer:
                 
                 # Calculate badge position based on title
                 title_width = self.pixel_fonts['huge'].size("CHECKMATE PROTOCOL")[0]
-                badge_x = game_center_x + title_width // 2 - int(20 * config.SCALE)
+                badge_x = game_center_x + title_width // 2 - int(5 * config.SCALE)
                 badge_y = game_center_y - 150 * config.SCALE - int(70 * config.SCALE)
                 
+                # Calculate fade-in alpha based on time since title completion
+                if not hasattr(self, 'badge_fade_start'):
+                    self.badge_fade_start = pygame.time.get_ticks()
+                
+                fade_duration = 500  # 0.5 seconds fade-in
+                elapsed = pygame.time.get_ticks() - self.badge_fade_start
+                alpha = min(255, int(255 * (elapsed / fade_duration)))
+                
+                rotated_badge.set_alpha(alpha)
                 self.screen.blit(rotated_badge, (badge_x, badge_y))
-            
-            self._draw_button(buttons['play'], "PLAY GAME", (70, 150, 70), (100, 200, 100), mouse_pos)
-            self._draw_button(buttons['tutorial'], "TUTORIAL", (70, 100, 150), (100, 130, 200), mouse_pos)
-            self._draw_button(buttons['beta'], "BETA TEST INFO", (150, 150, 70), (200, 200, 100), mouse_pos)
-            self._draw_button(buttons['credits'], "CREDITS", (70, 70, 150), (100, 100, 200), mouse_pos)
+                
+                # Calculate button fade-in based on badge fade completion
+                badge_fade_complete = elapsed >= fade_duration
+                if badge_fade_complete:
+                    if not hasattr(self, 'buttons_fade_start'):
+                        self.buttons_fade_start = pygame.time.get_ticks()
+                    
+                    buttons_fade_duration = 800  # 0.8 seconds fade-in
+                    buttons_elapsed = pygame.time.get_ticks() - self.buttons_fade_start
+                    buttons_alpha = min(255, int(255 * (buttons_elapsed / buttons_fade_duration)))
+                    
+                    # Draw buttons with fade effect
+                    self._draw_button_with_alpha(buttons['play'], "PLAY GAME", (70, 150, 70), (100, 200, 100), mouse_pos, buttons_alpha)
+                    self._draw_button_with_alpha(buttons['tutorial'], "TUTORIAL", (70, 100, 150), (100, 130, 200), mouse_pos, buttons_alpha)
+                    self._draw_button_with_alpha(buttons['beta'], "BETA TEST INFO", (150, 150, 70), (200, 200, 100), mouse_pos, buttons_alpha)
+                    self._draw_button_with_alpha(buttons['credits'], "CREDITS", (70, 70, 150), (100, 100, 200), mouse_pos, buttons_alpha)
+            else:
+                # If no badge or title not complete, don't show buttons yet
+                pass
             
         elif screen_type == config.SCREEN_CREDITS:
             text = self.pixel_fonts['huge'].render("CREDITS", True, config.WHITE)
@@ -2086,10 +2266,11 @@ class Renderer:
         # Draw highlight for powerup buttons
         highlighted_powerup = story_tutorial.get_highlight_powerup()
         if highlighted_powerup:
-            # Calculate powerup menu position (from powerup_renderer)
-            menu_width = 300
-            menu_x = config.WIDTH - menu_width - 20
-            menu_y = config.BOARD_OFFSET_Y + 50
+            # Calculate powerup menu position (matching powerup_renderer exactly)
+            extra_spacing = 20  # Normal gap in windowed mode
+            menu_x = config.BOARD_OFFSET_X + config.BOARD_SIZE + extra_spacing
+            menu_y = config.BOARD_OFFSET_Y + 36  # Move down by the board border size
+            menu_width = config.POWERUP_MENU_WIDTH  # Use actual config value (250)
             
             # Define powerup order (same as in powerup_renderer)
             powerup_keys = ["shield", "gun", "airstrike", "paratroopers", "chopper"]
@@ -2097,25 +2278,36 @@ class Renderer:
             # Find the index of the highlighted powerup
             if highlighted_powerup in powerup_keys:
                 index = powerup_keys.index(highlighted_powerup)
-                card_height = 120
-                card_y = menu_y + index * (card_height + 10)
+                # Match the actual button positioning from powerup_renderer.py
+                button_y = menu_y + 120  # Buttons start at menu_y + 120
+                button_height = 70
+                button_spacing = 15
+                button_margin = 20
+                
+                # Calculate the actual button position
+                card_y = button_y + index * (button_height + button_spacing)
+                card_height = button_height
                 
                 # Draw pulsing highlight around the powerup card
                 pulse = (pygame.time.get_ticks() // 200) % 10
                 thickness = 4 + (pulse // 3)
                 
+                # Calculate actual button dimensions (matching powerup_renderer)
+                button_width = menu_width - 2 * button_margin
+                button_x = menu_x + button_margin
+                
                 # Create glowing effect
                 for i in range(3):
                     alpha = 150 - (i * 50)
-                    glow_surf = pygame.Surface((menu_width + i*8, card_height + i*8), pygame.SRCALPHA)
+                    glow_surf = pygame.Surface((button_width + i*8, card_height + i*8), pygame.SRCALPHA)
                     pygame.draw.rect(glow_surf, (255, 215, 0, alpha), 
-                                   (0, 0, menu_width + i*8, card_height + i*8), 
+                                   (0, 0, button_width + i*8, card_height + i*8), 
                                    thickness + i*2, border_radius=10)
-                    self.screen.blit(glow_surf, (menu_x - i*4, card_y - i*4))
+                    self.screen.blit(glow_surf, (button_x - i*4, card_y - i*4))
                 
                 # Draw main highlight border
                 pygame.draw.rect(self.screen, (255, 215, 0), 
-                               (menu_x, card_y, menu_width, card_height), 
+                               (button_x, card_y, button_width, card_height), 
                                thickness, border_radius=10)
         
         # Draw instruction panel
@@ -2304,13 +2496,13 @@ class Renderer:
         # Simple rectangular card layout
         powerup_keys = ["shield", "gun", "airstrike", "paratroopers", "chopper"]
         
-        # Calculate positions for simple row arrangement
-        card_width = 140 * self.scale
-        card_height = 180 * self.scale
-        card_spacing = 20 * self.scale
+        # Calculate positions for simple row arrangement - smaller cards
+        card_width = 100 * self.scale
+        card_height = 140 * self.scale
+        card_spacing = 15 * self.scale
         total_width = len(powerup_keys) * card_width + (len(powerup_keys) - 1) * card_spacing
-        start_x = game_center_x - total_width / 2
-        card_y = game_center_y - 50 * self.scale
+        start_x = game_center_x - total_width / 2 + 100 * self.scale  # Shift right
+        card_y = game_center_y - 80 * self.scale
         
         shop_buttons.clear()
         
@@ -2556,3 +2748,265 @@ class Renderer:
         
         # Tail
         pygame.draw.rect(screen, color, (cx + 10, cy, 15, 5))
+    
+    def _draw_tech_grid(self):
+        """Draw animated tech grid background."""
+        grid_color = (0, 50, 80, 30)
+        line_spacing = 50
+        time_offset = pygame.time.get_ticks() * 0.02
+        
+        # Vertical lines
+        for x in range(0, config.WIDTH, line_spacing):
+            offset = int(math.sin(time_offset + x * 0.01) * 5)
+            line_surf = pygame.Surface((2, config.HEIGHT), pygame.SRCALPHA)
+            line_surf.fill(grid_color)
+            self.screen.blit(line_surf, (x + offset, 0))
+        
+        # Horizontal lines
+        for y in range(0, config.HEIGHT, line_spacing):
+            offset = int(math.cos(time_offset + y * 0.01) * 5)
+            line_surf = pygame.Surface((config.WIDTH, 2), pygame.SRCALPHA)
+            line_surf.fill(grid_color)
+            self.screen.blit(line_surf, (0, y + offset))
+    
+    def _draw_scanner_effect(self, x, y, width, height, current_time):
+        """Draw scanner effect around an area."""
+        scanner_color = (0, 255, 255)
+        
+        # Rotating scanner line
+        angle = (current_time * 0.1) % 360
+        center_x = x + width // 2
+        center_y = y + height // 2
+        
+        # Calculate scanner line endpoints
+        radius = max(width, height) // 2
+        end_x = center_x + int(math.cos(math.radians(angle)) * radius)
+        end_y = center_y + int(math.sin(math.radians(angle)) * radius)
+        
+        # Draw scanner line with fade
+        for i in range(5):
+            alpha = 150 - i * 30
+            scanner_surf = pygame.Surface((config.WIDTH, config.HEIGHT), pygame.SRCALPHA)
+            pygame.draw.line(scanner_surf, (*scanner_color, alpha), 
+                           (center_x, center_y), (end_x, end_y), 3 - i)
+            self.screen.blit(scanner_surf, (0, 0))
+        
+        # Corner brackets that pulse
+        pulse = abs(math.sin(current_time * 0.003)) * 0.5 + 0.5
+        bracket_size = int(30 * pulse + 20)
+        bracket_color = (0, int(255 * pulse), int(255 * pulse))
+        thickness = 3
+        
+        # Top-left
+        pygame.draw.lines(self.screen, bracket_color, False,
+                         [(x, y + bracket_size), (x, y), (x + bracket_size, y)], thickness)
+        # Top-right
+        pygame.draw.lines(self.screen, bracket_color, False,
+                         [(x + width - bracket_size, y), (x + width, y), (x + width, y + bracket_size)], thickness)
+        # Bottom-left
+        pygame.draw.lines(self.screen, bracket_color, False,
+                         [(x, y + height - bracket_size), (x, y + height), (x + bracket_size, y + height)], thickness)
+        # Bottom-right
+        pygame.draw.lines(self.screen, bracket_color, False,
+                         [(x + width - bracket_size, y + height), (x + width, y + height), (x + width, y + height - bracket_size)], thickness)
+    
+    def _draw_digital_rain(self, current_time):
+        """Draw Matrix-style digital rain effect."""
+        # Initialize rain columns if not exists
+        if not hasattr(self, 'rain_columns'):
+            self.rain_columns = []
+            # Create columns across the screen
+            for x in range(0, config.WIDTH, 20):
+                self.rain_columns.append({
+                    'x': x,
+                    'y': random.randint(-config.HEIGHT, 0),
+                    'speed': random.uniform(2, 6),
+                    'chars': [chr(random.randint(33, 126)) for _ in range(20)],
+                    'length': random.randint(10, 20)
+                })
+        
+        rain_surf = pygame.Surface((config.WIDTH, config.HEIGHT), pygame.SRCALPHA)
+        
+        # Update and draw rain columns
+        for col in self.rain_columns:
+            # Update position
+            col['y'] += col['speed']
+            
+            # Reset column when it goes off screen
+            if col['y'] > config.HEIGHT + 200:
+                col['y'] = random.randint(-400, -100)
+                col['speed'] = random.uniform(2, 6)
+                col['chars'] = [chr(random.randint(33, 126)) for _ in range(20)]
+                col['length'] = random.randint(10, 20)
+            
+            # Draw characters in column
+            for i in range(col['length']):
+                char_y = col['y'] - i * 20
+                if 0 <= char_y <= config.HEIGHT:
+                    # Fade based on position in trail
+                    if i == 0:
+                        color = (150, 255, 150)  # Bright green for head
+                        alpha = 255
+                    else:
+                        fade = 1 - (i / col['length'])
+                        color = (0, int(180 * fade), 0)
+                        alpha = int(200 * fade)
+                    
+                    # Change character occasionally
+                    if random.random() < 0.1:
+                        col['chars'][i % len(col['chars'])] = chr(random.randint(33, 126))
+                    
+                    # Draw character
+                    char_surf = self.pixel_fonts['tiny'].render(col['chars'][i % len(col['chars'])], True, (*color, alpha))
+                    rain_surf.blit(char_surf, (col['x'], char_y))
+        
+        self.screen.blit(rain_surf, (0, 0))
+    
+    def _draw_character_info_sheet(self, battle_data, x, y):
+        """Draw character information sheet with badges and stats."""
+        sheet_width = 300
+        sheet_height = 180
+        
+        # Info sheet background
+        sheet_surf = pygame.Surface((sheet_width, sheet_height), pygame.SRCALPHA)
+        pygame.draw.rect(sheet_surf, (10, 20, 30, 200), (0, 0, sheet_width, sheet_height), border_radius=10)
+        pygame.draw.rect(sheet_surf, (0, 150, 200), (0, 0, sheet_width, sheet_height), 2, border_radius=10)
+        
+        # Draw grid pattern on sheet
+        for i in range(0, sheet_width, 30):
+            pygame.draw.line(sheet_surf, (0, 100, 150, 50), (i, 0), (i, sheet_height), 1)
+        for i in range(0, sheet_height, 30):
+            pygame.draw.line(sheet_surf, (0, 100, 150, 50), (0, i), (sheet_width, i), 1)
+        
+        # Affiliation Badge
+        affiliation = battle_data.get("affiliation", "UNKNOWN")
+        badge_y = 15
+        
+        # Draw badge background
+        badge_color = self._get_affiliation_color(affiliation)
+        pygame.draw.polygon(sheet_surf, badge_color,
+                          [(20, badge_y), (50, badge_y - 10), (80, badge_y), 
+                           (80, badge_y + 20), (50, badge_y + 30), (20, badge_y + 20)])
+        pygame.draw.polygon(sheet_surf, (255, 255, 255),
+                          [(20, badge_y), (50, badge_y - 10), (80, badge_y), 
+                           (80, badge_y + 20), (50, badge_y + 30), (20, badge_y + 20)], 2)
+        
+        # Affiliation text
+        aff_text = affiliation
+        aff_surf = self.pixel_fonts['tiny'].render(aff_text, True, (255, 255, 255))
+        sheet_surf.blit(aff_surf, (90, badge_y + 5))
+        
+        # Information fields
+        info_y = 60
+        info_spacing = 25
+        
+        # Rank
+        rank = battle_data.get("rank", "UNKNOWN")
+        self._draw_info_field(sheet_surf, "RANK:", rank, 20, info_y, badge_color)
+        
+        # Threat Level
+        threat = battle_data.get("threat_level", "UNKNOWN")
+        threat_color = self._get_threat_color(threat)
+        self._draw_info_field(sheet_surf, "THREAT:", threat, 20, info_y + info_spacing, threat_color)
+        
+        # Classification
+        classification = battle_data.get("classification", "UNKNOWN")
+        self._draw_info_field(sheet_surf, "CLASS:", classification, 20, info_y + info_spacing * 2, (100, 200, 255))
+        
+        # Specialization
+        spec = battle_data.get("specialization", "Unknown")
+        self._draw_info_field(sheet_surf, "SPEC:", spec, 20, info_y + info_spacing * 3, (150, 150, 200))
+        
+        # Difficulty indicator
+        diff = battle_data.get("difficulty", "unknown")
+        diff_text = f"DIFFICULTY: {diff.upper()}"
+        diff_color = {"easy": (100, 255, 100), "medium": (255, 255, 100), "hard": (255, 100, 100)}.get(diff, (200, 200, 200))
+        diff_surf = self.pixel_fonts['small'].render(diff_text, True, diff_color)
+        sheet_surf.blit(diff_surf, (20, sheet_height - 30))
+        
+        # Blit the sheet to screen
+        self.screen.blit(sheet_surf, (x, y))
+    
+    def _draw_info_field(self, surface, label, value, x, y, color):
+        """Draw an information field with label and value."""
+        label_surf = self.pixel_fonts['tiny'].render(label, True, (150, 150, 150))
+        surface.blit(label_surf, (x, y))
+        
+        value_surf = self.pixel_fonts['small'].render(value, True, color)
+        surface.blit(value_surf, (x + 60, y - 2))
+    
+    def _get_affiliation_color(self, affiliation):
+        """Get color based on affiliation."""
+        colors = {
+            "HELIX ACADEMY": (0, 150, 255),
+            "HELIX DEFENSE FORCE": (0, 200, 100),
+            "NEXUS CORP": (255, 100, 0),
+            "SHADOW COLLECTIVE": (150, 0, 200),
+            "ROGUE": (255, 50, 50)
+        }
+        return colors.get(affiliation, (150, 150, 150))
+    
+    def _get_threat_color(self, threat_level):
+        """Get color based on threat level."""
+        colors = {
+            "MINIMAL": (100, 255, 100),
+            "LOW": (150, 255, 100),
+            "MODERATE": (255, 255, 100),
+            "HIGH": (255, 150, 100),
+            "EXTREME": (255, 50, 50),
+            "CRITICAL": (255, 0, 255)
+        }
+        return colors.get(threat_level, (200, 200, 200))
+    
+    def _draw_walking_capybaras(self):
+        """Draw sitting capybaras that move with parallax background."""
+        if not self.assets.capy_image:
+            return
+            
+        # Initialize capybara list and auto-scroll if not exists
+        if not hasattr(self, 'sitting_capybaras'):
+            self.sitting_capybaras = []
+            self.last_capybara_spawn = 0
+            self.story_mode_scroll_offset = 0
+            # Don't start with capybaras on screen
+        
+        current_time = pygame.time.get_ticks()
+        
+        # Auto-scroll for story mode screens (since there's no mouse parallax)
+        self.story_mode_scroll_offset += 2.0  # Constant rightward scroll speed
+        
+        # Spawn new capybara occasionally (every 8-15 seconds)
+        spawn_interval = random.randint(8000, 15000) if self.last_capybara_spawn == 0 else 8000
+        if current_time - self.last_capybara_spawn > spawn_interval:
+            # Spawn capybara just off-screen to the left
+            self.sitting_capybaras.append({
+                'world_x': -150 + self.story_mode_scroll_offset,  # World position (off-screen left)
+                'size': random.randint(45, 65),
+                'flip': random.choice([True, False])
+            })
+            self.last_capybara_spawn = current_time
+        
+        # Draw capybaras
+        capybaras_to_remove = []
+        for i, capy in enumerate(self.sitting_capybaras):
+            # Calculate screen position
+            # Capybaras stay at their world position while the "camera" moves right
+            screen_x = capy['world_x'] - self.story_mode_scroll_offset
+            capy_y = config.HEIGHT - capy['size'] - 100  # Position to sit on grass
+            
+            # Remove if moved too far off screen
+            if screen_x < -200 or screen_x > config.WIDTH + 200:
+                capybaras_to_remove.append(i)
+                continue
+            
+            # Draw sitting capybara
+            capy_scaled = pygame.transform.smoothscale(self.assets.capy_image, 
+                                                      (capy['size'], capy['size']))
+            if capy['flip']:
+                capy_scaled = pygame.transform.flip(capy_scaled, True, False)
+            
+            self.screen.blit(capy_scaled, (int(screen_x), int(capy_y)))
+        
+        # Remove capybaras that have left the screen
+        for i in reversed(capybaras_to_remove):
+            self.sitting_capybaras.pop(i)
