@@ -1,17 +1,40 @@
-All Rights Reserved
+Free-to-Play Personal Use License
 
 Copyright (c) 2024 KentuckyToThe
 
-This software and associated documentation files (the "Software") are the proprietary
-property of KentuckyToThe. All rights are reserved.
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated files (the "Software"), to use the Software
+subject to the following conditions:
 
-NO PERMISSION is granted to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of the Software without explicit written permission from the copyright
-holder.
+PERMITTED USES:
+- Playing the game for personal entertainment
+- Modifying the code for personal use and learning
+- Creating personal mods or modifications for your own enjoyment
+- Studying the code for educational purposes
 
-The Software is provided for viewing and reference purposes only on this repository.
-Running, executing, or using this code in any way without explicit permission is prohibited.
+PROHIBITED USES:
+- Redistributing the Software or any modified versions
+- Uploading to any website, repository, or file sharing service
+- Commercial use of any kind
+- Selling or monetizing the Software or derivatives
+- Claiming ownership or authorship of the Software
+- Using assets (graphics, sounds, music) in other projects
 
-For licensing inquiries or permission requests, please contact the copyright holder.
+DISTRIBUTION:
+The official distribution channels for this Software are:
+- GitHub repository (for source code viewing only)
+- Steam (official release)
+- itch.io (official release)
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED.
+Any other distribution is unauthorized and prohibited.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+For questions about this license or permission requests, please contact the
+copyright holder through GitHub.
