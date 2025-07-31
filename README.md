@@ -2,6 +2,18 @@
 
 A unique chess game built with Pygame featuring military-themed powerups, AI opponents, and an immersive story mode.
 
+## 🎮 Play the Game
+
+**Coming Soon to Steam and itch.io!**
+
+This game will be available as a free download on both platforms. Follow for updates!
+
+## ⚠️ License Notice
+
+**This software is proprietary and all rights are reserved.** The source code is provided for viewing and reference only. You may NOT run, modify, distribute, or use this code without explicit written permission from the copyright holder.
+
+See the [LICENSE](LICENSE) file for full details.
+
 ## Features
 
 - **Classic Chess Gameplay**: Full chess rules implementation with drag-and-drop piece movement
@@ -24,44 +36,20 @@ A unique chess game built with Pygame featuring military-themed powerups, AI opp
   - Sound effects for moves, captures, and powerups
   - Voice acting in story mode
 
-## Requirements
+## Screenshots
 
-- Python 3.8 or higher
-- Pygame 2.0 or higher
+*Screenshots coming soon*
 
-## Installation
+## System Requirements
 
-1. Clone the repository:
-```bash
-git clone https://github.com/KentuckyToThe/chess-game.git
-cd chess-game
-```
+- Windows, macOS, or Linux
+- Python 3.8 or higher (for source code)
+- 2GB RAM minimum
+- Graphics card with OpenGL support
 
-2. Install required dependencies:
-```bash
-pip install pygame
-```
+## About the Developer
 
-## How to Play
-
-Run the game:
-```bash
-python main.py
-```
-
-### Controls
-
-- **Mouse**: Click and drag to move pieces
-- **ESC**: Return to menu / Exit
-- **Space**: Skip cutscenes (in story mode)
-- **1-3**: Activate powerups (when available)
-
-### Game Rules
-
-Standard chess rules apply with the addition of powerup mechanics:
-- Capture enemy pieces to charge your powerup meter
-- Once charged, activate devastating military strikes
-- Use powerups strategically to turn the tide of battle
+This is my first game release! I'm excited to share this unique take on chess that combines classic strategy with modern military action.
 
 ## Project Structure
 
@@ -73,28 +61,27 @@ Standard chess rules apply with the addition of powerup mechanics:
 - `story_mode.py` - Story mode campaign
 - `assets/` - Game sprites, sounds, and music
 
-## Development
-
-This game was created as a creative take on classical chess, adding modern military elements while maintaining the strategic depth of the original game.
+## Development Status
 
 ### Recent Updates
 
 - Replaced jet flyby animation with title fade-in effect
 - Fixed typewriter text issues between screen transitions
 - Windows compatibility improvements for console output
+- Updated to proprietary license for commercial release
 
-## License
+### Planned Features
 
-This project is licensed under the Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License.
+- Online multiplayer
+- Additional powerups
+- More story chapters
+- Steam achievements
+- Custom board themes
 
-You are free to use, modify, and share this code for non-commercial purposes. See the LICENSE file for details.
+## Contact
 
-## Contributing
+For licensing inquiries or permission requests, please contact via GitHub issues.
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+## Copyright
 
-## Acknowledgments
-
-- Chess piece sprites and board textures
-- Pygame community for the excellent game development framework
-- Beta testers for feedback and bug reports
+Copyright (c) 2024 KentuckyToThe. All rights reserved.
