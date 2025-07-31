@@ -1257,33 +1257,9 @@ class ChessGame:
             # Fade out tariq music when leaving arms dealer
             self.switching_to_tariq = False
             self.start_music_fade(1, 0, 1000)
-        # Clear typewriter texts when switching screens, but preserve certain texts
-        preserve_texts = set()
-        
-        # Only preserve title screen text when staying on or returning to start screen
-        if to_screen == config.SCREEN_START:
-            preserve_texts.add("main_title")
-        
-        # Only preserve mode select text when staying on or going to mode select
-        if to_screen == "mode_select":
-            preserve_texts.add("mode_select_title")
-        
-        # Clear story dialogue when transitioning away from story_dialogue screen
-        if from_screen == "story_dialogue":
-            # Clear ALL typewriter texts when leaving story dialogue
-            self.renderer.clear_typewriter_texts()
-        
-        # Also clear when going TO the game screen to ensure clean state
-        if to_screen == config.SCREEN_GAME:
-            # Clear any lingering typewriter texts except preserved ones
-            if from_screen != config.SCREEN_START and from_screen != "mode_select":
-                self.renderer.clear_typewriter_texts()
-            
-        # For other screens, clear everything (dialogue will be re-added as needed)
-        if not preserve_texts:
-            self.renderer.clear_typewriter_texts()
-        else:
-            self.renderer.clear_typewriter_texts(preserve_texts)
+        # Always clear ALL typewriter texts when switching screens
+        # Each screen will re-add its own texts when drawn
+        self.renderer.clear_typewriter_texts()
         
     def update(self):
         """Update game logic."""
@@ -1570,6 +1546,9 @@ class ChessGame:
         
         # Handle fade transitions
         if self.fade_active:
+            # Disable typewriter additions during fade
+            self.renderer.allow_typewriter_additions = False
+            
             # Draw fade transition
             progress = min(1.0, (pygame.time.get_ticks() - self.fade_start) / config.FADE_DURATION)
             
@@ -1585,12 +1564,16 @@ class ChessGame:
                 alpha = int(255 * (2 - progress * 2))
                 self._fade_surface.set_alpha(alpha)
                 self.screen.blit(self._fade_surface, (0, 0))
+                
+            # Re-enable typewriter additions
+            self.renderer.allow_typewriter_additions = True
         else:
             # Normal drawing (no fade)
             self.draw_screen(self.current_screen)
             
         # Update and draw typewriter texts only on appropriate screens
-        if self.current_screen in [config.SCREEN_START, "mode_select", "story_dialogue", config.SCREEN_ARMS_DEALER]:
+        # Don't draw typewriter texts during fade transitions
+        if not self.fade_active and self.current_screen in [config.SCREEN_START, "mode_select", "story_dialogue", config.SCREEN_ARMS_DEALER]:
             self.renderer.update_typewriter_texts()
             self.renderer.draw_typewriter_texts()
             

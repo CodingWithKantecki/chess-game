@@ -14,6 +14,7 @@ class Renderer:
         self.assets = assets
         self.parallax_offset = 0
         self.scale = 1.0
+        self.allow_typewriter_additions = True  # Flag to control typewriter text additions
         
         # Try to load pixel fonts
         self.pixel_fonts = self.load_pixel_fonts()
@@ -224,6 +225,10 @@ class Renderer:
             else:
                 self.screen.blit(text_surface, position)
         else:
+            # Only add typewriter texts if allowed (not during fade transitions)
+            if not self.allow_typewriter_additions:
+                return
+                
             # Use text_id or create one from text and position
             if text_id is None:
                 text_id = f"{text}_{position}"
@@ -447,8 +452,8 @@ class Renderer:
             if not is_unlocked:
                 lock_text = "LOCKED"
                 lock_surface = self.pixel_fonts['medium'].render(lock_text, True, (200, 50, 50))
-                # Position on the right side, before the progress bar
-                lock_rect = lock_surface.get_rect(center=(bar_x - 80, button_rect.centery))
+                # Position on the right side, below the chapter title to avoid overlap
+                lock_rect = lock_surface.get_rect(center=(bar_x - 80, button_rect.centery + 15))
                 self.screen.blit(lock_surface, lock_rect)
                 
             y_offset += button_height + 20
