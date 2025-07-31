@@ -85,7 +85,9 @@ This game was created as a creative take on classical chess, adding modern milit
 
 ## License
 
-This project is open source and available under the MIT License.
+Copyright © 2024 KentuckyToThe. All rights reserved.
+
+This software is proprietary. See the LICENSE file for details.
 
 ## Contributing
 
