@@ -20,15 +20,15 @@ class PostIntroCutscene:
         self.start_time = 0
         # No duration - wait for user input
         
-        # Jet properties
-        self.jet_x = -200  # Start off-screen left
+        # Jet properties - we'll remove the main jet movement but keep animation for background jets
+        self.jet_x = config.WIDTH + 200  # Set jet as already off screen
         self.jet_y = config.HEIGHT // 2 - 50
-        self.jet_speed = 18.0  # Much faster for dramatic effect
+        self.jet_speed = 0  # No movement
         self.jet_frame = 0
         self.jet_animation_timer = 0
         self.jet_animation_speed = 140  # Milliseconds per frame for animation
-        self.jet_reached_end = False
-        self.jet_final_x = config.WIDTH + 200  # Where jet ends up
+        self.jet_reached_end = True  # Already at end
+        self.jet_final_x = config.WIDTH + 200
         
         # Use animated jet frames from assets
         self.jet_frames = []
@@ -99,12 +99,12 @@ class PostIntroCutscene:
         self.cleared_lightning_active = False
         self.next_cleared_lightning = random.randint(1000, 3000)
         
-        # Letter-by-letter logo appearance
+        # Logo fade-in appearance
         self.logo_text1 = "CHECKMATE"
         self.logo_text2 = "PROTOCOL"
-        self.logo_letters_shown = 0
-        self.logo_letter_timer = 0
-        self.logo_letter_speed = 60  # Milliseconds per letter
+        self.logo_fade_alpha = 0
+        self.logo_fade_start = None
+        self.logo_fade_duration = 2000  # 2 seconds fade-in
         self.logo_complete = False
         
         # Binary code streams
@@ -218,7 +218,7 @@ class PostIntroCutscene:
         self.active = True
         self.complete = False
         self.start_time = pygame.time.get_ticks()
-        self.jet_x = -200
+        self.jet_x = config.WIDTH + 200  # Already off screen
         self.fade_alpha = 255
         self.fade_out_started = False
         
@@ -246,23 +246,9 @@ class PostIntroCutscene:
         else:
             self.fade_alpha = 0
             
-        # Update jet position - stop when it reaches the end
-        if not self.jet_reached_end:
-            self.jet_x += self.jet_speed
-            if self.jet_x >= self.jet_final_x:
-                self.jet_reached_end = True
-                self.jet_x = self.jet_final_x
-        
-        # Update jet animation (always animate, even when stopped)
-        if self.jet_frames:
-            self.jet_animation_timer += 16  # Assume 60 FPS
-            if self.jet_animation_timer >= self.jet_animation_speed:
-                self.jet_animation_timer = 0
-                self.jet_frame = (self.jet_frame + 1) % len(self.jet_frames)
-        
-        # Update camera follow with slight lag
-        target_camera_x = (self.jet_x - config.WIDTH // 2) * 0.3
-        self.camera_offset_x += (target_camera_x - self.camera_offset_x) * 0.05
+        # No jet movement - it's already off screen
+        # Keep camera steady
+        self.camera_offset_x = 0
         
         # Update turbulence
         self.turbulence_timer += 16  # Assume 60 FPS
@@ -300,8 +286,8 @@ class PostIntroCutscene:
             self.text_visible = not self.text_visible
             self.text_blink_timer = 0
             
-        # Update falling chess pieces (only after jet clears area)
-        if self.jet_x > 200:
+        # Update falling chess pieces immediately
+        if True:
             for piece in self.falling_pieces:
                 piece['y'] += piece['speed']
                 piece['rotation'] += piece['rotation_speed']
@@ -309,7 +295,7 @@ class PostIntroCutscene:
                 # Reset pieces that fall off screen
                 if piece['y'] > config.HEIGHT:
                     piece['y'] = random.randint(-200, -50)
-                    piece['x'] = random.randint(0, max(100, int(self.jet_x - 100)))  # Only spawn in cleared area
+                    piece['x'] = random.randint(0, config.WIDTH)  # Spawn anywhere
                     piece['speed'] = random.uniform(0.2, 1.5)
                     piece['type'] = random.choice(self.piece_types)
                     
@@ -328,7 +314,7 @@ class PostIntroCutscene:
                 jet['speed'] = random.uniform(2.0, 4.0)
                 
         # Update cleared area lightning
-        if self.jet_x > 400:  # Only after significant clearing
+        if True:  # Always show
             self.cleared_lightning_timer += 16
             if self.cleared_lightning_timer >= self.next_cleared_lightning and not self.cleared_lightning_active:
                 self.cleared_lightning_active = True
@@ -340,18 +326,22 @@ class PostIntroCutscene:
                 if current_time - self.cleared_lightning_start >= 150:  # Slightly longer than normal lightning
                     self.cleared_lightning_active = False
                     
-        # Update letter-by-letter logo appearance
-        if self.jet_x > 400 and not self.logo_complete:
-            self.logo_letter_timer += 16
-            if self.logo_letter_timer >= self.logo_letter_speed:
-                self.logo_letter_timer = 0
-                self.logo_letters_shown += 1
-                total_letters = len(self.logo_text1) + len(self.logo_text2)
-                if self.logo_letters_shown >= total_letters:
-                    self.logo_complete = True
+        # Update logo fade-in
+        if not self.logo_complete:
+            # Start fade when intro is done (immediately)
+            if self.logo_fade_start is None:
+                self.logo_fade_start = pygame.time.get_ticks()
+            
+            # Calculate fade progress
+            elapsed = pygame.time.get_ticks() - self.logo_fade_start
+            if elapsed < self.logo_fade_duration:
+                self.logo_fade_alpha = int(255 * (elapsed / self.logo_fade_duration))
+            else:
+                self.logo_fade_alpha = 255
+                self.logo_complete = True
                     
-        # Update military data (only after jet has fully cleared screen)
-        if self.jet_x >= config.WIDTH + 100:  # Wait until jet fully clears
+        # Update military data immediately
+        if True:  # Always show
             for data in self.military_data:
                 data['y'] -= data['speed']
                 if data['y'] < -20:
@@ -443,19 +433,18 @@ class PostIntroCutscene:
                            (drop['x'], end_y), 1)
         self.screen.blit(rain_surface, (0, 0))
         
-        # Draw the trail effect - clear the screen behind the jet
-        # Don't apply camera offset to the clearing effect - it should be consistent
-        clear_width = max(0, self.jet_x - 100)  # Clear 100 pixels behind the jet
+        # Show the entire cleared area (no jet clearing effect)
+        clear_width = config.WIDTH  # Full screen is "cleared"
         
-        if clear_width > 0:
+        if True:  # Always show
             # Create a vertical clearing effect that covers the full screen height
             clear_rect = pygame.Rect(0, 0, clear_width, config.HEIGHT)
             
             # Draw black background for cleared area
             pygame.draw.rect(self.screen, (0, 0, 0), clear_rect)
             
-            # Draw falling chess pieces in the cleared area
-            if clear_width > 200:  # Start showing pieces earlier
+            # Draw falling chess pieces
+            if True:  # Always show
                 # Create a clipping rect for the cleared area
                 clip_rect = self.screen.get_clip()
                 self.screen.set_clip(clear_rect)
@@ -498,8 +487,8 @@ class PostIntroCutscene:
                             
                             self.screen.blit(scaled_jet, (int(jet['x']), int(jet['y'])))
                 
-                # Draw military data and binary streams (only after jet fully clears)
-                if self.jet_x >= config.WIDTH + 100:
+                # Draw military data and binary streams immediately
+                if True:
                     # Draw binary streams
                     for stream in self.binary_streams:
                         if stream['x'] < clear_rect.width:
@@ -516,24 +505,14 @@ class PostIntroCutscene:
                             text.set_alpha(data['opacity'])
                             self.screen.blit(text, (int(data['x']), int(data['y'])))
                 
-                # Draw the logo letter by letter
-                if self.logo_font:
-                    # Calculate how many letters to show
-                    letters_shown = min(self.logo_letters_shown, len(self.logo_text1) + len(self.logo_text2))
-                    
-                    # First line
-                    if letters_shown > 0:
-                        text1_shown = self.logo_text1[:min(letters_shown, len(self.logo_text1))]
-                        logo_text1 = self.logo_font.render(text1_shown, True, config.WHITE)
-                        logo1_rect = logo_text1.get_rect(center=(config.WIDTH // 2, config.HEIGHT // 2 - 40))
-                        self.screen.blit(logo_text1, logo1_rect)
-                    
-                    # Second line
-                    if letters_shown > len(self.logo_text1):
-                        text2_shown = self.logo_text2[:letters_shown - len(self.logo_text1)]
-                        logo_text2 = self.logo_font.render(text2_shown, True, config.WHITE)
-                        logo2_rect = logo_text2.get_rect(center=(config.WIDTH // 2, config.HEIGHT // 2 + 20))
-                        self.screen.blit(logo_text2, logo2_rect)
+                # Draw the logo with fade-in effect
+                if self.logo_font and self.logo_fade_alpha > 0:
+                    # Draw "CHECKMATE PROTOCOL" as one line with fade
+                    full_title = "CHECKMATE PROTOCOL"
+                    logo_surface = self.logo_font.render(full_title, True, config.WHITE)
+                    logo_surface.set_alpha(self.logo_fade_alpha)
+                    logo_rect = logo_surface.get_rect(center=(config.WIDTH // 2, config.HEIGHT // 2))
+                    self.screen.blit(logo_surface, logo_rect)
                     
                 # Draw cleared area lightning - DISABLED
                 # if self.cleared_lightning_active and clear_rect.width > 0:
@@ -557,33 +536,9 @@ class PostIntroCutscene:
                 #             # Glow effect
                 #             pygame.draw.line(self.screen, (150, 150, 255, 100), segment[0], segment[1], 4)
                 
-            # Draw the edge of the clearing with a glowing effect
-            edge_x = clear_width
-            for i in range(5):
-                alpha = 150 - i * 30
-                edge_color = (255, 255, 255, alpha)
-                edge_surf = pygame.Surface((3, config.HEIGHT), pygame.SRCALPHA)
-                edge_surf.fill(edge_color)
-                self.screen.blit(edge_surf, (edge_x + i * 3, 0))
+            # No edge effect needed since there's no jet clearing
         
-        # Calculate jet position with camera shake only (no offset for consistency)
-        jet_draw_x = self.jet_x + self.camera_shake_x
-        jet_draw_y = self.jet_y + self.camera_shake_y + math.sin(self.turbulence_timer * 0.001) * 5
-        
-        # Draw jet with animation
-        if self.jet_frames and len(self.jet_frames) > 0:
-            current_frame = self.jet_frames[self.jet_frame]
-            self.screen.blit(current_frame, (jet_draw_x, jet_draw_y))
-        else:
-            # Fallback - draw simple jet shape
-            pygame.draw.polygon(self.screen, (80, 80, 80), [
-                (jet_draw_x, jet_draw_y + 20),
-                (jet_draw_x + 100, jet_draw_y + 20),
-                (jet_draw_x + 120, jet_draw_y + 30),
-                (jet_draw_x + 100, jet_draw_y + 40),
-                (jet_draw_x, jet_draw_y + 40),
-                (jet_draw_x - 20, jet_draw_y + 30)
-            ])
+        # Don't draw the main jet - we removed it
             
         # Draw "PRESS ANYWHERE TO CONTINUE" text
         if self.text_visible and self.fade_alpha < 200:  # Don't show during fade
@@ -619,5 +574,12 @@ class PostIntroCutscene:
     def skip(self):
         """Skip the cutscene."""
         if not self.fade_out_started:
+            # Play click sound if available
+            if hasattr(self.assets, 'sounds') and 'click' in self.assets.sounds:
+                try:
+                    self.assets.sounds['click'].play()
+                except:
+                    pass  # Ignore if sound fails to play
+            
             self.fade_out_started = True
             self.fade_out_start_time = pygame.time.get_ticks()
