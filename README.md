@@ -103,7 +103,7 @@ python main.py
 
 ## 👨‍💻 About the Developer
 
-Hi! I'm KentuckyToThe, an indie game developer passionate about creating unique gaming experiences. This chess game is my first release, combining classic strategy with modern military action elements. I hope you enjoy playing it as much as I enjoyed making it!
+Hi! I'm Thomas Kantecki, an indie game developer passionate about creating unique gaming experiences. This chess game is my first release, combining classic strategy with modern military action elements. I hope you enjoy playing it as much as I enjoyed making it!
 
 ## 📁 Project Structure
 
@@ -148,7 +148,7 @@ Chess Game/
 
 ## 📝 Copyright & Legal
 
-Copyright © 2024 KentuckyToThe. All rights reserved.
+Copyright © 2024 CodingWithKantecki. All rights reserved.
 
 This is proprietary software. The source code is made available for transparency and educational purposes only. All game assets, including graphics, sounds, and music, are protected by copyright and may not be extracted or reused.
 
