@@ -29,31 +29,6 @@ A unique chess game built with Pygame featuring military-themed powerups, AI opp
 
 Any other distribution channels are unauthorized.
 
-## ✨ Features
-
-- **Classic Chess Gameplay**: Full chess rules implementation with drag-and-drop piece movement
-- **Military Powerups**: 
-  - Airstrike: Call in aerial support to clear enemy pieces
-  - Chopper Gunner: Take direct control of attack helicopter
-  - Additional tactical powerups
-- **Game Modes**:
-  - Story Mode with cutscenes and narrative
-  - Tutorial Mode for beginners
-  - VS AI Mode with intelligent computer opponent
-  - Free Play Mode
-- **Visual Effects**:
-  - Parallax scrolling backgrounds
-  - Explosion animations
-  - Smooth piece animations
-  - Custom military-themed UI
-- **Audio**:
-  - Background music
-  - Sound effects for moves, captures, and powerups
-  - Voice acting in story mode
-
-## 📸 Screenshots
-
-*Screenshots and gameplay videos coming soon!*
 
 Check back for:
 - Main menu and UI showcase
@@ -125,25 +100,6 @@ Chess Game/
 │   └── *.wav           # Sound effects
 └── LICENSE             # Free-to-Play Personal Use License
 ```
-
-## 🚀 Development Status
-
-### Recent Updates
-
-- Replaced jet flyby animation with title fade-in effect
-- Fixed typewriter text issues between screen transitions
-- Windows compatibility improvements for console output
-- Updated to proprietary license for commercial release
-
-### Planned Features
-
-- 🌐 Online multiplayer
-- 💥 Additional powerups
-- 📖 More story chapters
-- 🏆 Steam achievements
-- 🎨 Custom board themes
-- 🎵 Extended soundtrack
-- 🌍 Localization support
 
 
 ## 📝 Copyright & Legal
