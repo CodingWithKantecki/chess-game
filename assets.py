@@ -27,10 +27,11 @@ class AssetManager:
         self.beta_badge = None  # Store beta badge image
         self.bot_image = None  # Store bot character image
         self.capy_image = None  # Store capybara image
+        self.mills_image = None  # Store Sgt Mills character image
         
     def load_all(self):
         """Load all game assets."""
-        print("Loading game assets...")
+        # Loading game assets
         self.load_pieces()
         self.load_board()
         self.load_backgrounds()
@@ -47,7 +48,8 @@ class AssetManager:
         self.load_beta_badge()
         self.load_bot()
         self.load_capy()
-        print("Assets loaded!")
+        self.load_mills()
+        # Assets loaded
         
     def load_pieces(self):
         """Load chess piece images."""
@@ -62,7 +64,6 @@ class AssetManager:
                     # Scale piece to fit square
                     img = self.scale_piece(img)
                     self.pieces[piece_code] = img
-                    print(f"[OK] Loaded {piece_code}")
                 except:
                     fallback = self.create_fallback_piece(piece_code)
                     self.pieces_original[piece_code] = fallback
@@ -128,26 +129,19 @@ class AssetManager:
                     self.board_texture_original = pygame.image.load(filepath).convert_alpha()
                     self.board_texture = pygame.transform.scale(
                         self.board_texture_original, (BOARD_SIZE, BOARD_SIZE))
-                    print(f"[OK] Loaded board texture")
                     return
                 except:
                     pass
-        print("! Using default board")
         
     def load_backgrounds(self):
         """Load parallax backgrounds."""
-        print(f"\nLoading parallax backgrounds from {ASSETS_DIR}...")
-        print(f"Looking for {len(PARALLAX_LAYERS)} layers")
-        
         loaded_count = 0
         for i, layer in enumerate(PARALLAX_LAYERS):
             filepath = os.path.join(ASSETS_DIR, layer["file"])
-            print(f"  Checking for {layer['file']}... ", end="")
             
             if os.path.exists(filepath):
                 try:
                     img = pygame.image.load(filepath).convert_alpha()
-                    print(f"[OK] Loaded (size: {img.get_width()}x{img.get_height()})")
                     
                     # Store original
                     self.parallax_layers_original.append({
@@ -171,12 +165,10 @@ class AssetManager:
                     })
                     loaded_count += 1
                 except Exception as e:
-                    print(f"[ERROR] Error: {str(e)}")
+                    pass
             else:
-                print(f"[MISSING] File not found")
+                pass
                 
-        print(f"\nLoaded {loaded_count}/{len(PARALLAX_LAYERS)} parallax layers")
-        print(f"parallax_layers list has {len(self.parallax_layers)} items\n")
                     
     def load_sounds(self):
         """Load sound effects and music."""
@@ -185,7 +177,7 @@ class AssetManager:
         if os.path.exists(music_path):
             try:
                 pygame.mixer.music.load(music_path)
-                print("[OK] Loaded music")
+                pass
             except:
                 pass
                 
@@ -195,7 +187,7 @@ class AssetManager:
             try:
                 self.sounds['capture'] = pygame.mixer.Sound(capture_path)
                 # Don't set volume here - let game.py handle it
-                print("[OK] Loaded capture sound")
+                pass
             except:
                 pass
                 
@@ -205,7 +197,7 @@ class AssetManager:
             try:
                 self.sounds['bomb'] = pygame.mixer.Sound(bomb_path)
                 # Don't set volume here - let game.py handle it
-                print("[OK] Loaded bomb sound")
+                pass
             except:
                 pass
                 
@@ -214,7 +206,7 @@ class AssetManager:
         if os.path.exists(minigun_path):
             try:
                 self.sounds['minigun'] = pygame.mixer.Sound(minigun_path)
-                print("[OK] Loaded minigun sound")
+                pass
             except:
                 pass
                 
@@ -223,34 +215,34 @@ class AssetManager:
         if os.path.exists(guns1_path):
             try:
                 self.sounds['minigun_revup'] = pygame.mixer.Sound(guns1_path)
-                print("[OK] Loaded minigun rev up sound")
+                pass
             except Exception as e:
-                print(f"[ERROR] Error loading minigun rev up sound: {str(e)}")
+                pass
                 
         # Load minigun firing sound
         guns2_path = os.path.join(ASSETS_DIR, "guns2.wav")
         if os.path.exists(guns2_path):
             try:
                 self.sounds['minigun_fire'] = pygame.mixer.Sound(guns2_path)
-                print("[OK] Loaded minigun firing sound")
+                pass
             except Exception as e:
-                print(f"[ERROR] Error loading minigun firing sound: {str(e)}")
+                pass
                 
         # Load minigun spin down sound
         guns3_path = os.path.join(ASSETS_DIR, "guns3.wav")
         if os.path.exists(guns3_path):
             try:
                 self.sounds['minigun_spindown'] = pygame.mixer.Sound(guns3_path)
-                print("[OK] Loaded minigun spin down sound")
+                pass
             except Exception as e:
-                print(f"[ERROR] Error loading minigun spin down sound: {str(e)}")
+                pass
                 
         # Load helicopter sound
         helicopter_path = os.path.join(ASSETS_DIR, "helicopter.mp3")
         if os.path.exists(helicopter_path):
             try:
                 self.sounds['helicopter'] = pygame.mixer.Sound(helicopter_path)
-                print("[OK] Loaded helicopter sound")
+                pass
             except:
                 pass
                 
@@ -259,25 +251,21 @@ class AssetManager:
         if os.path.exists(helicopter_blade_path):
             try:
                 self.sounds['helicopter_blade'] = pygame.mixer.Sound(helicopter_blade_path)
-                print("[OK] Loaded helicopter blade sound")
+                pass
             except Exception as e:
-                print(f"[ERROR] Error loading helicopter blade sound: {str(e)}")
-        else:
-            print(f"[ERROR] helicopta.wav not found at {helicopter_blade_path}")
+                pass
             
         # Load click sound for menu buttons
         click_path = os.path.join(ASSETS_DIR, "click.mp3")
         if os.path.exists(click_path):
             try:
                 self.sounds['click'] = pygame.mixer.Sound(click_path)
-                print("[OK] Loaded click sound")
+                pass
             except Exception as e:
-                print(f"[ERROR] Error loading click sound: {str(e)}")
+                pass
                 
     def load_explosion_frames(self):
         """Load explosion animation frames."""
-        print("\nLoading explosion animation frames...")
-        
         for i in range(1, 8):  # frame1.png through frame7.png
             filename = f"frame{i}.png"
             filepath = os.path.join(ASSETS_DIR, filename)
@@ -286,13 +274,8 @@ class AssetManager:
                 try:
                     img = pygame.image.load(filepath).convert_alpha()
                     self.explosion_frames.append(img)
-                    print(f"[OK] Loaded {filename}")
                 except Exception as e:
-                    print(f"[ERROR] Error loading {filename}: {str(e)}")
-            else:
-                print(f"[ERROR] {filename} not found")
-                
-        print(f"Loaded {len(self.explosion_frames)}/7 explosion frames")
+                    pass
         
     def load_revolver(self):
         """Load revolver image."""
@@ -300,16 +283,12 @@ class AssetManager:
         if os.path.exists(revolver_path):
             try:
                 self.revolver_image = pygame.image.load(revolver_path).convert_alpha()
-                print("[OK] Loaded revolver image")
+                pass
             except Exception as e:
-                print(f"[ERROR] Error loading revolver: {str(e)}")
-        else:
-            print("[ERROR] Revolver image not found")
+                pass
             
     def load_jet_frames(self):
         """Load jet animation frames."""
-        print("\nLoading jet animation frames...")
-        
         # Load the jet frames in order
         jet_files = [
             "frame_0_delay-0.2s.png",
@@ -324,13 +303,8 @@ class AssetManager:
                 try:
                     img = pygame.image.load(filepath).convert_alpha()
                     self.jet_frames.append(img)
-                    print(f"[OK] Loaded {filename}")
                 except Exception as e:
-                    print(f"[ERROR] Error loading {filename}: {str(e)}")
-            else:
-                print(f"[ERROR] {filename} not found")
-                
-        print(f"Loaded {len(self.jet_frames)}/4 jet frames")
+                    pass
         
     def load_tariq(self):
         """Load Tariq character image."""
@@ -338,11 +312,9 @@ class AssetManager:
         if os.path.exists(tariq_path):
             try:
                 self.tariq_image = pygame.image.load(tariq_path).convert_alpha()
-                print("[OK] Loaded Tariq character")
+                pass
             except Exception as e:
-                print(f"[ERROR] Error loading Tariq: {str(e)}")
-        else:
-            print("[ERROR] Tariq image not found")
+                pass
             
     def load_arms_background(self):
         """Load arms dealer background."""
@@ -350,11 +322,9 @@ class AssetManager:
         if os.path.exists(bg_path):
             try:
                 self.arms_background = pygame.image.load(bg_path).convert()
-                print("[OK] Loaded arms dealer background")
+                pass
             except Exception as e:
-                print(f"[ERROR] Error loading arms background: {str(e)}")
-        else:
-            print("[ERROR] Arms dealer background not found")
+                pass
             
     def load_bar_background(self):
         """Load bar background for intro scene."""
@@ -362,11 +332,9 @@ class AssetManager:
         if os.path.exists(bar_path):
             try:
                 self.bar_background = pygame.image.load(bar_path).convert()
-                print("[OK] Loaded bar background")
+                pass
             except Exception as e:
-                print(f"[ERROR] Error loading bar background: {str(e)}")
-        else:
-            print("[ERROR] Bar background not found")
+                pass
             
     def load_cockpit_view(self):
         """Load cockpit view for chopper gunner."""
@@ -374,11 +342,9 @@ class AssetManager:
         if os.path.exists(cockpit_path):
             try:
                 self.cockpit_view = pygame.image.load(cockpit_path).convert_alpha()
-                print("[OK] Loaded cockpit view")
+                pass
             except Exception as e:
-                print(f"[ERROR] Error loading cockpit view: {str(e)}")
-        else:
-            print("[ERROR] Cockpit view not found")
+                pass
             
     def load_chopper_activation_overlay(self):
         """Load chopper activation overlay."""
@@ -386,16 +352,12 @@ class AssetManager:
         if os.path.exists(overlay_path):
             try:
                 self.chopper_activation_overlay = pygame.image.load(overlay_path).convert_alpha()
-                print("[OK] Loaded chopper activation overlay")
+                pass
             except Exception as e:
-                print(f"[ERROR] Error loading chopper activation overlay: {str(e)}")
-        else:
-            print("[ERROR] copter2.png not found")
+                pass
             
     def load_airstrike_sequence(self):
         """Load helicopter takeoff sequence images."""
-        print("\nLoading airstrike sequence images...")
-        
         sequence_files = ["1.png", "2.png"]
         
         for filename in sequence_files:
@@ -404,13 +366,8 @@ class AssetManager:
                 try:
                     img = pygame.image.load(filepath).convert_alpha()
                     self.airstrike_sequence.append(img)
-                    print(f"[OK] Loaded {filename}")
                 except Exception as e:
-                    print(f"[ERROR] Error loading {filename}: {str(e)}")
-            else:
-                print(f"[ERROR] {filename} not found")
-                
-        print(f"Loaded {len(self.airstrike_sequence)}/2 airstrike sequence images")
+                    pass
         
     def load_beta_badge(self):
         """Load beta badge image."""
@@ -418,11 +375,9 @@ class AssetManager:
         if os.path.exists(beta_path):
             try:
                 self.beta_badge = pygame.image.load(beta_path).convert_alpha()
-                print("[OK] Loaded beta badge")
+                pass
             except Exception as e:
-                print(f"[ERROR] Error loading beta badge: {str(e)}")
-        else:
-            print("[ERROR] Beta badge not found")
+                pass
     
     def load_bot(self):
         """Load bot character image."""
@@ -430,11 +385,9 @@ class AssetManager:
         if os.path.exists(bot_path):
             try:
                 self.bot_image = pygame.image.load(bot_path).convert_alpha()
-                print("[OK] Loaded bot character")
+                pass
             except Exception as e:
-                print(f"[ERROR] Error loading bot character: {str(e)}")
-        else:
-            print("[ERROR] Bot character not found")
+                pass
     
     def load_capy(self):
         """Load capybara image."""
@@ -442,8 +395,16 @@ class AssetManager:
         if os.path.exists(capy_path):
             try:
                 self.capy_image = pygame.image.load(capy_path).convert_alpha()
-                print("[OK] Loaded capybara")
+                pass
             except Exception as e:
-                print(f"[ERROR] Error loading capybara: {str(e)}")
-        else:
-            print("[ERROR] Capybara image not found")
+                pass
+    
+    def load_mills(self):
+        """Load Sgt Mills character image."""
+        mills_path = os.path.join(ASSETS_DIR, "mills.png")
+        if os.path.exists(mills_path):
+            try:
+                self.mills_image = pygame.image.load(mills_path).convert_alpha()
+                pass
+            except Exception as e:
+                pass

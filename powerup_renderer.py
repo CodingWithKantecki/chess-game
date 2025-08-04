@@ -85,9 +85,15 @@ class PowerupRenderer:
         progress = self._get_cached_progress()
         unlocked_powerups = progress.get("unlocked_powerups", ["shield"])
         
-        # Filter powerups to only show unlocked ones
-        available_powerups = {k: v for k, v in self.powerup_system.powerups.items() 
-                             if k in unlocked_powerups}
+        # Check if we're in tutorial mode
+        in_tutorial = hasattr(self.powerup_system, 'in_tutorial') and self.powerup_system.in_tutorial
+        
+        # Filter powerups to only show unlocked ones (or all in tutorial)
+        if in_tutorial:
+            available_powerups = self.powerup_system.powerups
+        else:
+            available_powerups = {k: v for k, v in self.powerup_system.powerups.items() 
+                                 if k in unlocked_powerups}
         
         # Clear button rects
         self.powerup_system.button_rects = {}

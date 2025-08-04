@@ -123,6 +123,9 @@ class PowerupSystem:
         
     def can_use_powerup(self, powerup_key):
         """Check if a powerup is unlocked."""
+        # Check if we're in tutorial mode
+        if hasattr(self, 'in_tutorial') and self.in_tutorial:
+            return True  # All powerups available in tutorial
         progress = load_progress()
         unlocked = progress.get("unlocked_powerups", ["shield"])
         return powerup_key in unlocked
@@ -408,6 +411,7 @@ class PowerupSystem:
             turns_remaining = self.shielded_pieces[from_pos]
             del self.shielded_pieces[from_pos]
             self.shielded_pieces[to_pos] = turns_remaining
+            print(f"Shield moved from {from_pos} to {to_pos} with {turns_remaining} turns remaining")
             
     def is_piece_shielded(self, row, col):
         """Check if a piece is protected by shield."""

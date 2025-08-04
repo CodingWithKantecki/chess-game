@@ -81,13 +81,13 @@ class ChopperGunnerMode:
         # Try multiple ways to load the jet image
         if hasattr(assets, 'jet55'):
             self.jet_image = assets.jet55
-            print("Loaded jet image from assets.jet55")
+            pass
         elif hasattr(assets, 'images') and 'jet55' in assets.images:
             self.jet_image = assets.images['jet55']
-            print("Loaded jet image from assets.images['jet55']")
+            pass
         elif hasattr(assets, 'jet_image'):
             self.jet_image = assets.jet_image
-            print("Loaded jet image from assets.jet_image")
+            pass
         else:
             # Try to load it directly if not in assets
             try:
@@ -95,17 +95,17 @@ class ChopperGunnerMode:
                 jet_path = os.path.join('assets', 'jet55.png')
                 if os.path.exists(jet_path):
                     self.jet_image = pygame.image.load(jet_path).convert_alpha()
-                    print(f"Loaded jet image directly from {jet_path}")
+                    pass
                 else:
-                    print(f"Jet image not found at {jet_path}")
+                    pass
             except Exception as e:
-                print(f"Could not load jet image: {e}")
+                pass
                 
         if self.jet_image is None:
-            print("WARNING: No jet image loaded, will use triangle fallback")
+            pass
         
         # Initialize rain (reasonable amount)
-        print(f"Initializing rain particles...")
+        # Initialize rain particles
         for _ in range(150):  # Reduced from 500 to 150
             particle = {
                 "x": random.randint(-50, WIDTH + 50),
@@ -115,13 +115,9 @@ class ChopperGunnerMode:
                 "wind": random.uniform(-2, -4)  # Less wind
             }
             self.rain_particles.append(particle)
-        print(f"Created {len(self.rain_particles)} rain particles")
+        pass
         
-        # Debug first few particles
-        print("First 3 rain particles:")
-        for i in range(min(3, len(self.rain_particles))):
-            p = self.rain_particles[i]
-            print(f"  Particle {i}: x={p['x']}, y={p['y']}, speed={p['speed']}")
+        # Rain particles initialized
             
         # Initialize clouds
         for _ in range(5):
@@ -176,21 +172,18 @@ class ChopperGunnerMode:
         self.zoom_scale = 0.3
         self.target_zoom = 1.0
         
-        # Debug prints
-        print("Starting chopper gunner mode...")
-        print(f"Helicopter sound available: {self.helicopter_sound is not None}")
-        print(f"Helicopter blade sound available: {self.helicopter_blade_sound is not None}")
+        # Starting chopper gunner mode
         
         # Start helicopter sounds
         if self.helicopter_sound:
             self.helicopter_sound.play(-1)  # Loop
-            print("Playing helicopter sound")
+            pass
         # Play blade sound if available
         if self.helicopter_blade_sound:
             self.helicopter_blade_sound.play(-1)  # Loop the blade sound
-            print("Playing helicopter blade sound")
+            pass
         else:
-            print("No helicopter blade sound loaded!")
+            pass
             
     def stop(self):
         """End chopper gunner mode."""

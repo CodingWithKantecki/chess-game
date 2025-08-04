@@ -384,9 +384,22 @@ class Renderer:
         progress_rect = progress_surface.get_rect(center=(config.WIDTH // 2, 100))
         self.screen.blit(progress_surface, progress_rect)
         
+        # Display player money - use in-memory value
+        money_text = f"Money: ${config.get_money()}"
+        money_surface = self.pixel_fonts['medium'].render(money_text, True, (0, 255, 0))
+        money_rect = money_surface.get_rect(center=(config.WIDTH // 2, 130))
+        self.screen.blit(money_surface, money_rect)
+        
         # Chapter list
         chapter_buttons.clear()
-        y_offset = 150
+        y_offset = 170
+        
+        # Debug output only once per second to reduce spam
+        current_time = pygame.time.get_ticks()
+        if not hasattr(self, '_last_debug_time') or current_time - self._last_debug_time > 1000:
+            self._last_debug_time = current_time
+            print(f"Story Chapters Display - unlocked_chapters: {story_mode.unlocked_chapters}")
+            print(f"Story Chapters Display - completed_battles: {story_mode.completed_battles}")
         
         for i, chapter in enumerate(story_mode.chapters):
             if not chapter.get("battles"):  # Skip epilogue
@@ -565,6 +578,20 @@ class Renderer:
                     # Lights
                     pygame.draw.circle(self.screen, (0, 255, 0), (robot_x - 8, robot_y + 15), 3)
                     pygame.draw.circle(self.screen, (255, 0, 0), (robot_x + 8, robot_y + 15), 3)
+            elif portrait_text == "SGT":
+                # Use mills.png image if available
+                if self.assets.mills_image:
+                    # Scale mills image to fit card portrait area
+                    mini_mills_size = 80
+                    mills_scaled = pygame.transform.smoothscale(self.assets.mills_image, 
+                                                              (mini_mills_size, mini_mills_size))
+                    mills_rect = mills_scaled.get_rect(center=(card_x + 60, card_rect.centery))
+                    self.screen.blit(mills_scaled, mills_rect)
+                else:
+                    # Fallback to text if image not loaded
+                    portrait_surface = self.pixel_fonts['huge'].render(portrait_text, True, config.WHITE)
+                    portrait_rect = portrait_surface.get_rect(center=(card_x + 60, card_rect.centery))
+                    self.screen.blit(portrait_surface, portrait_rect)
             else:
                 # Regular portrait
                 portrait_surface = self.pixel_fonts['huge'].render(portrait_text, True, config.WHITE)
@@ -722,6 +749,20 @@ class Renderer:
                         light_y = robot_center_y + 25 + j * 15
                         light_color = (0, 255, 0) if (i + j) % 2 == 0 else (255, 0, 0)
                         pygame.draw.circle(self.screen, light_color, (light_x, light_y), 4)
+        elif portrait_text == "SGT":
+            # Use mills.png image if available
+            if self.assets.mills_image:
+                # Scale mills image to fit portrait area
+                mills_scaled = pygame.transform.smoothscale(self.assets.mills_image, 
+                                                           (portrait_size - 20, portrait_size - 20))
+                mills_rect = mills_scaled.get_rect(center=(portrait_x + portrait_size // 2, 
+                                                         portrait_y + portrait_size // 2))
+                self.screen.blit(mills_scaled, mills_rect)
+            else:
+                # Fallback to text if image not loaded
+                portrait_surface = pygame.font.Font(None, 120).render(portrait_text, True, config.WHITE)
+                portrait_rect = portrait_surface.get_rect(center=(portrait_x + portrait_size // 2, portrait_y + portrait_size // 2))
+                self.screen.blit(portrait_surface, portrait_rect)
         else:
             # Regular emoji/text portrait
             portrait_surface = pygame.font.Font(None, 120).render(portrait_text, True, config.WHITE)
@@ -1619,7 +1660,7 @@ class Renderer:
     def draw_game_over(self, board):
         """Draw game over screen with story mode support."""
         if not board.game_over:
-            return
+            return None, None
             
         current_time = pygame.time.get_ticks()
         
@@ -1830,6 +1871,9 @@ class Renderer:
         hint_text = self.pixel_fonts['tiny'].render("Press R to restart • ESC for menu", True, (150, 150, 150))
         hint_rect = hint_text.get_rect(center=(config.WIDTH // 2, hint_y))
         self.screen.blit(hint_text, hint_rect)
+        
+        # Return button rectangles for click handling
+        return restart_rect, menu_rect
         
     def _draw_star(self, x, y, size, color):
         """Helper method to draw a star."""
@@ -2362,71 +2406,6 @@ class Renderer:
             
         return lines
         
-    def draw_hint_system(self, hint_system):
-        """Draw hints for new players."""
-        if not hint_system or not hint_system.active:
-            return
-            
-        # Draw highlighted squares
-        highlights = hint_system.get_highlights()
-        for col, row in highlights:
-            x = config.BOARD_OFFSET_X + config.BOARD_BORDER_LEFT + col * config.SQUARE_SIZE
-            y = config.BOARD_OFFSET_Y + config.BOARD_BORDER_TOP + row * config.SQUARE_SIZE
-            
-            # Create soft blue highlight
-            pulse = (pygame.time.get_ticks() // 300) % 10
-            alpha = 50 + (pulse * 10)
-            
-            highlight_surf = pygame.Surface((config.SQUARE_SIZE, config.SQUARE_SIZE), pygame.SRCALPHA)
-            highlight_surf.fill((100, 150, 255, alpha))  # Blue color
-            self.screen.blit(highlight_surf, (x, y))
-            
-            # Add a soft border
-            pygame.draw.rect(self.screen, (100, 150, 255), 
-                           (x, y, config.SQUARE_SIZE, config.SQUARE_SIZE), 2)
-        
-        # Draw powerup highlight
-        highlighted_powerup = hint_system.get_powerup_highlights()
-        if highlighted_powerup:
-            # Calculate powerup menu position
-            menu_width = 300
-            menu_x = config.WIDTH - menu_width - 20
-            menu_y = config.BOARD_OFFSET_Y + 50
-            
-            powerup_keys = ["shield", "gun", "airstrike", "paratroopers", "chopper"]
-            
-            if highlighted_powerup in powerup_keys:
-                index = powerup_keys.index(highlighted_powerup)
-                card_height = 120
-                card_y = menu_y + index * (card_height + 10)
-                
-                # Draw soft blue highlight
-                pulse = (pygame.time.get_ticks() // 300) % 10
-                thickness = 2 + (pulse // 4)
-                
-                pygame.draw.rect(self.screen, (100, 150, 255), 
-                               (menu_x, card_y, menu_width, card_height), 
-                               thickness, border_radius=10)
-        
-        # Draw hint text
-        hint_text = hint_system.get_hint_text()
-        if hint_text:
-            panel_width = 500
-            panel_height = 60
-            panel_x = (config.WIDTH - panel_width) // 2
-            panel_y = config.HEIGHT - panel_height - 120
-            
-            # Panel background
-            panel_surf = pygame.Surface((panel_width, panel_height), pygame.SRCALPHA)
-            panel_surf.fill((0, 0, 0, 180))
-            pygame.draw.rect(panel_surf, (100, 150, 255), panel_surf.get_rect(), 2)
-            self.screen.blit(panel_surf, (panel_x, panel_y))
-            
-            # Hint text
-            text_surf = self.pixel_fonts['small'].render(hint_text, True, (255, 255, 255))
-            text_rect = text_surf.get_rect(center=(config.WIDTH // 2, panel_y + panel_height // 2))
-            self.screen.blit(text_surf, text_rect)
-        
     def draw_arms_dealer(self, powerup_system, shop_buttons, back_button, mouse_pos, dialogue_index=0, dialogues=None, story_tutorial=None):
         """Draw the arms dealer shop with simple design."""
         current_time = pygame.time.get_ticks()
@@ -2480,9 +2459,8 @@ class Renderer:
         title_rect = title_surface.get_rect(center=(game_center_x, title_y))
         self.screen.blit(title_surface, title_rect)
         
-        # Simple money display
-        progress = config.load_progress()
-        money = progress.get("money", 0)
+        # Simple money display - use in-memory value
+        money = config.get_money()
         
         money_text = f"Money: ${money:,}"
         money_surface = self.pixel_fonts['large'].render(money_text, True, (255, 215, 0))
@@ -2491,10 +2469,10 @@ class Renderer:
         
         # Check if in tutorial mode and use tutorial unlocked powerups
         if story_tutorial and story_tutorial.active:
-            import config as tutorial_config
-            unlocked = tutorial_config.tutorial_unlocked_powerups
+            # In tutorial, show all powerups as unlocked
+            unlocked = ["shield", "gun", "airstrike", "paratroopers", "chopper"]
         else:
-            unlocked = progress.get("unlocked_powerups", ["shield"])
+            unlocked = config.get_unlocked_powerups()
         
         # Simple powerup display
         

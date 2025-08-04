@@ -1,0 +1,32 @@
+{
+  "unlocked_difficulties": [
+    "easy",
+    "medium",
+    "hard",
+    "very_hard"
+  ],
+  "money": 600,
+  "unlocked_powerups": [
+    "shield",
+    "gun"
+  ],
+  "settings": {
+    "music_volume": 0.4,
+    "sfx_volume": 0.6571428571428571
+  },
+  "story": {
+    "current_chapter": 0,
+    "current_battle": 0,
+    "completed_battles": [
+      "tutorial_bot",
+      "sergeant_mills"
+    ],
+    "unlocked_chapters": [
+      true,
+      true,
+      false,
+      false,
+      false
+    ]
+  }
+}
