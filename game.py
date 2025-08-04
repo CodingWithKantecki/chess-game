@@ -1196,10 +1196,18 @@ class ChessGame:
                 # Handle tutorial move
                 self.tutorial.handle_move(from_row, from_col, row, col)
                 
-                # TUTORIAL FIX: Move shield immediately in tutorial mode
+                # TUTORIAL FIX: Move shield immediately in tutorial mode (but only if not capturing)
                 if self.powerup_system and self.powerup_system.is_piece_shielded(from_row, from_col):
-                    print(f"\nTUTORIAL: Moving shield from ({from_row}, {from_col}) to ({row}, {col})")
-                    self.powerup_system.move_shield((from_row, from_col), (row, col))
+                    # Check if this is a capture move
+                    target_piece = self.board.get_piece(row, col)
+                    if not target_piece:  # Only move shield if not capturing
+                        print(f"\nTUTORIAL: Moving shield from ({from_row}, {from_col}) to ({row}, {col})")
+                        self.powerup_system.move_shield((from_row, from_col), (row, col))
+                    else:
+                        print(f"\nTUTORIAL: Not moving shield - capturing at ({row}, {col})")
+                        # Remove shield from source position since piece is capturing
+                        self.powerup_system.remove_shield_at(from_row, from_col)
+                        print(f"\nTUTORIAL: Removed shield from source position ({from_row}, {from_col})")
                     
                 # Note: Shield countdown will happen when turn switches in complete_move()
             
@@ -2052,7 +2060,7 @@ class ChessGame:
         
         # Check if tutorial is highlighting this button
         should_highlight = False
-        if hasattr(self, 'story_tutorial') and self.tutorial and self.tutorial.active:
+        if self.in_tutorial_battle and self.tutorial and self.tutorial.active:
             if self.tutorial.current_step < len(self.tutorial.steps):
                 current_step = self.tutorial.steps[self.tutorial.current_step]
                 if current_step.get("wait_for") == "arms_dealer_visit":

@@ -250,16 +250,25 @@ class ChessBoard:
         to_row, to_col = self.animation_to
         piece = self.animation_piece
         
-        # Move shield if piece is shielded
+        # Check for capture FIRST (before moving shield)
+        captured = self.get_piece(to_row, to_col)
+        
+        # Move shield if piece is shielded, but ONLY if not capturing
         if self.powerup_system:
             print(f"\n=== COMPLETE MOVE DEBUG ===")
             print(f"Moving piece from ({from_row}, {from_col}) to ({to_row}, {to_col})")
             print(f"Piece being moved: {piece}")
             print(f"Checking for shield at source position...")
-            self.powerup_system.move_shield((from_row, from_col), (to_row, to_col))
-        
-        # Check for capture
-        captured = self.get_piece(to_row, to_col)
+            
+            # Only move shield if we're not capturing a piece
+            if not captured:
+                self.powerup_system.move_shield((from_row, from_col), (to_row, to_col))
+            else:
+                print(f"Capturing piece at ({to_row}, {to_col}), not moving shield")
+                # Remove shield from source position since piece is capturing
+                if self.powerup_system.is_piece_shielded(from_row, from_col):
+                    self.powerup_system.remove_shield_at(from_row, from_col)
+                    print(f"Removed shield from source position ({from_row}, {from_col})")
         if captured and piece:
             # Check if target is shielded - if so, this move should not have been allowed!
             if self.powerup_system and self.powerup_system.is_piece_shielded(to_row, to_col):

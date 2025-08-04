@@ -2295,8 +2295,9 @@ class Renderer:
     def draw_tutorial_hints(self, story_tutorial):
         """Draw tutorial hints and highlights."""
         # Draw highlighted squares
-        for col, row in story_tutorial.get_highlight_squares():
-            # Use the same positioning as pieces and board squares
+        for square in story_tutorial.get_highlight_squares():
+            col, row = square  # Tutorial stores as (col, row)
+            # Use the same positioning calculation as board.get_square_pos()
             x = config.BOARD_OFFSET_X + config.BOARD_BORDER_LEFT + col * config.SQUARE_SIZE
             y = config.BOARD_OFFSET_Y + config.BOARD_BORDER_TOP + row * config.SQUARE_SIZE
             
@@ -2563,10 +2564,38 @@ class Renderer:
             elif powerup_key == "chopper":
                 self._draw_helicopter_icon(self.screen, card_rect, icon_y, can_afford or is_unlocked)
             
-            # Simple powerup name
-            name_surface = self.pixel_fonts['medium'].render(powerup["name"], True, (255, 255, 255))
-            name_rect = name_surface.get_rect(center=(card_rect.centerx, card_rect.centery + 20))
-            self.screen.blit(name_surface, name_rect)
+            # Simple powerup name - use smaller font for longer names
+            powerup_name = powerup["name"]
+            
+            # Special handling for very long names
+            if powerup_key == "chopper":
+                # Split "CHOPPER GUNNER" into two lines with less spacing
+                line1_surface = self.pixel_fonts['small'].render("CHOPPER", True, (255, 255, 255))
+                line2_surface = self.pixel_fonts['small'].render("GUNNER", True, (255, 255, 255))
+                line1_rect = line1_surface.get_rect(center=(card_rect.centerx, card_rect.centery + 12))
+                line2_rect = line2_surface.get_rect(center=(card_rect.centerx, card_rect.centery + 28))
+                self.screen.blit(line1_surface, line1_rect)
+                self.screen.blit(line2_surface, line2_rect)
+            elif powerup_key == "paratroopers":
+                # Use extra small font for PARATROOPERS
+                # Try using tiny font if available, otherwise use small
+                if 'tiny' in self.pixel_fonts:
+                    name_surface = self.pixel_fonts['tiny'].render(powerup_name, True, (255, 255, 255))
+                else:
+                    name_surface = self.pixel_fonts['small'].render(powerup_name, True, (255, 255, 255))
+                name_rect = name_surface.get_rect(center=(card_rect.centerx, card_rect.centery + 20))
+                self.screen.blit(name_surface, name_rect)
+            else:
+                # Check if name fits in card width
+                test_surface = self.pixel_fonts['medium'].render(powerup_name, True, (255, 255, 255))
+                if test_surface.get_width() > card_width - 20:
+                    # Use small font for long names with more padding
+                    name_surface = self.pixel_fonts['small'].render(powerup_name, True, (255, 255, 255))
+                else:
+                    # Use medium font for short names
+                    name_surface = self.pixel_fonts['medium'].render(powerup_name, True, (255, 255, 255))
+                name_rect = name_surface.get_rect(center=(card_rect.centerx, card_rect.centery + 20))
+                self.screen.blit(name_surface, name_rect)
             
             # Simple price/status display
             if is_unlocked:
