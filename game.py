@@ -1195,6 +1195,13 @@ class ChessGame:
                     
                 # Handle tutorial move
                 self.tutorial.handle_move(from_row, from_col, row, col)
+                
+                # TUTORIAL FIX: Move shield immediately in tutorial mode
+                if self.powerup_system and self.powerup_system.is_piece_shielded(from_row, from_col):
+                    print(f"\nTUTORIAL: Moving shield from ({from_row}, {from_col}) to ({row}, {col})")
+                    self.powerup_system.move_shield((from_row, from_col), (row, col))
+                    
+                # Note: Shield countdown will happen when turn switches in complete_move()
             
             # Always use animation
             self.board.start_move(from_row, from_col, row, col)
@@ -1401,6 +1408,12 @@ class ChessGame:
                                 self.in_tutorial_battle = True
                                 config.set_tutorial_mode(True)  # Enable tutorial mode
                                 self.powerup_system.in_tutorial = True  # Enable all powerups for tutorial
+                                
+                                # CRITICAL FIX: Update tutorial references to current board and powerup system
+                                self.tutorial.board = self.board
+                                self.tutorial.powerup_system = self.powerup_system
+                                print(f"Tutorial: Updated references - board powerup_system: {self.board.powerup_system is not None}")
+                                
                                 self.tutorial.start("story")
                             else:
                                 self.in_tutorial_battle = False
@@ -1477,6 +1490,9 @@ class ChessGame:
             # Check animation complete
             if self.board.animating:
                 if current_time - self.board.animation_start >= config.MOVE_ANIMATION_DURATION:
+                    if self.in_tutorial_battle:
+                        print(f"\n=== TUTORIAL ANIMATION COMPLETE ===")
+                        print(f"About to call complete_move()")
                     captured = self.board.complete_move()
                     
                     # Bulletproof AI move detection when animation completes
@@ -1499,10 +1515,15 @@ class ChessGame:
                         
                         
             # AI turn
-            if self.board.current_turn == "black" and not self.board.game_over and not self.board.animating:
+            if (self.board.current_turn == "black" and 
+                not self.board.game_over and 
+                not self.board.animating and
+                self.current_mode in ["vs_ai", "story"]):
                 if self.ai:
                     # Start thinking if not already
                     if not self.ai.is_thinking() and self.ai.start_thinking is None:
+                        if self.in_tutorial_battle:
+                            print(f"\n=== AI STARTING TURN ===\nTutorial active: {self.tutorial.active}\nMode: {self.tutorial.current_mode}\nStep: {self.tutorial.current_step}")
                         self.ai.start_turn()
                     
                     # Make move when done thinking
@@ -1518,26 +1539,91 @@ class ChessGame:
                         
                         # Otherwise make a normal move
                         # Check if tutorial should override AI move
-                        if self.in_tutorial_battle and self.tutorial.should_override_ai():
+                        print(f"\nAI Move Check: in_tutorial_battle={self.in_tutorial_battle}, tutorial_active={self.tutorial.active if hasattr(self, 'tutorial') else 'No tutorial'}")
+                        should_override = self.tutorial.should_override_ai() if self.in_tutorial_battle else False
+                        print(f"Should override AI: {should_override}")
+                        
+                        # SPECIAL CASE: Force e7-e5 in tutorial ONLY for first AI move
+                        if (self.in_tutorial_battle and 
+                            self.tutorial.ai_move_index == 0 and
+                            self.board.get_piece(1, 4) == 'bP' and
+                            self.board.get_piece(3, 4) == ""):
+                                print("TUTORIAL OVERRIDE: Forcing e7-e5 move for tutorial (first AI move only)")
+                                tutorial_move = ((4, 1), (4, 3))  # e7 to e5
+                                # Increment AI move index
+                                self.tutorial.ai_move_index += 1
+                                # Handle tutorial AI move
+                                if hasattr(self.tutorial, 'handle_ai_move'):
+                                    self.tutorial.handle_ai_move()
+                                # Execute the move
+                                self.board.start_move(1, 4, 3, 4)  # row, col format
+                                self.ai.start_thinking = None
+                                return
+                        
+                        if self.in_tutorial_battle and should_override:
                             tutorial_move = self.tutorial.get_next_ai_move()
                             if tutorial_move:
                                 from_pos, to_pos = tutorial_move
-                                pass
                                 
                                 # Debug: Check what piece is at the from position
                                 # Note: from_pos is (col, row) but get_piece expects (row, col)
                                 piece_at_from = self.board.get_piece(from_pos[1], from_pos[0])
                                 piece_at_to = self.board.get_piece(to_pos[1], to_pos[0])
-                                pass
+                                
+                                print(f"Tutorial AI: Moving {piece_at_from} from {from_pos} to {to_pos}")
+                                print(f"Piece at destination: {piece_at_to}")
+                                
+                                # Verify it's a valid black piece
+                                if not piece_at_from or piece_at_from[0] != 'b':
+                                    print(f"ERROR: Invalid piece at source position! Expected black piece, got: {piece_at_from}")
+                                    # Try to find e7 pawn and force the move
+                                    e7_piece = self.board.get_piece(1, 4)  # e7 = row 1, col 4
+                                    if e7_piece == 'bP':
+                                        print("Found black pawn at e7, forcing e7-e5 move")
+                                        from_pos = (4, 1)
+                                        to_pos = (4, 3)
                                 
                                 # Handle tutorial AI move (do this before the move)
                                 self.tutorial.handle_ai_move()
                                 
                                 # Always use animation
-                                self.board.start_move(from_pos[0], from_pos[1], to_pos[0], to_pos[1])
+                                # Fixed: start_move expects (from_row, from_col, to_row, to_col)
+                                # but tutorial stores moves as ((from_col, from_row), (to_col, to_row))
+                                self.board.start_move(from_pos[1], from_pos[0], to_pos[1], to_pos[0])
                         else:
                             # Normal AI move
                             ai_move = self.ai.get_move(self.board)
+                            
+                            # TUTORIAL SAFETY: Don't let AI capture critical pieces during tutorial
+                            if self.in_tutorial_battle and ai_move:
+                                from_pos, to_pos = ai_move
+                                target_piece = self.board.get_piece(to_pos[1], to_pos[0])
+                                
+                                # Check if AI is trying to capture any white knight during tutorial
+                                if (target_piece == 'wN' and 
+                                    self.tutorial.current_step >= 7 and self.tutorial.current_step <= 14):  # During/after capture phase
+                                    print(f"Tutorial: Preventing AI from capturing knight at {to_pos}")
+                                    # Find a safe pawn move instead
+                                    safe_moves = [
+                                        ((0, 1), (0, 2)),  # a7-a6
+                                        ((7, 1), (7, 2)),  # h7-h6
+                                        ((2, 1), (2, 2)),  # c7-c6
+                                        ((5, 1), (5, 2)),  # f7-f6
+                                    ]
+                                    for move in safe_moves:
+                                        piece = self.board.get_piece(move[0][1], move[0][0])
+                                        target = self.board.get_piece(move[1][1], move[1][0])
+                                        if piece == 'bP' and target == "":
+                                            ai_move = move
+                                            print(f"Tutorial: Redirecting AI to safe move {move}")
+                                            break
+                                    
+                                    # If no safe pawn moves, just skip the AI turn
+                                    if ai_move == old_ai_move:
+                                        print("Tutorial: No safe moves found, skipping AI turn")
+                                        self.ai.start_thinking = None
+                                        return
+                            
                             if ai_move:
                                 from_pos, to_pos = ai_move
                                 
@@ -1545,8 +1631,16 @@ class ChessGame:
                                 if self.in_tutorial_battle:
                                     self.tutorial.handle_ai_move()
                                     
-                                # Always use animation
-                                self.board.start_move(from_pos[0], from_pos[1], to_pos[0], to_pos[1])
+                                # Check if target is shielded (final safety check)
+                                target_piece = self.board.get_piece(to_pos[0], to_pos[1])
+                                if (target_piece and self.powerup_system and 
+                                    self.powerup_system.is_piece_shielded(to_pos[0], to_pos[1])):
+                                    print(f"ERROR: AI trying to capture shielded piece at {to_pos}!")
+                                    # This shouldn't happen - skip the AI turn
+                                    self.ai.start_thinking = None
+                                else:
+                                    # Always use animation
+                                    self.board.start_move(from_pos[0], from_pos[1], to_pos[0], to_pos[1])
                         self.ai.start_thinking = None
                         
             # Check for player victory and unlock next difficulty

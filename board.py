@@ -147,7 +147,9 @@ class ChessBoard:
                     target = self.get_piece(new_row, new_col)
                     if target and target[0] != piece_color:
                         # Check if target is shielded
-                        if ignore_shields or (self.powerup_system and not self.powerup_system.is_piece_shielded(new_row, new_col)) or not self.powerup_system:
+                        if self.powerup_system and self.powerup_system.is_piece_shielded(new_row, new_col) and not ignore_shields:
+                            pass  # Skip shielded pieces
+                        else:
                             moves.append((new_row, new_col))
                         
         elif piece_type == 'R':  # Rook
@@ -162,7 +164,9 @@ class ChessBoard:
                     else:
                         if target[0] != piece_color:
                             # Check if target is shielded
-                            if ignore_shields or (self.powerup_system and not self.powerup_system.is_piece_shielded(nr, nc)) or not self.powerup_system:
+                            if self.powerup_system and self.powerup_system.is_piece_shielded(nr, nc) and not ignore_shields:
+                                pass  # Skip shielded pieces
+                            else:
                                 moves.append((nr, nc))
                         break
                         
@@ -189,7 +193,9 @@ class ChessBoard:
                     else:
                         if target[0] != piece_color:
                             # Check if target is shielded
-                            if ignore_shields or (self.powerup_system and not self.powerup_system.is_piece_shielded(nr, nc)) or not self.powerup_system:
+                            if self.powerup_system and self.powerup_system.is_piece_shielded(nr, nc) and not ignore_shields:
+                                pass  # Skip shielded pieces
+                            else:
                                 moves.append((nr, nc))
                         break
                         
@@ -205,7 +211,9 @@ class ChessBoard:
                     else:
                         if target[0] != piece_color:
                             # Check if target is shielded
-                            if ignore_shields or (self.powerup_system and not self.powerup_system.is_piece_shielded(nr, nc)) or not self.powerup_system:
+                            if self.powerup_system and self.powerup_system.is_piece_shielded(nr, nc) and not ignore_shields:
+                                pass  # Skip shielded pieces
+                            else:
                                 moves.append((nr, nc))
                         break
                         
@@ -232,7 +240,10 @@ class ChessBoard:
         
     def complete_move(self):
         """Complete the animated move."""
+        print(f"\n=== COMPLETE_MOVE CALLED ===")
+        print(f"Animating: {self.animating}")
         if not self.animating:
+            print("Not animating, returning None")
             return None
             
         from_row, from_col = self.animation_from
@@ -241,11 +252,23 @@ class ChessBoard:
         
         # Move shield if piece is shielded
         if self.powerup_system:
+            print(f"\n=== COMPLETE MOVE DEBUG ===")
+            print(f"Moving piece from ({from_row}, {from_col}) to ({to_row}, {to_col})")
+            print(f"Piece being moved: {piece}")
+            print(f"Checking for shield at source position...")
             self.powerup_system.move_shield((from_row, from_col), (to_row, to_col))
         
         # Check for capture
         captured = self.get_piece(to_row, to_col)
         if captured and piece:
+            # Check if target is shielded - if so, this move should not have been allowed!
+            if self.powerup_system and self.powerup_system.is_piece_shielded(to_row, to_col):
+                print(f"ERROR: Attempting to capture shielded piece at ({to_row}, {to_col})!")
+                # This shouldn't happen - moves to shielded pieces should be filtered out
+                # But as a safety check, cancel the move
+                self.animating = False
+                return None
+                
             # Track captured piece
             capturing_color = "white" if piece[0] == 'w' else "black"
             self.captured_pieces[capturing_color].append(captured)
@@ -254,6 +277,8 @@ class ChessBoard:
             if self.powerup_system:
                 points = self.powerup_system.add_points_for_capture(captured, capturing_color)
                 print(f"{capturing_color} earned {points} points for capturing {captured}")
+                # Remove shield from captured piece's position
+                self.powerup_system.remove_shield_at(to_row, to_col)
             
             # Check for game over
             if captured[1] == 'K':
@@ -275,10 +300,15 @@ class ChessBoard:
                 
         # Switch turns
         if not self.game_over:
+            old_turn = self.current_turn
             self.current_turn = "black" if self.current_turn == "white" else "white"
+            print(f"\n=== TURN SWITCH: {old_turn} -> {self.current_turn} ===")
             # Update shield counters on turn change
             if self.powerup_system:
+                print("Updating shields due to turn change...")
                 self.powerup_system.update_shields()
+            else:
+                print("No powerup system to update shields!")
             
         self.animating = False
         return captured
