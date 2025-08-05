@@ -889,12 +889,22 @@ class ChessGame:
             # Click to advance dialogue or start battle
             if hasattr(self, 'dialogue_complete') and self.dialogue_complete:
                 play_click_sound()
+                # Reset dialogue box before transitioning to game
+                self.renderer.animated_dialogue_box.reset()
                 self.start_fade("story_dialogue", config.SCREEN_GAME)
             else:
-                # Advance dialogue
-                if hasattr(self, 'current_dialogue_index'):
-                    play_click_sound()
-                    self.current_dialogue_index += 1
+                # Check if animated dialogue box is complete
+                if self.renderer.animated_dialogue_box.is_complete():
+                    # Advance to next dialogue
+                    if hasattr(self, 'current_dialogue_index'):
+                        play_click_sound()
+                        self.current_dialogue_index += 1
+                        # Clear the dialogue key to trigger new animation
+                        dialogue_key = f"story_dialogue_{self.current_dialogue_index - 1}"
+                        self.renderer.typewriter_added_texts.discard(dialogue_key)
+                else:
+                    # Skip current animation
+                    self.renderer.animated_dialogue_box.skip_animation()
                     
         elif self.current_screen == "tutorial":
             # Handle tutorial navigation
@@ -1327,6 +1337,11 @@ class ChessGame:
         self.fade_from = from_screen
         self.fade_to = to_screen
         
+        # Handle screen-specific cleanup
+        if from_screen == "story_dialogue":
+            # Reset dialogue state when leaving story dialogue
+            self.renderer.reset_dialogue_state()
+        
         # Handle music transitions
         if to_screen == config.SCREEN_ARMS_DEALER and self.current_music == "main":
             # Fade out main music when entering arms dealer
@@ -1453,10 +1468,8 @@ class ChessGame:
                     # Initialize dialogue state
                     self.current_dialogue_index = 0
                     self.dialogue_complete = False
-                    # Clear any story dialogue typewriter texts when starting new dialogue
-                    story_dialogue_ids = {key for key in self.renderer.typewriter_added_texts if key.startswith("story_dialogue_")}
-                    for text_id in story_dialogue_ids:
-                        self.renderer.typewriter_added_texts.discard(text_id)
+                    # Reset dialogue box state
+                    self.renderer.reset_dialogue_state()
         
         # Check if chopper gunner was requested
         if self.powerup_system.chopper_gunner_requested:
@@ -1857,7 +1870,8 @@ class ChessGame:
             if self.current_story_battle:
                 self.renderer.draw_story_dialogue(self.current_story_battle, 
                                                 self.current_dialogue_index,
-                                                self.dialogue_complete)
+                                                self.dialogue_complete,
+                                                self.fade_active)
                 
                 # Check if dialogue is complete
                 dialogue_lines = self.current_story_battle.get("pre_battle", [])

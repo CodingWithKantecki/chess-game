@@ -7,6 +7,7 @@ import pygame.gfxdraw
 import math
 import random
 import config
+from animated_dialogue import AnimatedDialogueBox
 
 class Renderer:
     def __init__(self, screen, assets):
@@ -48,6 +49,9 @@ class Renderer:
         self.typewriter_texts = []
         self.typewriter_speed = 30  # Characters per second
         self.typewriter_added_texts = set()  # Track which texts have been added
+        
+        # Animated dialogue box for story mode
+        self.animated_dialogue_box = AnimatedDialogueBox(self)
         
         # Performance optimization: Cache frequently used surfaces
         self._cached_overlays = {}
@@ -213,6 +217,12 @@ class Renderer:
         # Reset buttons fade timer
         if hasattr(self, 'buttons_fade_start'):
             delattr(self, 'buttons_fade_start')
+            
+    def reset_dialogue_state(self):
+        """Reset the animated dialogue box state."""
+        self.animated_dialogue_box.reset()
+        # Clear story dialogue typewriter texts
+        self.typewriter_added_texts = {key for key in self.typewriter_added_texts if not key.startswith("story_dialogue_")}
         
     def draw_text_typewriter(self, text, position, font_key='medium', color=config.WHITE, center=False, instant=False, text_id=None, speed=None):
         """Draw text with typewriter effect (immediate version for single frame)."""
@@ -644,7 +654,7 @@ class Renderer:
         # Back button
         self._draw_button(back_button, "BACK", (150, 70, 70), (200, 100, 100), mouse_pos)
         
-    def draw_story_dialogue(self, battle_data, dialogue_index, dialogue_complete):
+    def draw_story_dialogue(self, battle_data, dialogue_index, dialogue_complete, is_fade_active=False):
         """Draw pre-battle dialogue screen."""
         self.draw_parallax_background(0.6)
         
@@ -818,62 +828,30 @@ class Renderer:
         # Character Information Sheet
         self._draw_character_info_sheet(battle_data, portrait_x - 50, name_y + 50)
         
-        # Dialogue box
+        # Animated dialogue box
         dialogue_lines = battle_data.get("pre_battle", [])
         if 0 <= dialogue_index < len(dialogue_lines):
-            # Dialogue background with tech styling
-            dialogue_width = 500
-            dialogue_height = 100
-            dialogue_x = (config.WIDTH - dialogue_width) // 2
-            dialogue_y = config.HEIGHT - 200
-            
-            # Dialogue box glow effect
-            for i in range(2):
-                glow_alpha = 80 - i * 40
-                glow_surf = pygame.Surface((dialogue_width + i*6, dialogue_height + i*6), pygame.SRCALPHA)
-                pygame.draw.rect(glow_surf, (0, 200, 255, glow_alpha), 
-                               (0, 0, dialogue_width + i*6, dialogue_height + i*6), 
-                               3, border_radius=10)
-                self.screen.blit(glow_surf, (dialogue_x - i*3, dialogue_y - i*3))
-            
-            # Main dialogue background
-            pygame.draw.rect(self.screen, (10, 15, 25), 
-                           (dialogue_x, dialogue_y, dialogue_width, dialogue_height), 
-                           border_radius=10)
-            pygame.draw.rect(self.screen, (0, 150, 200), 
-                           (dialogue_x, dialogue_y, dialogue_width, dialogue_height), 
-                           2, border_radius=10)
-            
-            # Tech corner details
-            corner_size = 20
-            corner_color = (0, 255, 255)
-            # Top left corner
-            pygame.draw.lines(self.screen, corner_color, False,
-                            [(dialogue_x + 10, dialogue_y + 10 + corner_size), 
-                             (dialogue_x + 10, dialogue_y + 10), 
-                             (dialogue_x + 10 + corner_size, dialogue_y + 10)], 2)
-            # Top right corner
-            pygame.draw.lines(self.screen, corner_color, False,
-                            [(dialogue_x + dialogue_width - 10 - corner_size, dialogue_y + 10), 
-                             (dialogue_x + dialogue_width - 10, dialogue_y + 10), 
-                             (dialogue_x + dialogue_width - 10, dialogue_y + 10 + corner_size)], 2)
-            
-            # Dialogue text with typewriter effect
             current_line = dialogue_lines[dialogue_index]
-            wrapped_lines = self._wrap_text(current_line, self.pixel_fonts['medium'], dialogue_width - 40)
             
-            # Check if we need to add this dialogue to typewriter
-            dialogue_key = f"story_dialogue_{dialogue_index}"
+            # Don't start dialogue animations during fade transitions
+            if not is_fade_active:
+                # Check if we need to start a new dialogue animation
+                # Only start if this is truly a new dialogue index
+                if self.animated_dialogue_box.current_dialogue_index != dialogue_index:
+                    self.animated_dialogue_box.current_dialogue_index = dialogue_index
+                    self.animated_dialogue_box.start_dialogue(current_line)
+                elif self.animated_dialogue_box.animation_state == "idle":
+                    # If somehow we're idle but at the right index, restart
+                    self.animated_dialogue_box.start_dialogue(current_line)
             
-            # Only add dialogue if it hasn't been added yet
-            if dialogue_key not in self.typewriter_added_texts:
-                # Clear ALL typewriter texts when showing new dialogue
-                self.clear_typewriter_texts()
-                text_y = dialogue_y + 15
-                for i, line in enumerate(wrapped_lines):
-                    self.add_typewriter_text(line, (config.WIDTH // 2, text_y), 'medium', config.WHITE, center=True)
-                    text_y += 25
-                self.typewriter_added_texts.add(dialogue_key)
+            # Always update and draw if we have an active animation
+            if self.animated_dialogue_box.animation_state != "idle":
+                self.animated_dialogue_box.update()
+                self.animated_dialogue_box.draw(self.screen)
+        else:
+            # Reset dialogue box if no dialogue to show or all dialogues complete
+            if self.animated_dialogue_box.animation_state != "idle":
+                self.animated_dialogue_box.reset()
                 
         # Instructions
         if dialogue_complete:
