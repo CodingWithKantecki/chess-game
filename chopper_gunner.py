@@ -1023,7 +1023,27 @@ class ChopperGunnerMode:
         
         # Draw cockpit overlay AFTER rain so cockpit blocks rain
         if self.cockpit_overlay:
-            self.screen.blit(self.cockpit_overlay, (0, 0))
+            # Add subtle shake effect (increased slightly)
+            current_time = pygame.time.get_ticks()
+            shake_x = math.sin(current_time * 0.003) * 3 + math.sin(current_time * 0.007) * 2
+            shake_y = math.cos(current_time * 0.004) * 3 + math.cos(current_time * 0.006) * 2
+            
+            # Increase shake when firing
+            if self.firing and self.ammo > 0:
+                shake_x += random.randint(-3, 3)
+                shake_y += random.randint(-3, 3)
+            
+            # Fill only the exposed edges with black when shaking
+            if shake_x > 0:
+                pygame.draw.rect(self.screen, (0, 0, 0), (0, 0, int(shake_x), HEIGHT))
+            if shake_x < 0:
+                pygame.draw.rect(self.screen, (0, 0, 0), (WIDTH + int(shake_x), 0, -int(shake_x), HEIGHT))
+            if shake_y > 0:
+                pygame.draw.rect(self.screen, (0, 0, 0), (0, 0, WIDTH, int(shake_y)))
+            if shake_y < 0:
+                pygame.draw.rect(self.screen, (0, 0, 0), (0, HEIGHT + int(shake_y), WIDTH, -int(shake_y)))
+            
+            self.screen.blit(self.cockpit_overlay, (int(shake_x), int(shake_y)))
         
         # Draw crosshair
         self.draw_crosshair()

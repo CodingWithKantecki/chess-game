@@ -822,10 +822,10 @@ class Renderer:
         dialogue_lines = battle_data.get("pre_battle", [])
         if 0 <= dialogue_index < len(dialogue_lines):
             # Dialogue background with tech styling
-            dialogue_width = 700
-            dialogue_height = 160
+            dialogue_width = 500
+            dialogue_height = 100
             dialogue_x = (config.WIDTH - dialogue_width) // 2
-            dialogue_y = config.HEIGHT - 260
+            dialogue_y = config.HEIGHT - 200
             
             # Dialogue box glow effect
             for i in range(2):
@@ -869,10 +869,10 @@ class Renderer:
             if dialogue_key not in self.typewriter_added_texts:
                 # Clear ALL typewriter texts when showing new dialogue
                 self.clear_typewriter_texts()
-                text_y = dialogue_y + 20
+                text_y = dialogue_y + 15
                 for i, line in enumerate(wrapped_lines):
                     self.add_typewriter_text(line, (config.WIDTH // 2, text_y), 'medium', config.WHITE, center=True)
-                    text_y += 30
+                    text_y += 25
                 self.typewriter_added_texts.add(dialogue_key)
                 
         # Instructions
@@ -2294,24 +2294,37 @@ class Renderer:
         
     def draw_tutorial_hints(self, story_tutorial):
         """Draw tutorial hints and highlights."""
-        # Draw highlighted squares
+        # Draw highlighted squares as circles
         for square in story_tutorial.get_highlight_squares():
             col, row = square  # Tutorial stores as (col, row)
-            # Use the same positioning calculation as board.get_square_pos()
-            x = config.BOARD_OFFSET_X + config.BOARD_BORDER_LEFT + col * config.SQUARE_SIZE
-            y = config.BOARD_OFFSET_Y + config.BOARD_BORDER_TOP + row * config.SQUARE_SIZE
+            # Use the same positioning calculation as board.get_square_pos() but with scaling
+            border_left_scaled = int(config.BOARD_BORDER_LEFT * self.scale)
+            border_top_scaled = int(config.BOARD_BORDER_TOP * self.scale)
+            square_size_scaled = int(config.SQUARE_SIZE * self.scale)
+            
+            x = config.BOARD_OFFSET_X + border_left_scaled + col * square_size_scaled
+            y = config.BOARD_OFFSET_Y + border_top_scaled + row * square_size_scaled
+            
+            # Center of the square
+            center_x = x + square_size_scaled // 2
+            center_y = y + square_size_scaled // 2
             
             # Create pulsing highlight
             pulse = (pygame.time.get_ticks() // 200) % 10
             alpha = 100 + (pulse * 15)
+            radius = int(square_size_scaled * 0.4)  # Circle radius as 40% of square size
             
-            highlight_surf = pygame.Surface((config.SQUARE_SIZE, config.SQUARE_SIZE), pygame.SRCALPHA)
-            highlight_surf.fill((255, 215, 0, alpha))  # Gold color
-            self.screen.blit(highlight_surf, (x, y))
+            # Draw glowing circles
+            for i in range(3):
+                glow_surf = pygame.Surface((square_size_scaled * 2, square_size_scaled * 2), pygame.SRCALPHA)
+                glow_alpha = alpha // (i + 1)
+                glow_radius = radius + (i * 4)
+                pygame.draw.circle(glow_surf, (255, 215, 0, glow_alpha), 
+                                 (square_size_scaled, square_size_scaled), glow_radius)
+                self.screen.blit(glow_surf, (center_x - square_size_scaled, center_y - square_size_scaled))
             
-            # Add a border
-            pygame.draw.rect(self.screen, (255, 215, 0), 
-                           (x, y, config.SQUARE_SIZE, config.SQUARE_SIZE), 4)
+            # Draw main circle border
+            pygame.draw.circle(self.screen, (255, 215, 0), (center_x, center_y), radius, 3)
         
         # Draw highlight for powerup buttons
         highlighted_powerup = story_tutorial.get_highlight_powerup()
