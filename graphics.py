@@ -2437,8 +2437,8 @@ class Renderer:
                 dialogue = dialogues[dialogue_index]
                 bubble_width = int(320 * config.SCALE)
                 tariq_center_x = tariq_x + tariq_width // 2
-                bubble_x = tariq_center_x - bubble_width // 2
-                bubble_y = tariq_y - int(140 * config.SCALE)
+                bubble_x = tariq_center_x - bubble_width // 2 - 3
+                bubble_y = tariq_y - int(100 * config.SCALE)
                 self._draw_speech_bubble(bubble_x, bubble_y, 
                                        dialogue, bubble_width, point_down=True, 
                                        use_typewriter=True, text_id=f"tariq_dialogue_{dialogue_index}")
