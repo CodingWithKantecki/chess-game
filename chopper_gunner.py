@@ -1556,22 +1556,22 @@ class ChopperGunnerMode:
         console_y = HEIGHT - 100
         
         # Create glow using radial gradient with more steps for smoothness
-        max_radius = 50  # Even smaller radius
-        for radius in range(max_radius, 0, -2):  # Smaller steps for smoother fade
+        max_radius = 25  # Much smaller radius for focused light
+        for radius in range(max_radius, 0, -1):  # 1-pixel steps for ultra-smooth fade
             # Smooth falloff curve - using exponential for softer edges
             normalized_radius = radius / max_radius
-            intensity = math.exp(-3 * (1.0 - normalized_radius))  # Exponential falloff for smooth fade
+            intensity = math.exp(-4 * (1.0 - normalized_radius))  # Steeper exponential falloff
             
             # Pulsing effect on intensity
-            glow_alpha = int(60 * intensity * (0.6 + 0.4 * pulse))  # Reduced max alpha
-            glow_alpha = min(40, glow_alpha)  # Lower cap for subtler effect
+            glow_alpha = int(50 * intensity * (0.6 + 0.4 * pulse))  # Reduced max alpha
+            glow_alpha = min(35, glow_alpha)  # Lower cap for subtler effect
             
             if glow_alpha > 1:  # Only draw if visible
                 # Smooth color transition
-                if radius < 20:
+                if radius < 10:
                     # Inner core - bright orange
                     color = (255, 100, 40, glow_alpha)
-                elif radius < 35:
+                elif radius < 18:
                     # Middle - orange-red
                     color = (255, 60, 20, glow_alpha)
                 else:
@@ -1580,19 +1580,7 @@ class ChopperGunnerMode:
                 
                 pygame.draw.circle(lighting_overlay, color, (console_x, console_y), radius)
         
-        # Add some hot spots for instrument panels
-        instrument_positions = [
-            (WIDTH // 4, HEIGHT - 80),
-            (3 * WIDTH // 4, HEIGHT - 80),
-        ]
-        
-        for pos_x, pos_y in instrument_positions:
-            # Small pulsing lights
-            spot_pulse = (math.sin(current_time * 0.003 + pos_x) + 1.0) * 0.5
-            spot_alpha = int(40 * spot_pulse)
-            
-            pygame.draw.circle(lighting_overlay, (255, 60, 20, spot_alpha), (pos_x, pos_y), 30)
-            pygame.draw.circle(lighting_overlay, (255, 100, 40, spot_alpha // 2), (pos_x, pos_y), 15)
+        # Remove instrument panel lights - only keep main console glow
         
         # Apply the lighting to the cockpit using additive blending
         cockpit_surface.blit(lighting_overlay, (0, 0), special_flags=pygame.BLEND_ADD)
