@@ -258,7 +258,7 @@ def save_progress(progress):
     # Update global variables from progress
     _player_money = progress.get("money", 0)
     _unlocked_powerups = progress.get("unlocked_powerups", ["shield"])
-    print(f"[SAVE DISABLED] In-memory: money=${_player_money}, powerups={_unlocked_powerups}")
+    pass  # Save disabled - in-memory only
     # NO FILE WRITES
 
 def save_story_progress(current_chapter, current_battle, completed_battles, unlocked_chapters):
@@ -309,7 +309,7 @@ def save_story_progress(current_chapter, current_battle, completed_battles, unlo
 def get_story_progress():
     """Get story progress from memory."""
     global _story_state
-    print(f"[GET STORY] Returning in-memory state: {_story_state}")
+    # Return in-memory state
     return _story_state.copy()
 
 def complete_story_battle(battle_id):
@@ -317,8 +317,8 @@ def complete_story_battle(battle_id):
     global _story_state
     if battle_id not in _story_state["completed_battles"]:
         _story_state["completed_battles"].append(battle_id)
-        print(f"[COMPLETE BATTLE] Added {battle_id} to completed battles")
-        print(f"[COMPLETE BATTLE] Current state: {_story_state}")
+        pass  # Battle completed
+        pass
         
         # Save the updated story progress
         save_story_progress(
@@ -334,7 +334,7 @@ def unlock_story_chapter(chapter_index):
     global _story_state
     if 0 <= chapter_index < len(_story_state["unlocked_chapters"]):
         _story_state["unlocked_chapters"][chapter_index] = True
-        print(f"[UNLOCK CHAPTER] Unlocked chapter {chapter_index + 1}")
+        pass  # Chapter unlocked
         
         # Save the updated story progress
         save_story_progress(
@@ -521,7 +521,7 @@ def unlock_powerup(powerup_key):
                 json.dump(progress, f, indent=2)
                 
             print(f"Unlocked powerup: {powerup_key}. Total unlocked: {_unlocked_powerups}")
-            print(f"Progress saved: money=${progress.get('money', 0)}, powerups={progress['unlocked_powerups']}")
+            pass  # Progress saved
         except Exception as e:
             print(f"Error saving unlocked powerup: {e}")
     return True
@@ -533,7 +533,7 @@ def reset_after_tutorial():
     # Set the tutorial completion rewards
     _player_money = 100  # Start with $100 from tutorial reward
     _unlocked_powerups = ["shield"]  # Reset to only shield unlocked
-    print(f"[TUTORIAL RESET] Money set to ${_player_money}")
+    pass  # Tutorial money reset
     
     # Save money to file
     save_money_to_file()

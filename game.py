@@ -846,21 +846,16 @@ class ChessGame:
                                         if ch["id"] == self.story_mode.get_current_chapter()["id"]), 0)
                     if self.story_mode.is_battle_unlocked(chapter_index, battle_index):
                         play_click_sound()
-                        print(f"\n=== SELECTING BATTLE ===")
-                        print(f"Battle index clicked: {battle_index}")
-                        print(f"Chapter index: {chapter_index}")
-                        print(f"Story mode current chapter before: {self.story_mode.current_chapter}")
+                        pass  # Selecting battle
                         
                         # Make sure we're on the right chapter
                         if self.story_mode.current_chapter != chapter_index:
-                            print(f"Switching from chapter {self.story_mode.current_chapter} to {chapter_index}")
+                            pass  # Switching chapter
                             self.story_mode.current_chapter = chapter_index
                             
                         self.story_mode.current_battle = battle_index
                         battle_data = self.story_mode.get_current_battle()
-                        print(f"Selected battle: {battle_data['id'] if battle_data else 'None'}")
-                        print(f"Story mode state - chapter: {self.story_mode.current_chapter}, battle: {self.story_mode.current_battle}")
-                        print("=== END SELECTING BATTLE ===\n")
+                        pass  # Battle selected
                         if battle_data:
                             self.current_story_battle = battle_data
                             self.current_mode = "story"  # Set the game mode to story
@@ -1079,11 +1074,11 @@ class ChessGame:
                     play_click_sound()
                     # CRITICAL: Reset victory flag when returning to menu
                     self.victory_processed = False
-                    print("Reset victory_processed flag to False")
+                    pass  # Reset victory_processed flag
                     # Ensure story mode progress is saved before leaving
                     if self.current_mode == "story" and hasattr(self.story_mode, 'save_progress'):
                         self.story_mode.save_progress()
-                        print(f"Saved story progress before returning to menu")
+                        pass  # Saved story progress
                     if self.current_mode == "story":
                         self.start_fade(config.SCREEN_GAME, "story_chapter")
                     else:
@@ -1211,13 +1206,13 @@ class ChessGame:
                     # Check if this is a capture move
                     target_piece = self.board.get_piece(row, col)
                     if not target_piece:  # Only move shield if not capturing
-                        print(f"\nTUTORIAL: Moving shield from ({from_row}, {from_col}) to ({row}, {col})")
+                        pass  # Moving shield
                         self.powerup_system.move_shield((from_row, from_col), (row, col))
                     else:
-                        print(f"\nTUTORIAL: Not moving shield - capturing at ({row}, {col})")
+                        pass  # Not moving shield - capturing
                         # Remove shield from source position since piece is capturing
                         self.powerup_system.remove_shield_at(from_row, from_col)
-                        print(f"\nTUTORIAL: Removed shield from source position ({from_row}, {from_col})")
+                        pass  # Removed shield from source
                     
                 # Note: Shield countdown will happen when turn switches in complete_move()
             
@@ -1246,7 +1241,7 @@ class ChessGame:
             # Check if SHIFT is also held for the cheat
             keys = pygame.key.get_pressed()
             if keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]:
-                print("CHEAT CODE ACTIVATED! TEST MODE ENABLED!")
+                pass  # Cheat code activated
                 
                 # Load progress
                 progress = config.load_progress()
@@ -1268,10 +1263,7 @@ class ChessGame:
                     self.powerup_system.points["white"] = 999
                     self.powerup_system.points["black"] = 999
                     
-                print("✓ All difficulties unlocked!")
-                print("✓ All powerups unlocked!")
-                print("✓ Money set to $99,999!")
-                print("✓ Both players have 999 powerup points!")
+                pass  # Cheat code applied
                 
                 # Visual feedback - flash the screen green
                 flash_surface = pygame.Surface((config.WIDTH, config.HEIGHT))
@@ -1415,7 +1407,7 @@ class ChessGame:
                         self.victory_processed = False
                         self.victory_reward = 0  # Reset victory reward
                         self.board.victory_reward = 0  # Reset board victory reward
-                        print("Reset victory_processed flag to False for new game")
+                        pass  # Reset victory_processed flag for new game
                         
                         # Apply story mode rules if in story mode
                         if self.current_mode == "story" and self.current_story_battle:
@@ -1435,7 +1427,7 @@ class ChessGame:
                                 # CRITICAL FIX: Update tutorial references to current board and powerup system
                                 self.tutorial.board = self.board
                                 self.tutorial.powerup_system = self.powerup_system
-                                print(f"Tutorial: Updated references - board powerup_system: {self.board.powerup_system is not None}")
+                                pass  # Tutorial updated references
                                 
                                 self.tutorial.start("story")
                             else:
@@ -1447,7 +1439,7 @@ class ChessGame:
                                     self.tutorial.active = False
                                     self.tutorial.completed = True
                                     self.tutorial.current_step = 999  # Set to beyond any valid step
-                                print(f"Tutorial forcefully disabled for non-tutorial battle: {self.current_story_battle.get('id')}")
+                                pass  # Tutorial forcefully disabled
                         else:
                             # Not in story mode - ensure tutorial is disabled
                             self.in_tutorial_battle = False
@@ -1512,8 +1504,7 @@ class ChessGame:
             if self.board.animating:
                 if current_time - self.board.animation_start >= config.MOVE_ANIMATION_DURATION:
                     if self.in_tutorial_battle:
-                        print(f"\n=== TUTORIAL ANIMATION COMPLETE ===")
-                        print(f"About to call complete_move()")
+                        pass  # Tutorial animation complete
                     captured = self.board.complete_move()
                     
                     # Bulletproof AI move detection when animation completes
@@ -1544,7 +1535,7 @@ class ChessGame:
                     # Start thinking if not already
                     if not self.ai.is_thinking() and self.ai.start_thinking is None:
                         if self.in_tutorial_battle:
-                            print(f"\n=== AI STARTING TURN ===\nTutorial active: {self.tutorial.active}\nMode: {self.tutorial.current_mode}\nStep: {self.tutorial.current_step}")
+                            pass  # AI starting turn
                         self.ai.start_turn()
                     
                     # Make move when done thinking
@@ -1560,16 +1551,15 @@ class ChessGame:
                         
                         # Otherwise make a normal move
                         # Check if tutorial should override AI move
-                        print(f"\nAI Move Check: in_tutorial_battle={self.in_tutorial_battle}, tutorial_active={self.tutorial.active if hasattr(self, 'tutorial') else 'No tutorial'}")
+                        pass  # AI move check
                         should_override = self.tutorial.should_override_ai() if self.in_tutorial_battle else False
-                        print(f"Should override AI: {should_override}")
                         
                         # SPECIAL CASE: Force e7-e5 in tutorial ONLY for first AI move
                         if (self.in_tutorial_battle and 
                             self.tutorial.ai_move_index == 0 and
                             self.board.get_piece(1, 4) == 'bP' and
                             self.board.get_piece(3, 4) == ""):
-                                print("TUTORIAL OVERRIDE: Forcing e7-e5 move for tutorial (first AI move only)")
+                                pass  # Tutorial override: forcing e7-e5
                                 tutorial_move = ((4, 1), (4, 3))  # e7 to e5
                                 # Increment AI move index
                                 self.tutorial.ai_move_index += 1
@@ -1591,16 +1581,15 @@ class ChessGame:
                                 piece_at_from = self.board.get_piece(from_pos[1], from_pos[0])
                                 piece_at_to = self.board.get_piece(to_pos[1], to_pos[0])
                                 
-                                print(f"Tutorial AI: Moving {piece_at_from} from {from_pos} to {to_pos}")
-                                print(f"Piece at destination: {piece_at_to}")
+                                pass  # Tutorial AI move
                                 
                                 # Verify it's a valid black piece
                                 if not piece_at_from or piece_at_from[0] != 'b':
-                                    print(f"ERROR: Invalid piece at source position! Expected black piece, got: {piece_at_from}")
+                                    pass  # Invalid piece at source
                                     # Try to find e7 pawn and force the move
                                     e7_piece = self.board.get_piece(1, 4)  # e7 = row 1, col 4
                                     if e7_piece == 'bP':
-                                        print("Found black pawn at e7, forcing e7-e5 move")
+                                        pass  # Found black pawn at e7
                                         from_pos = (4, 1)
                                         to_pos = (4, 3)
                                 
@@ -1623,7 +1612,7 @@ class ChessGame:
                                 # Check if AI is trying to capture any white knight during tutorial
                                 if (target_piece == 'wN' and 
                                     self.tutorial.current_step >= 7 and self.tutorial.current_step <= 14):  # During/after capture phase
-                                    print(f"Tutorial: Preventing AI from capturing knight at {to_pos}")
+                                    pass  # Preventing AI from capturing knight
                                     # Find a safe pawn move instead
                                     safe_moves = [
                                         ((0, 1), (0, 2)),  # a7-a6
@@ -1636,12 +1625,12 @@ class ChessGame:
                                         target = self.board.get_piece(move[1][1], move[1][0])
                                         if piece == 'bP' and target == "":
                                             ai_move = move
-                                            print(f"Tutorial: Redirecting AI to safe move {move}")
+                                            pass  # Redirecting AI to safe move
                                             break
                                     
                                     # If no safe pawn moves, just skip the AI turn
                                     if ai_move == old_ai_move:
-                                        print("Tutorial: No safe moves found, skipping AI turn")
+                                        pass  # No safe moves found
                                         self.ai.start_thinking = None
                                         return
                             
@@ -1656,7 +1645,7 @@ class ChessGame:
                                 target_piece = self.board.get_piece(to_pos[0], to_pos[1])
                                 if (target_piece and self.powerup_system and 
                                     self.powerup_system.is_piece_shielded(to_pos[0], to_pos[1])):
-                                    print(f"ERROR: AI trying to capture shielded piece at {to_pos}!")
+                                    pass  # AI trying to capture shielded piece
                                     # This shouldn't happen - skip the AI turn
                                     self.ai.start_thinking = None
                                 else:
@@ -1666,27 +1655,17 @@ class ChessGame:
                         
             # Check for player victory and unlock next difficulty
             if self.board.game_over and self.board.winner == "white":
-                print(f"Game Over! Winner: {self.board.winner}, Mode: {self.current_mode}, Selected Difficulty: {self.selected_difficulty}")
-                print(f"Victory processing check - has victory_processed: {hasattr(self, 'victory_processed')}")
-                print(f"Current story battle: {getattr(self, 'current_story_battle', None)}")
-                print(f"Tutorial mode: {getattr(config, '_in_tutorial', 'Unknown')}")
+                pass  # Game over
                 if not hasattr(self, 'victory_processed') or not self.victory_processed:
                     self.victory_processed = True
-                    print("PROCESSING VICTORY NOW!")
+                    pass  # Processing victory
                     
                     # Handle story mode victory first (story mode has its own reward system)
                     if self.current_mode == "story":
-                        print(f"Story mode check - current_mode: {self.current_mode}")
-                        print(f"Story mode check - current_story_battle: {self.current_story_battle}")
-                        print(f"Story mode instance id: {id(self.story_mode)}")
-                        print(f"Story mode state before: completed_battles={self.story_mode.completed_battles}")
+                        pass  # Story mode victory check
                         if self.current_story_battle:
                             battle_id = self.current_story_battle['id']
-                            print(f"\n{'='*50}")
-                            print(f"STORY MODE VICTORY PROCESSING")
-                            print(f"Battle: {battle_id}")
-                            print(f"Battle data: {self.current_story_battle}")
-                            print(f"{'='*50}\n")
+                            pass  # Story mode victory processing
                             
                             # Get chapter index for this battle
                             chapter_index = None
@@ -1701,38 +1680,32 @@ class ChessGame:
                             # Use story mode's robust completion system
                             self.story_mode.complete_battle(battle_id, won=True)
                             
-                            print(f"Story mode state: completed_battles={self.story_mode.completed_battles}")
-                            print(f"Story mode state: unlocked_chapters={self.story_mode.unlocked_chapters}")
+                            pass  # Story mode state updated
                             
                             # Award story mode cash rewards on EVERY victory (not just first time)
-                            print(f"\nChecking for reward_money in battle data...")
+                            pass  # Checking for reward_money
                             if "reward_money" in self.current_story_battle:
                                 story_reward = self.current_story_battle["reward_money"]
-                                print(f"Found reward_money: ${story_reward}")
+                                pass  # Found reward money
                                 
                                 # Handle tutorial bot completion specially
                                 if self.current_story_battle["id"] == "tutorial_bot":
-                                    print("Special handling for tutorial_bot")
+                                    pass  # Special handling for tutorial_bot
                                     config.set_tutorial_mode(False)
                                     self.powerup_system.in_tutorial = False
                                     config.reset_after_tutorial()  # This sets money to $100
                                     self.victory_reward = 100  # Display the reward
                                     self.board.victory_reward = 100  # Set it on board immediately
-                                    print("Tutorial completed! Starting with $100")
+                                    pass  # Tutorial completed
                                 else:
                                     # Regular story battle rewards
-                                    print(f"Processing regular battle reward: ${story_reward}")
-                                    print(f"Current money before: ${config.get_money()}")
+                                    pass  # Processing regular battle reward
                                     new_money = config.add_money(story_reward)
                                     self.victory_reward = story_reward  # Display the correct reward
                                     self.board.victory_reward = story_reward  # Set it on board immediately
-                                    print(f"Story mode victory reward: ${story_reward}")
-                                    print(f"Current money after: ${config.get_money()}")
-                                    print(f"add_money returned: ${new_money}")
-                                    print(f"self.victory_reward set to: ${self.victory_reward}")
-                                    print(f"self.board.victory_reward set to: ${self.board.victory_reward}")
+                                    pass  # Story mode reward applied
                             else:
-                                print("ERROR: No reward_money found in battle data!")
+                                pass  # No reward_money found
                     else:
                         # Classic mode - award difficulty-based money and unlock next difficulty
                         if self.selected_difficulty:
@@ -1740,12 +1713,12 @@ class ChessGame:
                             new_total = config.add_money(reward)
                             self.victory_reward = reward  # Store for display
                             self.board.victory_reward = reward  # Set it on board immediately
-                            print(f"Victory! Earned ${reward}. Total: ${new_total}")
+                            pass  # Victory reward
                         
                         # Unlock next difficulty
                         next_difficulty = config.unlock_next_difficulty(self.selected_difficulty)
                         if next_difficulty:
-                            print(f"Congratulations! You've unlocked {config.AI_DIFFICULTY_NAMES[next_difficulty]} difficulty!")
+                            pass  # Difficulty unlocked
                     
             elif self.board.game_over and self.board.winner == "black":
                 # AI victory
@@ -1970,9 +1943,9 @@ class ChessGame:
                     self.board.selected_difficulty = self.selected_difficulty
                 if not hasattr(self.board, 'victory_reward'):
                     self.board.victory_reward = self.victory_reward
-                    print(f"[VICTORY SCREEN] Set board.victory_reward = {self.board.victory_reward}")
+                    pass  # Set board.victory_reward
                 else:
-                    print(f"[VICTORY SCREEN] board.victory_reward already = {self.board.victory_reward}")
+                    pass  # board.victory_reward already set
                 if self.current_mode == "story":
                     self.board.is_story_mode = True
                     self.board.story_battle = self.current_story_battle

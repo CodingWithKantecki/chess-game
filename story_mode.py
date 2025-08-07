@@ -16,18 +16,17 @@ class StoryMode:
         if cls._instance is None:
             cls._instance = super(StoryMode, cls).__new__(cls)
             cls._instance._initialized = False
-            print("StoryMode: Creating new instance")
+            pass  # Instance created
         else:
-            print("StoryMode: Returning existing instance")
+            pass  # Return existing instance
         return cls._instance
     
     def __init__(self):
         # Only initialize once to preserve state
         if hasattr(self, '_initialized') and self._initialized:
-            print("StoryMode: Already initialized, skipping init")
-            print(f"StoryMode: Current state - completed_battles: {self.completed_battles}, unlocked_chapters: {self.unlocked_chapters}")
+            pass  # Already initialized
             return
-        print("StoryMode: Initializing for the first time")
+        pass  # Initialize
         self._initialized = True
             
         self.current_chapter = 0
@@ -334,7 +333,7 @@ class StoryMode:
             
     def save_progress(self):
         """Simple save - just print for now."""
-        print(f"[SAVE DISABLED] Would save: battles={self.completed_battles}, chapters={self.unlocked_chapters}")
+        # Save disabled
         return True
             
     def reset_progress(self):
@@ -362,12 +361,7 @@ class StoryMode:
         
     def complete_battle(self, battle_id, won=True):
         """Mark a battle as completed."""
-        print(f"\n=== STORY MODE BATTLE COMPLETION ===")
-        print(f"StoryMode instance id: {id(self)}")
-        print(f"Completing battle: {battle_id}")
-        print(f"Won: {won}")
-        print(f"Current state - chapter: {self.current_chapter}, battle: {self.current_battle}")
-        print(f"Completed battles before: {self.completed_battles}")
+        # Complete battle tracking
         
         # Special handling for enemy_scout to ensure it completes properly
         if battle_id == "enemy_scout":
@@ -398,35 +392,34 @@ class StoryMode:
                     break
                     
             if target_chapter is None:
-                print(f"ERROR: Battle {battle_id} not found in any chapter!")
+                # Battle not found
                 return
                 
-            print(f"Battle {battle_id} belongs to chapter {chapter_index}: {target_chapter['id']}")
-            print(f"Chapter battles: {[b['id'] for b in target_chapter['battles']]}")
+            # Found battle in chapter
             
             # Check if all battles in the chapter are complete
             all_complete = all(battle['id'] in self.completed_battles for battle in target_chapter['battles'])
-            print(f"All battles complete in chapter {chapter_index}: {all_complete}")
+            # Check if chapter is complete
             
             if all_complete:
-                print(f"Chapter {chapter_index} ({target_chapter['id']}) is COMPLETE!")
-                print(f"Current unlocked_chapters: {self.unlocked_chapters}")
+                # Chapter is complete
+                pass
                 
                 # Unlock next chapter
                 if chapter_index + 1 < len(self.unlocked_chapters):
                     self.unlocked_chapters[chapter_index + 1] = True
                     # Update global state
                     config.unlock_story_chapter(chapter_index + 1)
-                    print(f"UNLOCKED chapter {chapter_index + 1}!")
-                    print(f"New unlocked_chapters: {self.unlocked_chapters}")
+                    # Unlocked next chapter
+                    pass
                     
                     # Special case for Chapter 2 completion
                     if chapter_index == 1:  # Chapter 2 (0-indexed)
-                        print("Chapter 2 completed! Chapter 3 'The Arms Race' should now be unlocked!")
+                        pass  # Chapter 2 completed
                     # Special case for final chapter completion
                     elif chapter_index == 3:  # Chapter 4 (0-indexed)
-                        print("CONGRATULATIONS! You have completed the main campaign!")
-                        print("The Epilogue chapter is now available.")
+                        pass  # Main campaign completed
+                        pass
                 else:
                     print("No more chapters to unlock")
                     
@@ -442,16 +435,16 @@ class StoryMode:
             # Double-check by reloading
             self.load_progress()
             if battle_id in self.completed_battles:
-                print(f"✓ Battle {battle_id} completion confirmed!")
+                pass  # Completion confirmed
                 self._log_completion_success(battle_id)
             else:
-                print(f"✗ ERROR: {battle_id} not found after reload!")
+                # Error: battle not found after reload
                 # Restore and retry
                 self.completed_battles = saved_battles
                 self.unlocked_chapters = saved_chapters
                 self.save_progress()
         else:
-            print(f"✗ ERROR: Failed to save {battle_id} completion!")
+            # Error: failed to save
             # Try emergency save
             self._emergency_save(battle_id, saved_battles, saved_chapters)
             
@@ -493,8 +486,8 @@ class StoryMode:
             # Check previous battle in same chapter
             previous_battle = self.chapters[chapter_index]["battles"][battle_index - 1]
             is_completed = self.is_battle_completed(previous_battle["id"])
-            print(f"Checking unlock for battle {battle_index} in chapter {chapter_index}")
-            print(f"Previous battle: {previous_battle['id']}, completed: {is_completed}")
+            # Check battle unlock
+            # Check previous battle
             return is_completed
         else:
             # First battle of a chapter - check if last battle of previous chapter is completed
@@ -502,8 +495,8 @@ class StoryMode:
                 previous_chapter = self.chapters[chapter_index - 1]
                 last_battle = previous_chapter["battles"][-1]
                 is_completed = self.is_battle_completed(last_battle["id"])
-                print(f"Checking unlock for first battle of chapter {chapter_index}")
-                print(f"Last battle of previous chapter: {last_battle['id']}, completed: {is_completed}")
+                # Check first battle of chapter
+                # Check last battle of previous chapter
                 return is_completed
         
         return False

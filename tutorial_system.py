@@ -387,18 +387,17 @@ class TutorialSystem:
                     if self.current_step < len(self.steps):
                         next_step = self.steps[self.current_step]
                         if next_step.get("wait_for") == "ai_move":
-                            print(f"Story Tutorial: Now waiting for AI move...")
-                            print(f"Current turn before: {self.board.current_turn}")
+                            pass  # Now waiting for AI move
                             # The board's complete_move should switch turns, but let's verify
                             if self.board.current_turn == "white":
-                                print("WARNING: Turn is still white after player move, AI won't move!")
+                                pass  # Turn is still white after player move
                                 
         # TUTORIAL FIX: Update shields after player moves too
         # This ensures shields count down properly in tutorial
         if move_completed and self.powerup_system and len(self.powerup_system.shielded_pieces) > 0:
             # Count this as half a turn (player's turn)
             # The other half will happen after AI moves
-            print("\nTUTORIAL: Player move completed, shield countdown pending AI move")
+            pass  # Player move completed, shield countdown pending AI move
                     
         # Scripted mode validation
         elif self.current_mode == "scripted":
@@ -461,7 +460,7 @@ class TutorialSystem:
                     if next_step.get("wait_for") == "ai_move":
                         # In tutorial, using a powerup counts as your turn
                         self.board.current_turn = "black"
-                        print(f"Story Tutorial: Switching to AI turn after powerup use")
+                        pass  # Switching to AI turn after powerup use
                 
                 return True
             else:
@@ -515,14 +514,13 @@ class TutorialSystem:
         
         # Story mode AI move completion
         if self.current_mode == "story" and step.get("wait_for") == "ai_move":
-            print(f"Story Tutorial: AI move completed at step {self.current_step}, advancing tutorial")
-            print(f"AI move index was: {self.ai_move_index}")
+            pass  # AI move completed, advancing tutorial
             
             # TUTORIAL FIX: Force shield update after AI moves
             # In normal games, shields update when turns switch
             # In tutorial, we need to manually update them
             if self.powerup_system and len(self.powerup_system.shielded_pieces) > 0:
-                print("\nTUTORIAL: Manually updating shields after AI turn")
+                pass  # Manually updating shields after AI turn
                 self.powerup_system.update_shields()
             
             self._advance_step()
@@ -539,23 +537,23 @@ class TutorialSystem:
     def should_override_ai(self):
         """Check if tutorial should override AI moves."""
         if not self.active:
-            print("Tutorial override check: Not active")
+            pass  # Not active
             return False
             
         # Story mode has scripted AI sequence
         if self.current_mode == "story":
-            print(f"Tutorial override check: Story mode, ai_move_index={self.ai_move_index}, sequence_length={len(self.ai_move_sequence)}")
+            pass  # Story mode override check
             if self.ai_move_index < len(self.ai_move_sequence):
                 step = self.steps[self.current_step] if self.current_step < len(self.steps) else {}
-                print(f"Tutorial override check: Current step {self.current_step} wait_for: {step.get('wait_for', 'None')}")
+                pass  # Current step check
                 # Only override if we're actually waiting for an AI move
                 if step.get("wait_for") == "ai_move":
-                    print(f"Tutorial: Overriding AI move at step {self.current_step}, instruction: {step.get('instruction', 'N/A')}")
+                    pass  # Overriding AI move
                     return True
                 else:
-                    print(f"Tutorial: NOT overriding - not waiting for AI move")
+                    pass  # Not overriding
             else:
-                print(f"Tutorial: No more AI moves in sequence")
+                pass  # No more AI moves
             
         # Scripted mode controls specific AI moves
         if self.current_mode == "scripted":
@@ -574,12 +572,12 @@ class TutorialSystem:
             if self.ai_move_index == 0:
                 # Force e7-e5 move (e=col 4, rank 7=row 1, rank 5=row 3)
                 move = ((4, 1), (4, 3))  # e7 to e5
-                print(f"Tutorial: Forcing first AI move e7-e5 for knight capture demo")
+                pass  # Forcing first AI move
                 self.ai_move_index += 1
                 return move
             elif self.ai_move_index < len(self.ai_move_sequence):
                 move = self.ai_move_sequence[self.ai_move_index]
-                print(f"Tutorial AI Move {self.ai_move_index + 1}: {move} (from col,row to col,row)")
+                pass  # Tutorial AI move
                 self.ai_move_index += 1
                 return move
                 
@@ -682,7 +680,7 @@ class TutorialSystem:
         if self.current_step < len(self.steps):
             step = self.steps[self.current_step]
             if "completion_text" in step and self.current_mode == "story":
-                print(f"Story Tutorial: {step['completion_text']}")
+                pass  # Step completed
         
         
         # Advance step
@@ -733,7 +731,7 @@ class TutorialSystem:
             # Show current step instruction
             if self.current_step < len(self.steps):
                 step = self.steps[self.current_step]
-                print(f"Story Tutorial: {step.get('instruction', '')}")
+                pass  # Story tutorial instruction
                 
         return True
     

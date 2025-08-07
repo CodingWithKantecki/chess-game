@@ -217,11 +217,11 @@ class PowerupSystem:
             self._create_lightning_effect(row, col, board)
             
             # Apply shield after a delay (when lightning animation finishes)
-            print(f"\n=== APPLYING SHIELD ===")
-            print(f"Shielding piece at position: ({row}, {col})")
+            pass  # Apply shield
+            pass
             self.shielded_pieces[(row, col)] = 3
-            print(f"Shielded pieces now: {self.shielded_pieces}")
-            print(f"=== END APPLY SHIELD ===")
+            pass
+            pass
             
             # Create shield effect after lightning
             self._create_shield_effect(row, col, board, delay=500)
@@ -400,44 +400,44 @@ class PowerupSystem:
         
     def update_shields(self):
         """Decrement shield counters each turn."""
-        print(f"\n=== UPDATE SHIELDS CALLED ===")
-        print(f"Current shields before update: {self.shielded_pieces}")
+        # Update shield turns
+        pass
         
         to_remove = []
         for pos, turns in self.shielded_pieces.items():
             self.shielded_pieces[pos] = turns - 1
-            print(f"Shield at {pos}: {turns} -> {turns - 1}")
+            pass  # Decrement shield turn
             if self.shielded_pieces[pos] <= 0:
                 to_remove.append(pos)
-                print(f"Shield at {pos} expired!")
+                pass  # Shield expired
                 
         for pos in to_remove:
             del self.shielded_pieces[pos]
             
-        print(f"Shields after update: {self.shielded_pieces}")
+        # Shields updated
             
     def remove_shield_at(self, row, col):
         """Remove shield at a specific position (e.g., when piece is captured)."""
         pos = (row, col)
         if pos in self.shielded_pieces:
             del self.shielded_pieces[pos]
-            print(f"Removed shield at {pos}")
+            pass  # Shield removed
             
     def move_shield(self, from_pos, to_pos):
         """Move shield when a shielded piece moves."""
-        print(f"\n=== MOVE_SHIELD CALLED ===")
-        print(f"From: {from_pos}, To: {to_pos}")
-        print(f"Current shielded pieces: {self.shielded_pieces}")
+        # Move shield with piece
+        pass
+        pass
         
         if from_pos in self.shielded_pieces:
             turns_remaining = self.shielded_pieces[from_pos]
             del self.shielded_pieces[from_pos]
             self.shielded_pieces[to_pos] = turns_remaining
-            print(f"Shield moved from {from_pos} to {to_pos} with {turns_remaining} turns remaining")
-            print(f"Updated shielded pieces: {self.shielded_pieces}")
+            pass  # Shield moved
+            pass
         else:
-            print(f"WARNING: No shield found at {from_pos}!")
-        print(f"=== END SHIELD DEBUG ===")
+            pass  # No shield at from_pos
+        pass
             
     def is_piece_shielded(self, row, col):
         """Check if a piece is protected by shield."""

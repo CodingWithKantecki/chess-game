@@ -132,12 +132,12 @@ class Renderer:
                 if test_font:
                     for key, size in sizes.items():
                         fonts[key] = pygame.font.SysFont(font_name, size)
-                    print(f"Loaded pixel font: {font_name}")
+                    pass  # Loaded pixel font
                     return fonts
             except:
                 continue
                 
-        print("Using default monospace font")
+        pass  # Using default monospace font
         for key, size in sizes.items():
             fonts[key] = pygame.font.Font(pygame.font.get_default_font(), size)
         
@@ -408,8 +408,7 @@ class Renderer:
         current_time = pygame.time.get_ticks()
         if not hasattr(self, '_last_debug_time') or current_time - self._last_debug_time > 1000:
             self._last_debug_time = current_time
-            print(f"Story Chapters Display - unlocked_chapters: {story_mode.unlocked_chapters}")
-            print(f"Story Chapters Display - completed_battles: {story_mode.completed_battles}")
+            pass  # Story chapters display
         
         for i, chapter in enumerate(story_mode.chapters):
             if not chapter.get("battles"):  # Skip epilogue
@@ -996,7 +995,7 @@ class Renderer:
         self.screen.fill((20, 20, 30))
         
         if not hasattr(self.assets, 'parallax_layers') or not self.assets.parallax_layers:
-            print("WARNING: No parallax layers found in assets!")
+            pass  # No parallax layers warning
             for y in range(0, config.HEIGHT, 10):
                 color_val = int(30 + (y / config.HEIGHT) * 20)
                 pygame.draw.rect(self.screen, (color_val, color_val, color_val + 10), 
@@ -1023,7 +1022,7 @@ class Renderer:
         layers_drawn = 0
         for i, layer in enumerate(layers_to_draw):
             if not layer.get("image"):
-                print(f"WARNING: Layer {i} has no image!")
+                pass  # Layer has no image warning
                 continue
             
             if i == 5:
@@ -2288,9 +2287,9 @@ class Renderer:
             center_y = y + square_size_scaled // 2
             
             # Create pulsing highlight
-            pulse = (pygame.time.get_ticks() // 200) % 10
-            alpha = 100 + (pulse * 15)
-            radius = int(square_size_scaled * 0.4)  # Circle radius as 40% of square size
+            pulse = (pygame.time.get_ticks() // 100) % 10  # Faster pulsing (was 200)
+            alpha = 50 + (pulse * 10)  # More transparent (was 100 + pulse * 15)
+            radius = int(square_size_scaled * 0.3)  # Smaller circle radius (was 0.4)
             
             # Draw glowing circles
             for i in range(3):

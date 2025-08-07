@@ -240,10 +240,10 @@ class ChessBoard:
         
     def complete_move(self):
         """Complete the animated move."""
-        print(f"\n=== COMPLETE_MOVE CALLED ===")
-        print(f"Animating: {self.animating}")
+        # Complete move
+        pass
         if not self.animating:
-            print("Not animating, returning None")
+            pass  # Not animating
             return None
             
         from_row, from_col = self.animation_from
@@ -255,9 +255,9 @@ class ChessBoard:
         
         # Move shield if piece is shielded, but ONLY if not capturing
         if self.powerup_system:
-            print(f"\n=== COMPLETE MOVE DEBUG ===")
-            print(f"Moving piece from ({from_row}, {from_col}) to ({to_row}, {to_col})")
-            print(f"Piece being moved: {piece}")
+            # Complete move
+            pass
+            pass
             print(f"Checking for shield at source position...")
             
             # Only move shield if we're not capturing a piece
@@ -311,7 +311,7 @@ class ChessBoard:
         if not self.game_over:
             old_turn = self.current_turn
             self.current_turn = "black" if self.current_turn == "white" else "white"
-            print(f"\n=== TURN SWITCH: {old_turn} -> {self.current_turn} ===")
+            # Turn switched
             # Update shield counters on turn change
             if self.powerup_system:
                 print("Updating shields due to turn change...")
