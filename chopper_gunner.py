@@ -1478,17 +1478,7 @@ class ChopperGunnerMode:
         """Draw heads-up display."""
         # Removed ammo and altitude display - unlimited ammo mode
             
-        # Draw phase indicator
-        phase_text = ""
-        if self.phase == "approach":
-            phase_text = "APPROACHING TARGET..."
-        elif self.phase == "complete":
-            phase_text = "MISSION COMPLETE"
-            
-        if phase_text:
-            text = font.render(phase_text, True, (255, 255, 0))
-            rect = text.get_rect(center=(WIDTH // 2, 50))
-            self.screen.blit(text, rect)
+        # Removed phase indicator display
             
     def apply_cockpit_lighting(self, cockpit_surface, current_time):
         """Apply realistic red lighting effects to the cockpit overlay."""
