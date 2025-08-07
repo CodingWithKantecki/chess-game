@@ -2494,25 +2494,57 @@ class Renderer:
             # Check hover
             is_hover = card_rect.collidepoint(mouse_pos) and not is_unlocked
             
-            # Simple card colors
+            # Modern card design with gradients and better colors
             if is_unlocked:
-                card_color = (50, 150, 50)
-                border_color = (0, 255, 0)
+                # Owned - clean green gradient effect
+                card_base_color = (40, 90, 50)
+                card_highlight_color = (60, 140, 80)
+                border_color = (100, 255, 150)
+                glow_color = (0, 255, 100, 30)
             elif can_afford:
-                card_color = (100, 80, 20)
+                # Affordable - warm gold gradient
+                card_base_color = (80, 60, 30)
+                card_highlight_color = (120, 90, 40)
                 border_color = (255, 215, 0)
+                glow_color = (255, 200, 0, 20)
             else:
-                card_color = (60, 60, 60)
-                border_color = (150, 150, 150)
+                # Too expensive - clean gray
+                card_base_color = (50, 50, 55)
+                card_highlight_color = (70, 70, 75)
+                border_color = (120, 120, 130)
+                glow_color = None
             
-            # Draw card background
-            pygame.draw.rect(self.screen, card_color, card_rect)
-            pygame.draw.rect(self.screen, border_color, card_rect, 3)
+            # Draw card with gradient effect
+            # Shadow first
+            shadow_surf = pygame.Surface((card_rect.width + 10, card_rect.height + 10), pygame.SRCALPHA)
+            shadow_color = (0, 0, 0, 80)
+            pygame.draw.rect(shadow_surf, shadow_color, shadow_surf.get_rect(), border_radius=10)
+            self.screen.blit(shadow_surf, (card_rect.x - 3, card_rect.y + 3))
             
-            # Simple hover effect
+            # Base layer
+            pygame.draw.rect(self.screen, card_base_color, card_rect, border_radius=8)
+            
+            # Highlight gradient (top half lighter)
+            highlight_rect = pygame.Rect(card_rect.x, card_rect.y, card_rect.width, card_rect.height // 2)
+            highlight_surf = pygame.Surface((highlight_rect.width, highlight_rect.height), pygame.SRCALPHA)
+            highlight_surf.fill((*card_highlight_color, 100))
+            self.screen.blit(highlight_surf, highlight_rect)
+            
+            # Clean border
+            pygame.draw.rect(self.screen, border_color, card_rect, 2, border_radius=8)
+            
+            # Modern hover effect with glow
             if is_hover:
-                hover_rect = card_rect.inflate(10, 10)
-                pygame.draw.rect(self.screen, border_color, hover_rect, 2)
+                # Outer glow
+                for i in range(3):
+                    glow_rect = card_rect.inflate(4 + i*4, 4 + i*4)
+                    glow_surf = pygame.Surface((glow_rect.width, glow_rect.height), pygame.SRCALPHA)
+                    glow_alpha = 40 - i*12
+                    pygame.draw.rect(glow_surf, (*border_color, glow_alpha), glow_surf.get_rect(), border_radius=10)
+                    self.screen.blit(glow_surf, glow_rect)
+                
+                # Inner bright border
+                pygame.draw.rect(self.screen, border_color, card_rect, 3, border_radius=8)
             
             # Tutorial highlighting for shield
             if story_tutorial and story_tutorial.active and powerup_key == "shield" and not is_unlocked:
@@ -2679,77 +2711,231 @@ class Renderer:
                 self.screen.blit(text_surface, text_rect)
 
     def _draw_shield_icon(self, screen, card_rect, icon_y, enabled=True):
-        """Draw a shield icon."""
-        color = (200, 200, 200) if enabled else (80, 80, 80)
-        size = 40
-        x = card_rect.centerx - size // 2
-        y = icon_y - size // 2
+        """Draw a modern shield icon."""
+        # Use blue/cyan for enabled, gray for disabled
+        if enabled:
+            fill_color = (100, 200, 255)
+            border_color = (255, 255, 255)
+            accent_color = (150, 220, 255)
+        else:
+            fill_color = (80, 80, 80)
+            border_color = (120, 120, 120)
+            accent_color = (100, 100, 100)
         
+        size = 36
+        cx = card_rect.centerx
+        cy = icon_y
+        
+        # Shield shape with smoother curves
+        shield_surf = pygame.Surface((size + 10, size + 10), pygame.SRCALPHA)
+        
+        # Main shield body
         points = [
-            (x + size // 2, y + 5),
-            (x + size - 5, y + 10),
-            (x + size - 5, y + size // 2),
-            (x + size // 2, y + size - 5),
-            (x + 5, y + size // 2),
-            (x + 5, y + 10)
+            (size // 2, 2),
+            (size - 2, 8),
+            (size - 2, size // 2 + 4),
+            (size // 2, size - 2),
+            (2, size // 2 + 4),
+            (2, 8)
         ]
-        pygame.draw.polygon(screen, color, points)
-        pygame.draw.polygon(screen, (0, 0, 0), points, 2)
+        
+        # Draw gradient-like effect
+        for i in range(3):
+            offset_points = [(p[0] + 5 - i*2, p[1] + 5 - i*2) for p in points]
+            alpha = 255 - i * 60
+            temp_color = (*fill_color, alpha)
+            pygame.draw.polygon(shield_surf, temp_color, offset_points)
+        
+        # Draw main shield
+        offset_points = [(p[0] + 5, p[1] + 5) for p in points]
+        pygame.draw.polygon(shield_surf, fill_color, offset_points)
+        
+        # Add highlight
+        highlight_points = [
+            (size // 2 + 5, 7),
+            (size - 5, 12),
+            (size - 5, size // 4 + 8),
+            (size // 2 + 5, size // 3 + 5)
+        ]
+        pygame.draw.polygon(shield_surf, accent_color, highlight_points)
+        
+        # Clean border
+        pygame.draw.polygon(shield_surf, border_color, offset_points, 2)
+        
+        # Center the shield
+        shield_rect = shield_surf.get_rect(center=(cx, cy))
+        screen.blit(shield_surf, shield_rect)
 
     def _draw_missile_icon(self, screen, card_rect, icon_y, enabled=True):
-        """Draw a missile/airstrike icon."""
-        color = (200, 50, 50) if enabled else (80, 80, 80)
+        """Draw a modern missile/airstrike icon."""
+        if enabled:
+            fill_color = (255, 100, 100)
+            accent_color = (255, 150, 150)
+            flame_color = (255, 200, 100)
+        else:
+            fill_color = (80, 80, 80)
+            accent_color = (100, 100, 100)
+            flame_color = (90, 90, 90)
+        
         cx = card_rect.centerx
         cy = icon_y
         
-        pygame.draw.rect(screen, color, (cx - 3, cy - 10, 6, 15))
+        # Create surface for smooth rendering
+        icon_surf = pygame.Surface((50, 50), pygame.SRCALPHA)
+        center = (25, 25)
         
-        pygame.draw.polygon(screen, color, [
-            (cx - 3, cy - 10),
-            (cx, cy - 15),
-            (cx + 3, cy - 10)
-        ])
+        # Missile body (sleeker design)
+        body_rect = pygame.Rect(center[0] - 4, center[1] - 15, 8, 20)
+        pygame.draw.rect(icon_surf, fill_color, body_rect, border_radius=4)
         
-        pygame.draw.polygon(screen, color, [
-            (cx - 6, cy + 2),
-            (cx - 3, cy + 5),
-            (cx - 3, cy)
-        ])
-        pygame.draw.polygon(screen, color, [
-            (cx + 6, cy + 2),
-            (cx + 3, cy + 5),
-            (cx + 3, cy)
-        ])
+        # Nose cone (smoother)
+        nose_points = [
+            (center[0], center[1] - 20),
+            (center[0] - 4, center[1] - 15),
+            (center[0] + 4, center[1] - 15)
+        ]
+        pygame.draw.polygon(icon_surf, fill_color, nose_points)
+        
+        # Fins (more modern)
+        # Left fin
+        left_fin = [
+            (center[0] - 4, center[1] + 2),
+            (center[0] - 10, center[1] + 5),
+            (center[0] - 8, center[1] + 8),
+            (center[0] - 4, center[1] + 5)
+        ]
+        pygame.draw.polygon(icon_surf, accent_color, left_fin)
+        
+        # Right fin
+        right_fin = [
+            (center[0] + 4, center[1] + 2),
+            (center[0] + 10, center[1] + 5),
+            (center[0] + 8, center[1] + 8),
+            (center[0] + 4, center[1] + 5)
+        ]
+        pygame.draw.polygon(icon_surf, accent_color, right_fin)
+        
+        # Exhaust flame
+        flame_points = [
+            (center[0] - 3, center[1] + 5),
+            (center[0], center[1] + 12),
+            (center[0] + 3, center[1] + 5)
+        ]
+        pygame.draw.polygon(icon_surf, flame_color, flame_points)
+        
+        # Highlight on body
+        pygame.draw.rect(icon_surf, accent_color, (center[0] - 2, center[1] - 13, 2, 10))
+        
+        # Draw to screen
+        icon_rect = icon_surf.get_rect(center=(cx, cy))
+        screen.blit(icon_surf, icon_rect)
 
     def _draw_parachute_icon(self, screen, card_rect, icon_y, enabled=True):
-        """Draw a parachute icon."""
-        color = (100, 150, 200) if enabled else (80, 80, 80)
+        """Draw a modern parachute icon."""
+        if enabled:
+            chute_color = (100, 200, 150)
+            line_color = (150, 220, 180)
+            soldier_color = (80, 80, 100)
+        else:
+            chute_color = (80, 80, 80)
+            line_color = (100, 100, 100)
+            soldier_color = (60, 60, 60)
+        
         cx = card_rect.centerx
         cy = icon_y
         
-        pygame.draw.arc(screen, color, (cx - 15, cy - 15, 30, 15), 0, 3.14, 3)
+        # Create surface for smooth rendering
+        icon_surf = pygame.Surface((50, 50), pygame.SRCALPHA)
+        center = (25, 25)
         
-        for x in [cx - 10, cx, cx + 10]:
-            pygame.draw.line(screen, color, (x, cy - 8), 
-                           (cx, cy + 8), 1)
+        # Draw parachute canopy (filled semicircle)
+        chute_rect = pygame.Rect(center[0] - 18, center[1] - 18, 36, 20)
+        pygame.draw.ellipse(icon_surf, chute_color, chute_rect)
+        # Cut off bottom half
+        pygame.draw.rect(icon_surf, (0, 0, 0, 0), (center[0] - 20, center[1] - 5, 40, 20))
         
-        pygame.draw.circle(screen, color, (cx, cy + 8), 3)
+        # Add highlight to canopy
+        highlight_rect = pygame.Rect(center[0] - 12, center[1] - 15, 15, 8)
+        pygame.draw.ellipse(icon_surf, line_color, highlight_rect)
+        
+        # Draw suspension lines (cleaner)
+        line_start_y = center[1] - 5
+        line_end = (center[0], center[1] + 8)
+        
+        for offset in [-12, -6, 0, 6, 12]:
+            start_point = (center[0] + offset, line_start_y)
+            pygame.draw.line(icon_surf, line_color, start_point, line_end, 2 if offset == 0 else 1)
+        
+        # Draw soldier (simplified figure)
+        # Head
+        pygame.draw.circle(icon_surf, soldier_color, (center[0], center[1] + 10), 4)
+        # Body
+        pygame.draw.rect(icon_surf, soldier_color, (center[0] - 3, center[1] + 12, 6, 8), border_radius=2)
+        
+        # Draw to screen
+        icon_rect = icon_surf.get_rect(center=(cx, cy))
+        screen.blit(icon_surf, icon_rect)
 
     def _draw_helicopter_icon(self, screen, card_rect, icon_y, enabled=True):
-        """Draw a helicopter icon."""
-        color = (100, 100, 150) if enabled else (80, 80, 80)
+        """Draw a modern helicopter icon."""
+        if enabled:
+            body_color = (150, 100, 200)
+            rotor_color = (200, 150, 250)
+            window_color = (100, 200, 255)
+        else:
+            body_color = (80, 80, 80)
+            rotor_color = (100, 100, 100)
+            window_color = (60, 60, 60)
+        
         cx = card_rect.centerx
         cy = icon_y
         
-        # Rotor
-        pygame.draw.line(screen, color, (cx - 20, cy - 10), (cx + 20, cy - 10), 2)
+        # Create surface for smooth rendering
+        icon_surf = pygame.Surface((60, 50), pygame.SRCALPHA)
+        center = (30, 25)
         
-        # Body
-        body_rect = pygame.Rect(cx - 15, cy - 5, 30, 15)
-        pygame.draw.ellipse(screen, color, body_rect)
+        # Main rotor (animated look)
+        # Rotor hub
+        pygame.draw.circle(icon_surf, rotor_color, (center[0], center[1] - 8), 3)
+        # Rotor blades (blurred effect)
+        for angle in [0, 120, 240]:
+            end_x = center[0] + int(20 * math.cos(math.radians(angle)))
+            end_y = center[1] - 8 + int(3 * math.sin(math.radians(angle)))
+            pygame.draw.line(icon_surf, rotor_color, (center[0], center[1] - 8), (end_x, end_y), 2)
         
-        # Tail
-        pygame.draw.rect(screen, color, (cx + 10, cy, 15, 5))
+        # Body (more detailed)
+        # Main fuselage
+        body_points = [
+            (center[0] - 12, center[1] - 2),
+            (center[0] - 12, center[1] + 8),
+            (center[0] + 8, center[1] + 8),
+            (center[0] + 12, center[1] + 3),
+            (center[0] + 12, center[1] - 2)
+        ]
+        pygame.draw.polygon(icon_surf, body_color, body_points)
+        
+        # Cockpit window
+        window_points = [
+            (center[0] - 11, center[1] - 1),
+            (center[0] - 11, center[1] + 4),
+            (center[0] - 2, center[1] + 4),
+            (center[0] + 2, center[1] - 1)
+        ]
+        pygame.draw.polygon(icon_surf, window_color, window_points)
+        
+        # Tail boom
+        tail_rect = pygame.Rect(center[0] + 8, center[1] + 2, 18, 4)
+        pygame.draw.rect(icon_surf, body_color, tail_rect, border_radius=2)
+        
+        # Tail rotor
+        pygame.draw.circle(icon_surf, rotor_color, (center[0] + 24, center[1] + 4), 4, 2)
+        
+        # Landing skids
+        pygame.draw.rect(icon_surf, body_color, (center[0] - 10, center[1] + 8, 20, 2), border_radius=1)
+        
+        # Draw to screen
+        icon_rect = icon_surf.get_rect(center=(cx, cy))
+        screen.blit(icon_surf, icon_rect)
     
     def _draw_tech_grid(self):
         """Draw animated tech grid background."""
