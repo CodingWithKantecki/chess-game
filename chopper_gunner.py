@@ -1033,6 +1033,12 @@ class ChopperGunnerMode:
                 shake_x += random.randint(-3, 3)
                 shake_y += random.randint(-3, 3)
             
+            # Create a copy of the cockpit overlay to apply lighting effects
+            lit_cockpit = self.cockpit_overlay.copy()
+            
+            # Apply red cockpit lighting to the cockpit image
+            self.apply_cockpit_lighting(lit_cockpit, current_time)
+            
             # Fill only the exposed edges with black when shaking
             if shake_x > 0:
                 pygame.draw.rect(self.screen, (0, 0, 0), (0, 0, int(shake_x), HEIGHT))
@@ -1043,10 +1049,7 @@ class ChopperGunnerMode:
             if shake_y < 0:
                 pygame.draw.rect(self.screen, (0, 0, 0), (0, HEIGHT + int(shake_y), WIDTH, -int(shake_y)))
             
-            self.screen.blit(self.cockpit_overlay, (int(shake_x), int(shake_y)))
-        
-        # Draw red cockpit glow effect
-        self.draw_cockpit_glow()
+            self.screen.blit(lit_cockpit, (int(shake_x), int(shake_y)))
         
         # Draw crosshair
         self.draw_crosshair()
@@ -1499,48 +1502,63 @@ class ChopperGunnerMode:
             rect = text.get_rect(center=(WIDTH // 2, 50))
             self.screen.blit(text, rect)
             
-    def draw_cockpit_glow(self):
-        """Draw soft red glow from cockpit controls."""
-        # Create multiple layers of red glow for depth
-        glow_positions = [
-            # Bottom left corner - main controls
-            {"pos": (100, HEIGHT - 100), "radius": 150, "intensity": 0.4},
-            # Bottom right corner - secondary controls
-            {"pos": (WIDTH - 100, HEIGHT - 100), "radius": 120, "intensity": 0.3},
-            # Center bottom - pilot area
-            {"pos": (WIDTH // 2, HEIGHT - 80), "radius": 180, "intensity": 0.2},
+    def apply_cockpit_lighting(self, cockpit_surface, current_time):
+        """Apply realistic red lighting effects to the cockpit overlay."""
+        # Create a lighting overlay
+        lighting_overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        
+        # Define light sources with pulsing effects
+        light_sources = [
+            # Main console lights
+            {"pos": (WIDTH // 2, HEIGHT - 120), "radius": 200, "base_intensity": 0.3, "pulse_speed": 0.002},
+            # Left panel
+            {"pos": (150, HEIGHT - 150), "radius": 120, "base_intensity": 0.25, "pulse_speed": 0.003},
+            # Right panel
+            {"pos": (WIDTH - 150, HEIGHT - 150), "radius": 120, "base_intensity": 0.25, "pulse_speed": 0.0025},
             # Small instrument lights
-            {"pos": (200, HEIGHT - 150), "radius": 60, "intensity": 0.5},
-            {"pos": (WIDTH - 200, HEIGHT - 150), "radius": 60, "intensity": 0.5},
+            {"pos": (300, HEIGHT - 180), "radius": 60, "base_intensity": 0.4, "pulse_speed": 0.004},
+            {"pos": (WIDTH - 300, HEIGHT - 180), "radius": 60, "base_intensity": 0.4, "pulse_speed": 0.0035},
         ]
         
-        # Draw each glow
-        for glow in glow_positions:
-            # Create a surface for the glow
-            radius = glow["radius"]
-            glow_surf = pygame.Surface((radius * 2, radius * 2), pygame.SRCALPHA)
+        # Draw each light source
+        for light in light_sources:
+            # Calculate pulsing intensity
+            pulse = math.sin(current_time * light["pulse_speed"]) * 0.15 + 0.85
+            intensity = light["base_intensity"] * pulse
             
-            # Draw multiple circles with decreasing alpha for smooth gradient
-            for i in range(radius, 0, -2):
-                # Calculate alpha based on distance from center
-                alpha = int(255 * glow["intensity"] * (1 - (radius - i) / radius) * 0.3)
-                alpha = min(alpha, 80)  # Cap alpha to keep it subtle
+            # Create gradient for this light
+            radius = light["radius"]
+            for i in range(radius, 0, -3):
+                # Calculate falloff
+                distance_ratio = i / radius
+                falloff = math.pow(distance_ratio, 2)  # Quadratic falloff for realistic lighting
                 
-                # Red color with slight variation
-                red_value = 255 - (radius - i) // 2
-                color = (red_value, 20, 20, alpha)
+                # Calculate alpha
+                alpha = int(255 * intensity * falloff * 0.6)
+                alpha = min(alpha, 120)
                 
-                pygame.draw.circle(glow_surf, color, (radius, radius), i)
-            
-            # Blit the glow to the screen
-            self.screen.blit(glow_surf, (glow["pos"][0] - radius, glow["pos"][1] - radius), special_flags=pygame.BLEND_ADD)
+                # Draw the light circle
+                pygame.draw.circle(lighting_overlay, (255, 80, 60, alpha), light["pos"], i)
         
-        # Add flickering effect to simulate electronic displays
-        if random.random() < 0.05:  # 5% chance each frame
-            flicker_x = random.randint(50, WIDTH - 50)
-            flicker_y = random.randint(HEIGHT - 200, HEIGHT - 50)
-            flicker_radius = random.randint(20, 40)
-            
-            flicker_surf = pygame.Surface((flicker_radius * 2, flicker_radius * 2), pygame.SRCALPHA)
-            pygame.draw.circle(flicker_surf, (255, 50, 50, 100), (flicker_radius, flicker_radius), flicker_radius)
-            self.screen.blit(flicker_surf, (flicker_x - flicker_radius, flicker_y - flicker_radius), special_flags=pygame.BLEND_ADD)
+        # Add random flickers for instrument panels
+        if random.random() < 0.08:  # 8% chance each frame
+            num_flickers = random.randint(1, 3)
+            for _ in range(num_flickers):
+                flicker_x = random.randint(100, WIDTH - 100)
+                flicker_y = random.randint(HEIGHT - 250, HEIGHT - 100)
+                flicker_radius = random.randint(20, 50)
+                flicker_intensity = random.uniform(0.3, 0.6)
+                
+                for i in range(flicker_radius, 0, -5):
+                    alpha = int(255 * flicker_intensity * (i / flicker_radius) * 0.5)
+                    pygame.draw.circle(lighting_overlay, (255, 100, 80, alpha), 
+                                     (flicker_x, flicker_y), i)
+        
+        # Apply the lighting to the cockpit using multiplicative blending
+        # This will make the cockpit image appear to be lit by the red lights
+        cockpit_surface.blit(lighting_overlay, (0, 0), special_flags=pygame.BLEND_ADD)
+        
+        # Add a subtle overall red tint to unify the lighting
+        tint_surface = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        tint_surface.fill((30, 0, 0, 20))
+        cockpit_surface.blit(tint_surface, (0, 0))
