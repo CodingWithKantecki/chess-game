@@ -1507,82 +1507,87 @@ class ChopperGunnerMode:
         # Create a lighting overlay
         lighting_overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
         
-        # Smooth pulsing effect
-        pulse = (math.sin(current_time * 0.0015) + 1.0) * 0.5  # Varies smoothly between 0 and 1
+        # Smooth pulsing effect - more noticeable
+        pulse = (math.sin(current_time * 0.002) + 1.0) * 0.5  # Varies smoothly between 0 and 1
         
-        # Create vertical gradient using filled rectangles (much faster than pixel-by-pixel)
-        gradient_steps = 20  # Number of gradient bands
-        step_height = int(HEIGHT * 0.7 / gradient_steps)
+        # Create a smooth vertical gradient using pygame's built-in gradient capabilities
+        # Bottom section - bright console area
+        bottom_section = pygame.Surface((WIDTH, HEIGHT // 2), pygame.SRCALPHA)
         
-        for i in range(gradient_steps):
-            y = HEIGHT - (i + 1) * step_height
+        # Draw multiple overlapping gradients for smoother effect
+        for i in range(10):
+            y_offset = i * 20
+            height = HEIGHT // 2 - y_offset
+            if height <= 0:
+                break
+                
+            # Calculate intensity for this layer
+            layer_intensity = (1.0 - (i / 10.0)) ** 2
+            base_alpha = int(80 * layer_intensity * (0.5 + 0.5 * pulse))
             
-            # Calculate intensity for this band
-            normalized_position = i / gradient_steps
-            falloff = math.exp(-3 * normalized_position)
-            base_intensity = falloff * 0.4
-            intensity = base_intensity * (0.7 + 0.3 * pulse)
-            
-            # Calculate alpha
-            alpha = int(intensity * 255)
-            alpha = min(50, alpha)
-            
-            if alpha > 0:
-                # Create a surface for this gradient band
-                band_surface = pygame.Surface((WIDTH, step_height), pygame.SRCALPHA)
+            # Create gradient rectangle
+            for y in range(0, height, 5):  # Step by 5 for performance
+                # Vertical falloff
+                vertical_falloff = 1.0 - (y / height)
+                alpha = int(base_alpha * vertical_falloff)
                 
-                # Fill with semi-transparent red
-                band_surface.fill((200, 0, 0, alpha))
-                
-                # Add horizontal gradient using pre-calculated gradient surface
-                if not hasattr(self, '_horizontal_gradient'):
-                    self._create_horizontal_gradient()
-                
-                # Apply horizontal gradient mask (scale to band height)
-                scaled_gradient = pygame.transform.scale(self._horizontal_gradient, (WIDTH, step_height))
-                band_surface.blit(scaled_gradient, (0, 0), special_flags=pygame.BLEND_MULT)
-                
-                # Draw the band
-                lighting_overlay.blit(band_surface, (0, y))
+                if alpha > 0:
+                    # Draw a horizontal gradient line
+                    gradient_rect = pygame.Surface((WIDTH, 5), pygame.SRCALPHA)
+                    
+                    # Center glow effect
+                    center_x = WIDTH // 2
+                    for x in range(0, WIDTH, 10):  # Step by 10 for performance
+                        dist_from_center = abs(x - center_x)
+                        horizontal_falloff = max(0, 1.0 - (dist_from_center / (WIDTH * 0.4)))
+                        pixel_alpha = int(alpha * horizontal_falloff)
+                        
+                        if pixel_alpha > 0:
+                            rect = pygame.Rect(x, 0, 10, 5)
+                            gradient_rect.fill((255, 50, 20, pixel_alpha), rect)
+                    
+                    bottom_section.blit(gradient_rect, (0, y))
         
-        # Add console glow using larger, fewer circles for performance
+        # Blit bottom section to main overlay
+        lighting_overlay.blit(bottom_section, (0, HEIGHT // 2))
+        
+        # Add a strong console glow effect
         console_x = WIDTH // 2
-        console_y = HEIGHT - 80
+        console_y = HEIGHT - 100
         
-        # Draw just a few circles for the glow effect
-        glow_steps = [
-            (120, 0.1),  # Outer glow
-            (80, 0.2),   # Middle glow
-            (40, 0.4),   # Inner glow
+        # Create glow using radial gradient with more steps for smoothness
+        max_radius = 200
+        for radius in range(max_radius, 0, -10):
+            # Smooth falloff curve
+            normalized_radius = radius / max_radius
+            intensity = (1.0 - normalized_radius) ** 2.5  # Steeper falloff for focused glow
+            
+            # Pulsing effect on intensity
+            glow_alpha = int(120 * intensity * (0.6 + 0.4 * pulse))
+            glow_alpha = min(80, glow_alpha)
+            
+            if glow_alpha > 0:
+                # Inner glow is more orange
+                if radius < 50:
+                    color = (255, 80, 30, glow_alpha)
+                else:
+                    color = (255, 40, 10, glow_alpha)
+                
+                pygame.draw.circle(lighting_overlay, color, (console_x, console_y), radius)
+        
+        # Add some hot spots for instrument panels
+        instrument_positions = [
+            (WIDTH // 4, HEIGHT - 80),
+            (3 * WIDTH // 4, HEIGHT - 80),
         ]
         
-        for radius, intensity in glow_steps:
-            alpha = int(intensity * 60 * (0.8 + 0.2 * pulse))
-            alpha = min(40, alpha)
+        for pos_x, pos_y in instrument_positions:
+            # Small pulsing lights
+            spot_pulse = (math.sin(current_time * 0.003 + pos_x) + 1.0) * 0.5
+            spot_alpha = int(40 * spot_pulse)
             
-            if alpha > 0:
-                pygame.draw.circle(lighting_overlay, (255, 20, 0, alpha), 
-                                 (console_x, console_y), radius)
+            pygame.draw.circle(lighting_overlay, (255, 60, 20, spot_alpha), (pos_x, pos_y), 30)
+            pygame.draw.circle(lighting_overlay, (255, 100, 40, spot_alpha // 2), (pos_x, pos_y), 15)
         
         # Apply the lighting to the cockpit using additive blending
         cockpit_surface.blit(lighting_overlay, (0, 0), special_flags=pygame.BLEND_ADD)
-    
-    def _create_horizontal_gradient(self):
-        """Create a reusable horizontal gradient mask."""
-        self._horizontal_gradient = pygame.Surface((WIDTH, 1), pygame.SRCALPHA)
-        
-        # Create gradient using fewer samples
-        gradient_samples = 50
-        for i in range(gradient_samples):
-            x = int(i * WIDTH / gradient_samples)
-            width = int(WIDTH / gradient_samples) + 1
-            
-            # Calculate intensity at this position
-            center_distance = abs(x + width/2 - WIDTH/2) / (WIDTH/2)
-            intensity = math.exp(-2 * center_distance ** 2)
-            alpha = int(intensity * 255)
-            
-            # Draw a vertical strip
-            strip = pygame.Surface((width, 1), pygame.SRCALPHA)
-            strip.fill((255, 255, 255, alpha))
-            self._horizontal_gradient.blit(strip, (x, 0))
