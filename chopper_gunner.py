@@ -1514,45 +1514,44 @@ class ChopperGunnerMode:
         # Bottom section - bright console area
         bottom_section = pygame.Surface((WIDTH, HEIGHT // 2), pygame.SRCALPHA)
         
-        # Draw multiple overlapping gradients for smoother effect
-        for i in range(10):
-            y_offset = i * 20
-            height = HEIGHT // 2 - y_offset
-            if height <= 0:
-                break
-                
-            # Calculate intensity for this layer
-            layer_intensity = (1.0 - (i / 10.0)) ** 2
-            base_alpha = int(80 * layer_intensity * (0.5 + 0.5 * pulse))
+        # Create a much smaller and smoother ambient glow
+        # Focus the glow around the console area
+        glow_center_x = WIDTH // 2 + 75  # Match console position
+        glow_width = 200  # Much narrower glow area
+        glow_height = HEIGHT // 3  # Reduced height
+        
+        # Draw smooth gradient layers
+        for layer in range(5):  # Fewer layers for subtlety
+            layer_alpha = int(25 * (1.0 - layer / 5.0) * (0.7 + 0.3 * pulse))
             
-            # Create gradient rectangle
-            for y in range(0, height, 5):  # Step by 5 for performance
-                # Vertical falloff
-                vertical_falloff = 1.0 - (y / height)
-                alpha = int(base_alpha * vertical_falloff)
+            # Create vertical gradient strips
+            for y in range(0, glow_height, 3):
+                # Smooth vertical falloff
+                y_ratio = y / glow_height
+                vertical_falloff = math.exp(-2 * y_ratio)  # Exponential falloff
                 
-                if alpha > 0:
-                    # Draw a horizontal gradient line
-                    gradient_rect = pygame.Surface((WIDTH, 5), pygame.SRCALPHA)
-                    
-                    # Center glow effect
-                    center_x = WIDTH // 2
-                    for x in range(0, WIDTH, 10):  # Step by 10 for performance
-                        dist_from_center = abs(x - center_x)
-                        horizontal_falloff = max(0, 1.0 - (dist_from_center / (WIDTH * 0.4)))
-                        pixel_alpha = int(alpha * horizontal_falloff)
-                        
-                        if pixel_alpha > 0:
-                            rect = pygame.Rect(x, 0, 10, 5)
-                            gradient_rect.fill((255, 50, 20, pixel_alpha), rect)
-                    
-                    bottom_section.blit(gradient_rect, (0, y))
+                # Calculate strip alpha
+                strip_alpha = int(layer_alpha * vertical_falloff)
+                
+                if strip_alpha > 0:
+                    # Draw horizontal gradient strip centered on glow position
+                    for x_offset in range(-glow_width//2, glow_width//2, 5):
+                        x = glow_center_x + x_offset
+                        if 0 <= x < WIDTH:
+                            # Horizontal falloff from center
+                            x_ratio = abs(x_offset) / (glow_width / 2)
+                            horizontal_falloff = math.exp(-2 * x_ratio ** 2)  # Gaussian falloff
+                            
+                            pixel_alpha = int(strip_alpha * horizontal_falloff)
+                            if pixel_alpha > 0:
+                                rect = pygame.Rect(x, y, 5, 3)
+                                bottom_section.fill((200, 30, 10, pixel_alpha), rect)
         
         # Blit bottom section to main overlay
         lighting_overlay.blit(bottom_section, (0, HEIGHT // 2))
         
         # Add a strong console glow effect
-        console_x = WIDTH // 2 + 60  # Moved 60 pixels to the right total
+        console_x = WIDTH // 2 + 75  # Moved 75 pixels to the right total
         console_y = HEIGHT - 100
         
         # Create glow using radial gradient with more steps for smoothness
