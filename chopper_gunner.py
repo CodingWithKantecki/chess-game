@@ -1507,58 +1507,70 @@ class ChopperGunnerMode:
         # Create a lighting overlay
         lighting_overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
         
-        # Define light sources with pulsing effects
-        light_sources = [
-            # Main console lights
-            {"pos": (WIDTH // 2, HEIGHT - 120), "radius": 200, "base_intensity": 0.3, "pulse_speed": 0.002},
-            # Left panel
-            {"pos": (150, HEIGHT - 150), "radius": 120, "base_intensity": 0.25, "pulse_speed": 0.003},
-            # Right panel
-            {"pos": (WIDTH - 150, HEIGHT - 150), "radius": 120, "base_intensity": 0.25, "pulse_speed": 0.0025},
-            # Small instrument lights
-            {"pos": (300, HEIGHT - 180), "radius": 60, "base_intensity": 0.4, "pulse_speed": 0.004},
-            {"pos": (WIDTH - 300, HEIGHT - 180), "radius": 60, "base_intensity": 0.4, "pulse_speed": 0.0035},
-        ]
+        # Smooth pulsing effect
+        pulse = (math.sin(current_time * 0.0015) + 1.0) * 0.5  # Varies smoothly between 0 and 1
         
-        # Draw each light source
-        for light in light_sources:
-            # Calculate pulsing intensity
-            pulse = math.sin(current_time * light["pulse_speed"]) * 0.15 + 0.85
-            intensity = light["base_intensity"] * pulse
+        # Create a smooth gradient that covers the entire cockpit
+        # Start from bottom (console area) and fade towards top
+        for y in range(HEIGHT):
+            # Calculate distance from bottom
+            distance_from_bottom = HEIGHT - y
             
-            # Create gradient for this light
-            radius = light["radius"]
-            for i in range(radius, 0, -3):
-                # Calculate falloff
-                distance_ratio = i / radius
-                falloff = math.pow(distance_ratio, 2)  # Quadratic falloff for realistic lighting
+            # Create a smooth falloff curve
+            if distance_from_bottom < HEIGHT * 0.7:  # Light affects bottom 70% of screen
+                # Normalized distance (0 at bottom, 1 at cutoff)
+                normalized_distance = distance_from_bottom / (HEIGHT * 0.7)
                 
-                # Calculate alpha
-                alpha = int(255 * intensity * falloff * 0.6)
-                alpha = min(alpha, 120)
+                # Smooth exponential falloff
+                falloff = math.exp(-3 * normalized_distance)  # e^(-3x) for smooth curve
                 
-                # Draw the light circle
-                pygame.draw.circle(lighting_overlay, (255, 80, 60, alpha), light["pos"], i)
+                # Calculate intensity with pulsing
+                base_intensity = falloff * 0.4  # Max 40% intensity
+                intensity = base_intensity * (0.7 + 0.3 * pulse)  # Pulse between 70% and 100%
+                
+                # Calculate alpha for this scanline
+                alpha = int(intensity * 255)
+                alpha = min(60, alpha)  # Cap at 60 for subtlety
+                
+                # Draw a horizontal line with gradient
+                # Center is brighter, edges fade out
+                for x in range(WIDTH):
+                    # Distance from center
+                    center_distance = abs(x - WIDTH // 2) / (WIDTH // 2)
+                    
+                    # Horizontal falloff (bell curve)
+                    horizontal_falloff = math.exp(-2 * center_distance ** 2)
+                    
+                    # Combined alpha
+                    pixel_alpha = int(alpha * horizontal_falloff)
+                    
+                    if pixel_alpha > 0:
+                        # Warmer color near bottom/center
+                        if distance_from_bottom < 200 and center_distance < 0.3:
+                            color = (255, 30, 0, pixel_alpha)  # Orange-red
+                        else:
+                            color = (200, 0, 0, pixel_alpha)  # Pure red
+                        
+                        lighting_overlay.set_at((x, y), color)
         
-        # Add random flickers for instrument panels
-        if random.random() < 0.08:  # 8% chance each frame
-            num_flickers = random.randint(1, 3)
-            for _ in range(num_flickers):
-                flicker_x = random.randint(100, WIDTH - 100)
-                flicker_y = random.randint(HEIGHT - 250, HEIGHT - 100)
-                flicker_radius = random.randint(20, 50)
-                flicker_intensity = random.uniform(0.3, 0.6)
-                
-                for i in range(flicker_radius, 0, -5):
-                    alpha = int(255 * flicker_intensity * (i / flicker_radius) * 0.5)
-                    pygame.draw.circle(lighting_overlay, (255, 100, 80, alpha), 
-                                     (flicker_x, flicker_y), i)
+        # Add a subtle console glow spot
+        console_x = WIDTH // 2
+        console_y = HEIGHT - 80
         
-        # Apply the lighting to the cockpit using multiplicative blending
-        # This will make the cockpit image appear to be lit by the red lights
+        # Create smooth radial gradient for console
+        glow_radius = 150
+        for radius in range(glow_radius, 0, -2):
+            # Smooth falloff
+            r_normalized = radius / glow_radius
+            intensity = (1.0 - r_normalized) ** 2  # Quadratic falloff
+            
+            # Pulsing alpha
+            alpha = int(intensity * 30 * (0.8 + 0.2 * pulse))
+            alpha = min(30, alpha)
+            
+            if alpha > 0:
+                pygame.draw.circle(lighting_overlay, (255, 20, 0, alpha), 
+                                 (console_x, console_y), radius)
+        
+        # Apply the lighting to the cockpit using additive blending for glow effect
         cockpit_surface.blit(lighting_overlay, (0, 0), special_flags=pygame.BLEND_ADD)
-        
-        # Add a subtle overall red tint to unify the lighting
-        tint_surface = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
-        tint_surface.fill((30, 0, 0, 20))
-        cockpit_surface.blit(tint_surface, (0, 0))
