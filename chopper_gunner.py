@@ -1045,6 +1045,9 @@ class ChopperGunnerMode:
             
             self.screen.blit(self.cockpit_overlay, (int(shake_x), int(shake_y)))
         
+        # Draw red cockpit glow effect
+        self.draw_cockpit_glow()
+        
         # Draw crosshair
         self.draw_crosshair()
         
@@ -1165,11 +1168,11 @@ class ChopperGunnerMode:
         for y in range(max(0, horizon_y), HEIGHT):
             progress = (y - horizon_y) / (HEIGHT - horizon_y) if HEIGHT > horizon_y else 0
             progress = max(0, min(1, progress))  # Clamp progress
-            # Dark muddy ground colors
+            # Much darker ground for nighttime
             color = (
-                int(20 + progress * 20),   # R: 20 to 40
-                int(25 + progress * 20),   # G: 25 to 45
-                int(15 + progress * 15)    # B: 15 to 30
+                int(10 + progress * 10),   # R: 10 to 20
+                int(12 + progress * 10),   # G: 12 to 22
+                int(8 + progress * 8)      # B: 8 to 16
             )
             pygame.draw.line(self.screen, color, (0, y), (WIDTH, y))
         
@@ -1423,32 +1426,37 @@ class ChopperGunnerMode:
         size = 30
         gap = 10
         
+        # Crosshair color - red tinted for night vision
+        crosshair_color = (255, 100, 100)
+        
         # Horizontal lines
-        pygame.draw.line(self.screen, (0, 255, 0), 
+        pygame.draw.line(self.screen, crosshair_color, 
                         (self.crosshair_x - size, self.crosshair_y),
                         (self.crosshair_x - gap, self.crosshair_y), 2)
-        pygame.draw.line(self.screen, (0, 255, 0), 
+        pygame.draw.line(self.screen, crosshair_color, 
                         (self.crosshair_x + gap, self.crosshair_y),
                         (self.crosshair_x + size, self.crosshair_y), 2)
                         
         # Vertical lines
-        pygame.draw.line(self.screen, (0, 255, 0), 
+        pygame.draw.line(self.screen, crosshair_color, 
                         (self.crosshair_x, self.crosshair_y - size),
                         (self.crosshair_x, self.crosshair_y - gap), 2)
-        pygame.draw.line(self.screen, (0, 255, 0), 
+        pygame.draw.line(self.screen, crosshair_color, 
                         (self.crosshair_x, self.crosshair_y + gap),
                         (self.crosshair_x, self.crosshair_y + size), 2)
                         
-        # Center dot
-        pygame.draw.circle(self.screen, (0, 255, 0), 
+        # Center dot with slight glow
+        pygame.draw.circle(self.screen, (255, 150, 150), 
+                         (self.crosshair_x, self.crosshair_y), 3)
+        pygame.draw.circle(self.screen, crosshair_color, 
                          (self.crosshair_x, self.crosshair_y), 2)
                          
     def draw_rain(self):
         """Draw rain effect."""
         # Draw rain particles with more subtle appearance
         for particle in self.rain_particles:
-            # Rain color - semi-transparent blue-grey
-            rain_color = (180, 180, 200)
+            # Rain color - slightly brighter for visibility at night
+            rain_color = (120, 120, 150)
             
             # Draw rain streak
             start_x = int(particle["x"])
@@ -1458,19 +1466,25 @@ class ChopperGunnerMode:
             
             # Only draw if at least part of the line is on screen
             if end_y > 0 and start_y < HEIGHT and start_x > -50 and start_x < WIDTH + 50:
+                # Draw thicker rain for more intensity
                 pygame.draw.line(self.screen, rain_color, 
-                                 (start_x, start_y), (end_x, end_y), 1)  # Thinner lines
+                                 (start_x, start_y), (end_x, end_y), 2)
+                # Add slight glow to rain
+                if random.random() < 0.1:  # 10% of rain drops have a slight shimmer
+                    pygame.draw.line(self.screen, (150, 150, 180), 
+                                     (start_x, start_y), (end_x, end_y), 1)
                                
     def draw_hud(self):
         """Draw heads-up display."""
-        # Draw ammo counter
+        # Draw ammo counter with red night vision tint
         font = pygame.font.Font(None, 36)
-        ammo_text = font.render(f"AMMO: {self.ammo}", True, (0, 255, 0))
+        hud_color = (255, 150, 150)  # Red tinted HUD
+        ammo_text = font.render(f"AMMO: {self.ammo}", True, hud_color)
         self.screen.blit(ammo_text, (WIDTH - 200, HEIGHT - 50))
         
         # Draw altitude
         if self.phase in ["approach", "descent", "active"]:
-            alt_text = font.render(f"ALT: {int(self.altitude)}ft", True, (0, 255, 0))
+            alt_text = font.render(f"ALT: {int(self.altitude)}ft", True, hud_color)
             self.screen.blit(alt_text, (WIDTH - 200, HEIGHT - 90))
             
         # Draw phase indicator
@@ -1484,3 +1498,49 @@ class ChopperGunnerMode:
             text = font.render(phase_text, True, (255, 255, 0))
             rect = text.get_rect(center=(WIDTH // 2, 50))
             self.screen.blit(text, rect)
+            
+    def draw_cockpit_glow(self):
+        """Draw soft red glow from cockpit controls."""
+        # Create multiple layers of red glow for depth
+        glow_positions = [
+            # Bottom left corner - main controls
+            {"pos": (100, HEIGHT - 100), "radius": 150, "intensity": 0.4},
+            # Bottom right corner - secondary controls
+            {"pos": (WIDTH - 100, HEIGHT - 100), "radius": 120, "intensity": 0.3},
+            # Center bottom - pilot area
+            {"pos": (WIDTH // 2, HEIGHT - 80), "radius": 180, "intensity": 0.2},
+            # Small instrument lights
+            {"pos": (200, HEIGHT - 150), "radius": 60, "intensity": 0.5},
+            {"pos": (WIDTH - 200, HEIGHT - 150), "radius": 60, "intensity": 0.5},
+        ]
+        
+        # Draw each glow
+        for glow in glow_positions:
+            # Create a surface for the glow
+            radius = glow["radius"]
+            glow_surf = pygame.Surface((radius * 2, radius * 2), pygame.SRCALPHA)
+            
+            # Draw multiple circles with decreasing alpha for smooth gradient
+            for i in range(radius, 0, -2):
+                # Calculate alpha based on distance from center
+                alpha = int(255 * glow["intensity"] * (1 - (radius - i) / radius) * 0.3)
+                alpha = min(alpha, 80)  # Cap alpha to keep it subtle
+                
+                # Red color with slight variation
+                red_value = 255 - (radius - i) // 2
+                color = (red_value, 20, 20, alpha)
+                
+                pygame.draw.circle(glow_surf, color, (radius, radius), i)
+            
+            # Blit the glow to the screen
+            self.screen.blit(glow_surf, (glow["pos"][0] - radius, glow["pos"][1] - radius), special_flags=pygame.BLEND_ADD)
+        
+        # Add flickering effect to simulate electronic displays
+        if random.random() < 0.05:  # 5% chance each frame
+            flicker_x = random.randint(50, WIDTH - 50)
+            flicker_y = random.randint(HEIGHT - 200, HEIGHT - 50)
+            flicker_radius = random.randint(20, 40)
+            
+            flicker_surf = pygame.Surface((flicker_radius * 2, flicker_radius * 2), pygame.SRCALPHA)
+            pygame.draw.circle(flicker_surf, (255, 50, 50, 100), (flicker_radius, flicker_radius), flicker_radius)
+            self.screen.blit(flicker_surf, (flicker_x - flicker_radius, flicker_y - flicker_radius), special_flags=pygame.BLEND_ADD)
