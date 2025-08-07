@@ -1550,36 +1550,7 @@ class ChopperGunnerMode:
         # Blit bottom section to main overlay
         lighting_overlay.blit(bottom_section, (0, HEIGHT // 2))
         
-        # Add a strong console glow effect
-        console_x = WIDTH // 2 + 85  # Moved 85 pixels to the right total
-        console_y = HEIGHT - 100
-        
-        # Create glow using radial gradient with more steps for smoothness
-        max_radius = 25  # Much smaller radius for focused light
-        for radius in range(max_radius, 0, -1):  # 1-pixel steps for ultra-smooth fade
-            # Smooth falloff curve - using exponential for softer edges
-            normalized_radius = radius / max_radius
-            intensity = math.exp(-4 * (1.0 - normalized_radius))  # Steeper exponential falloff
-            
-            # Pulsing effect on intensity
-            glow_alpha = int(50 * intensity * (0.6 + 0.4 * pulse))  # Reduced max alpha
-            glow_alpha = min(35, glow_alpha)  # Lower cap for subtler effect
-            
-            if glow_alpha > 1:  # Only draw if visible
-                # Smooth color transition
-                if radius < 10:
-                    # Inner core - bright orange
-                    color = (255, 100, 40, glow_alpha)
-                elif radius < 18:
-                    # Middle - orange-red
-                    color = (255, 60, 20, glow_alpha)
-                else:
-                    # Outer - dim red
-                    color = (200, 20, 10, glow_alpha)
-                
-                pygame.draw.circle(lighting_overlay, color, (console_x, console_y), radius)
-        
-        # Remove instrument panel lights - only keep main console glow
+        # Removed console glow dot - only ambient lighting remains
         
         # Apply the lighting to the cockpit using additive blending
         cockpit_surface.blit(lighting_overlay, (0, 0), special_flags=pygame.BLEND_ADD)
