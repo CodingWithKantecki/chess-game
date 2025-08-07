@@ -206,7 +206,7 @@ class ChopperGunnerMode:
         
     def handle_click(self, pos):
         """Handle firing."""
-        if self.phase == "active" and self.ammo > 0:
+        if self.phase == "active":  # Unlimited ammo
             self.firing = True
             
             # Start minigun rev up if not already firing
@@ -319,7 +319,7 @@ class ChopperGunnerMode:
                     self.minigun_state = "idle"
             
             # Handle firing
-            if self.firing and self.ammo > 0 and self.minigun_state == "firing":
+            if self.firing and self.minigun_state == "firing":  # Unlimited ammo
                 if current_time - self.last_shot_time > self.fire_rate:
                     self.fire_minigun()
                     self.last_shot_time = current_time
@@ -394,7 +394,7 @@ class ChopperGunnerMode:
         
     def fire_minigun(self):
         """Fire the minigun."""
-        self.ammo -= 1
+        # Unlimited ammo - no decrement
         self.muzzle_flash_timer = 5
         
         # Camera shake - moderate when firing
@@ -1029,7 +1029,7 @@ class ChopperGunnerMode:
             shake_y = math.cos(current_time * 0.004) * 3 + math.cos(current_time * 0.006) * 2
             
             # Increase shake when firing
-            if self.firing and self.ammo > 0:
+            if self.firing:  # Unlimited ammo
                 shake_x += random.randint(-3, 3)
                 shake_y += random.randint(-3, 3)
             
@@ -1057,10 +1057,7 @@ class ChopperGunnerMode:
         # Draw HUD
         self.draw_hud()
         
-        # DEBUG: Draw phase info
-        font = pygame.font.Font(None, 24)
-        phase_text = font.render(f"Phase: {self.phase}", True, (255, 255, 0))
-        self.screen.blit(phase_text, (10, 70))
+        # Removed phase debug info
         
     def draw_rotating_parallax_background(self):
         """Draw parallax background that rotates with the helicopter."""
@@ -1479,16 +1476,7 @@ class ChopperGunnerMode:
                                
     def draw_hud(self):
         """Draw heads-up display."""
-        # Draw ammo counter with red night vision tint
-        font = pygame.font.Font(None, 36)
-        hud_color = (255, 150, 150)  # Red tinted HUD
-        ammo_text = font.render(f"AMMO: {self.ammo}", True, hud_color)
-        self.screen.blit(ammo_text, (WIDTH - 200, HEIGHT - 50))
-        
-        # Draw altitude
-        if self.phase in ["approach", "descent", "active"]:
-            alt_text = font.render(f"ALT: {int(self.altitude)}ft", True, hud_color)
-            self.screen.blit(alt_text, (WIDTH - 200, HEIGHT - 90))
+        # Removed ammo and altitude display - unlimited ammo mode
             
         # Draw phase indicator
         phase_text = ""
@@ -1514,38 +1502,7 @@ class ChopperGunnerMode:
         # Bottom section - bright console area
         bottom_section = pygame.Surface((WIDTH, HEIGHT // 2), pygame.SRCALPHA)
         
-        # Create a much smaller and smoother ambient glow
-        # Focus the glow around the console area
-        glow_center_x = WIDTH // 2 + 85  # Match console position
-        glow_width = 200  # Much narrower glow area
-        glow_height = HEIGHT // 3  # Reduced height
-        
-        # Draw smooth gradient layers
-        for layer in range(5):  # Fewer layers for subtlety
-            layer_alpha = int(25 * (1.0 - layer / 5.0) * (0.7 + 0.3 * pulse))
-            
-            # Create vertical gradient strips
-            for y in range(0, glow_height, 3):
-                # Smooth vertical falloff
-                y_ratio = y / glow_height
-                vertical_falloff = math.exp(-2 * y_ratio)  # Exponential falloff
-                
-                # Calculate strip alpha
-                strip_alpha = int(layer_alpha * vertical_falloff)
-                
-                if strip_alpha > 0:
-                    # Draw horizontal gradient strip centered on glow position
-                    for x_offset in range(-glow_width//2, glow_width//2, 5):
-                        x = glow_center_x + x_offset
-                        if 0 <= x < WIDTH:
-                            # Horizontal falloff from center
-                            x_ratio = abs(x_offset) / (glow_width / 2)
-                            horizontal_falloff = math.exp(-2 * x_ratio ** 2)  # Gaussian falloff
-                            
-                            pixel_alpha = int(strip_alpha * horizontal_falloff)
-                            if pixel_alpha > 0:
-                                rect = pygame.Rect(x, y, 5, 3)
-                                bottom_section.fill((200, 30, 10, pixel_alpha), rect)
+        # Removed all ambient glow - cockpit stays dark
         
         # Blit bottom section to main overlay
         lighting_overlay.blit(bottom_section, (0, HEIGHT // 2))
