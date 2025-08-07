@@ -2877,15 +2877,20 @@ class Renderer:
         screen.blit(icon_surf, icon_rect)
 
     def _draw_helicopter_icon(self, screen, card_rect, icon_y, enabled=True):
-        """Draw a modern helicopter icon."""
+        """Draw a modern nighttime helicopter icon with glowing cockpit."""
         if enabled:
-            body_color = (150, 100, 200)
-            rotor_color = (200, 150, 250)
-            window_color = (100, 200, 255)
+            # Dark military colors for nighttime
+            body_color = (30, 35, 40)  # Dark gray/black
+            rotor_color = (50, 55, 60)  # Slightly lighter for visibility
+            window_color = (20, 20, 25)  # Very dark for contrast
+            red_glow = (255, 50, 50)  # Bright red for cockpit light
+            highlight_color = (40, 45, 50)  # Subtle highlights
         else:
-            body_color = (80, 80, 80)
-            rotor_color = (100, 100, 100)
-            window_color = (60, 60, 60)
+            body_color = (40, 40, 40)
+            rotor_color = (60, 60, 60)
+            window_color = (30, 30, 30)
+            red_glow = (100, 30, 30)
+            highlight_color = (50, 50, 50)
         
         cx = card_rect.centerx
         cy = icon_y
@@ -2894,16 +2899,22 @@ class Renderer:
         icon_surf = pygame.Surface((60, 50), pygame.SRCALPHA)
         center = (30, 25)
         
-        # Main rotor (animated look)
+        # Main rotor (darker, more menacing)
         # Rotor hub
         pygame.draw.circle(icon_surf, rotor_color, (center[0], center[1] - 8), 3)
-        # Rotor blades (blurred effect)
+        # Rotor blades with motion blur
         for angle in [0, 120, 240]:
             end_x = center[0] + int(20 * math.cos(math.radians(angle)))
             end_y = center[1] - 8 + int(3 * math.sin(math.radians(angle)))
-            pygame.draw.line(icon_surf, rotor_color, (center[0], center[1] - 8), (end_x, end_y), 2)
+            # Multiple lines for blur effect
+            for i in range(3):
+                blade_color = (*rotor_color, 150 - i * 40)
+                offset_angle = angle + i * 5
+                blur_end_x = center[0] + int(20 * math.cos(math.radians(offset_angle)))
+                blur_end_y = center[1] - 8 + int(3 * math.sin(math.radians(offset_angle)))
+                pygame.draw.line(icon_surf, blade_color, (center[0], center[1] - 8), (blur_end_x, blur_end_y), 2 - i)
         
-        # Body (more detailed)
+        # Body (military style)
         # Main fuselage
         body_points = [
             (center[0] - 12, center[1] - 2),
@@ -2914,7 +2925,15 @@ class Renderer:
         ]
         pygame.draw.polygon(icon_surf, body_color, body_points)
         
-        # Cockpit window
+        # Add subtle edge highlight
+        edge_points = [
+            (center[0] - 12, center[1] - 2),
+            (center[0] + 12, center[1] - 2),
+            (center[0] + 12, center[1] + 1)
+        ]
+        pygame.draw.lines(icon_surf, highlight_color, False, edge_points, 1)
+        
+        # Cockpit window (dark)
         window_points = [
             (center[0] - 11, center[1] - 1),
             (center[0] - 11, center[1] + 4),
@@ -2923,15 +2942,42 @@ class Renderer:
         ]
         pygame.draw.polygon(icon_surf, window_color, window_points)
         
-        # Tail boom
+        # RED GLOWING COCKPIT LIGHT
+        # Create glow effect
+        for i in range(4):
+            glow_radius = 6 - i
+            glow_alpha = 80 - i * 20
+            glow_surf = pygame.Surface((glow_radius * 2, glow_radius * 2), pygame.SRCALPHA)
+            pygame.draw.circle(glow_surf, (*red_glow, glow_alpha), (glow_radius, glow_radius), glow_radius)
+            glow_pos = (center[0] - 7 - glow_radius, center[1] + 1 - glow_radius)
+            icon_surf.blit(glow_surf, glow_pos)
+        
+        # Bright red center dot
+        pygame.draw.circle(icon_surf, red_glow, (center[0] - 7, center[1] + 1), 2)
+        
+        # Tail boom (darker)
         tail_rect = pygame.Rect(center[0] + 8, center[1] + 2, 18, 4)
         pygame.draw.rect(icon_surf, body_color, tail_rect, border_radius=2)
+        
+        # Small red position light on tail
+        pygame.draw.circle(icon_surf, red_glow, (center[0] + 24, center[1] + 2), 1)
         
         # Tail rotor
         pygame.draw.circle(icon_surf, rotor_color, (center[0] + 24, center[1] + 4), 4, 2)
         
-        # Landing skids
-        pygame.draw.rect(icon_surf, body_color, (center[0] - 10, center[1] + 8, 20, 2), border_radius=1)
+        # Landing skids (darker)
+        pygame.draw.rect(icon_surf, rotor_color, (center[0] - 10, center[1] + 8, 20, 2), border_radius=1)
+        
+        # Optional: Add subtle downward light cone effect
+        light_cone = pygame.Surface((30, 20), pygame.SRCALPHA)
+        for i in range(10):
+            cone_alpha = 30 - i * 3
+            cone_width = 10 + i * 2
+            pygame.draw.line(light_cone, (255, 255, 200, cone_alpha), 
+                           (15, 0), (15 - cone_width//2 + i, 20), 1)
+            pygame.draw.line(light_cone, (255, 255, 200, cone_alpha), 
+                           (15, 0), (15 + cone_width//2 - i, 20), 1)
+        icon_surf.blit(light_cone, (center[0] - 15, center[1] + 8))
         
         # Draw to screen
         icon_rect = icon_surf.get_rect(center=(cx, cy))
