@@ -1552,12 +1552,12 @@ class ChopperGunnerMode:
         lighting_overlay.blit(bottom_section, (0, HEIGHT // 2))
         
         # Add a strong console glow effect
-        console_x = WIDTH // 2
+        console_x = WIDTH // 2 + 30  # Moved 30 pixels to the right
         console_y = HEIGHT - 100
         
         # Create glow using radial gradient with more steps for smoothness
-        max_radius = 200
-        for radius in range(max_radius, 0, -10):
+        max_radius = 80  # Much smaller radius
+        for radius in range(max_radius, 0, -5):
             # Smooth falloff curve
             normalized_radius = radius / max_radius
             intensity = (1.0 - normalized_radius) ** 2.5  # Steeper falloff for focused glow
