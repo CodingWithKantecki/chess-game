@@ -1510,67 +1510,79 @@ class ChopperGunnerMode:
         # Smooth pulsing effect
         pulse = (math.sin(current_time * 0.0015) + 1.0) * 0.5  # Varies smoothly between 0 and 1
         
-        # Create a smooth gradient that covers the entire cockpit
-        # Start from bottom (console area) and fade towards top
-        for y in range(HEIGHT):
-            # Calculate distance from bottom
-            distance_from_bottom = HEIGHT - y
-            
-            # Create a smooth falloff curve
-            if distance_from_bottom < HEIGHT * 0.7:  # Light affects bottom 70% of screen
-                # Normalized distance (0 at bottom, 1 at cutoff)
-                normalized_distance = distance_from_bottom / (HEIGHT * 0.7)
-                
-                # Smooth exponential falloff
-                falloff = math.exp(-3 * normalized_distance)  # e^(-3x) for smooth curve
-                
-                # Calculate intensity with pulsing
-                base_intensity = falloff * 0.4  # Max 40% intensity
-                intensity = base_intensity * (0.7 + 0.3 * pulse)  # Pulse between 70% and 100%
-                
-                # Calculate alpha for this scanline
-                alpha = int(intensity * 255)
-                alpha = min(60, alpha)  # Cap at 60 for subtlety
-                
-                # Draw a horizontal line with gradient
-                # Center is brighter, edges fade out
-                for x in range(WIDTH):
-                    # Distance from center
-                    center_distance = abs(x - WIDTH // 2) / (WIDTH // 2)
-                    
-                    # Horizontal falloff (bell curve)
-                    horizontal_falloff = math.exp(-2 * center_distance ** 2)
-                    
-                    # Combined alpha
-                    pixel_alpha = int(alpha * horizontal_falloff)
-                    
-                    if pixel_alpha > 0:
-                        # Warmer color near bottom/center
-                        if distance_from_bottom < 200 and center_distance < 0.3:
-                            color = (255, 30, 0, pixel_alpha)  # Orange-red
-                        else:
-                            color = (200, 0, 0, pixel_alpha)  # Pure red
-                        
-                        lighting_overlay.set_at((x, y), color)
+        # Create vertical gradient using filled rectangles (much faster than pixel-by-pixel)
+        gradient_steps = 20  # Number of gradient bands
+        step_height = int(HEIGHT * 0.7 / gradient_steps)
         
-        # Add a subtle console glow spot
+        for i in range(gradient_steps):
+            y = HEIGHT - (i + 1) * step_height
+            
+            # Calculate intensity for this band
+            normalized_position = i / gradient_steps
+            falloff = math.exp(-3 * normalized_position)
+            base_intensity = falloff * 0.4
+            intensity = base_intensity * (0.7 + 0.3 * pulse)
+            
+            # Calculate alpha
+            alpha = int(intensity * 255)
+            alpha = min(50, alpha)
+            
+            if alpha > 0:
+                # Create a surface for this gradient band
+                band_surface = pygame.Surface((WIDTH, step_height), pygame.SRCALPHA)
+                
+                # Fill with semi-transparent red
+                band_surface.fill((200, 0, 0, alpha))
+                
+                # Add horizontal gradient using pre-calculated gradient surface
+                if not hasattr(self, '_horizontal_gradient'):
+                    self._create_horizontal_gradient()
+                
+                # Apply horizontal gradient mask (scale to band height)
+                scaled_gradient = pygame.transform.scale(self._horizontal_gradient, (WIDTH, step_height))
+                band_surface.blit(scaled_gradient, (0, 0), special_flags=pygame.BLEND_MULT)
+                
+                # Draw the band
+                lighting_overlay.blit(band_surface, (0, y))
+        
+        # Add console glow using larger, fewer circles for performance
         console_x = WIDTH // 2
         console_y = HEIGHT - 80
         
-        # Create smooth radial gradient for console
-        glow_radius = 150
-        for radius in range(glow_radius, 0, -2):
-            # Smooth falloff
-            r_normalized = radius / glow_radius
-            intensity = (1.0 - r_normalized) ** 2  # Quadratic falloff
-            
-            # Pulsing alpha
-            alpha = int(intensity * 30 * (0.8 + 0.2 * pulse))
-            alpha = min(30, alpha)
+        # Draw just a few circles for the glow effect
+        glow_steps = [
+            (120, 0.1),  # Outer glow
+            (80, 0.2),   # Middle glow
+            (40, 0.4),   # Inner glow
+        ]
+        
+        for radius, intensity in glow_steps:
+            alpha = int(intensity * 60 * (0.8 + 0.2 * pulse))
+            alpha = min(40, alpha)
             
             if alpha > 0:
                 pygame.draw.circle(lighting_overlay, (255, 20, 0, alpha), 
                                  (console_x, console_y), radius)
         
-        # Apply the lighting to the cockpit using additive blending for glow effect
+        # Apply the lighting to the cockpit using additive blending
         cockpit_surface.blit(lighting_overlay, (0, 0), special_flags=pygame.BLEND_ADD)
+    
+    def _create_horizontal_gradient(self):
+        """Create a reusable horizontal gradient mask."""
+        self._horizontal_gradient = pygame.Surface((WIDTH, 1), pygame.SRCALPHA)
+        
+        # Create gradient using fewer samples
+        gradient_samples = 50
+        for i in range(gradient_samples):
+            x = int(i * WIDTH / gradient_samples)
+            width = int(WIDTH / gradient_samples) + 1
+            
+            # Calculate intensity at this position
+            center_distance = abs(x + width/2 - WIDTH/2) / (WIDTH/2)
+            intensity = math.exp(-2 * center_distance ** 2)
+            alpha = int(intensity * 255)
+            
+            # Draw a vertical strip
+            strip = pygame.Surface((width, 1), pygame.SRCALPHA)
+            strip.fill((255, 255, 255, alpha))
+            self._horizontal_gradient.blit(strip, (x, 0))
