@@ -1552,26 +1552,31 @@ class ChopperGunnerMode:
         lighting_overlay.blit(bottom_section, (0, HEIGHT // 2))
         
         # Add a strong console glow effect
-        console_x = WIDTH // 2 + 30  # Moved 30 pixels to the right
+        console_x = WIDTH // 2 + 60  # Moved 60 pixels to the right total
         console_y = HEIGHT - 100
         
         # Create glow using radial gradient with more steps for smoothness
-        max_radius = 80  # Much smaller radius
-        for radius in range(max_radius, 0, -5):
-            # Smooth falloff curve
+        max_radius = 50  # Even smaller radius
+        for radius in range(max_radius, 0, -2):  # Smaller steps for smoother fade
+            # Smooth falloff curve - using exponential for softer edges
             normalized_radius = radius / max_radius
-            intensity = (1.0 - normalized_radius) ** 2.5  # Steeper falloff for focused glow
+            intensity = math.exp(-3 * (1.0 - normalized_radius))  # Exponential falloff for smooth fade
             
             # Pulsing effect on intensity
-            glow_alpha = int(120 * intensity * (0.6 + 0.4 * pulse))
-            glow_alpha = min(80, glow_alpha)
+            glow_alpha = int(60 * intensity * (0.6 + 0.4 * pulse))  # Reduced max alpha
+            glow_alpha = min(40, glow_alpha)  # Lower cap for subtler effect
             
-            if glow_alpha > 0:
-                # Inner glow is more orange
-                if radius < 50:
-                    color = (255, 80, 30, glow_alpha)
+            if glow_alpha > 1:  # Only draw if visible
+                # Smooth color transition
+                if radius < 20:
+                    # Inner core - bright orange
+                    color = (255, 100, 40, glow_alpha)
+                elif radius < 35:
+                    # Middle - orange-red
+                    color = (255, 60, 20, glow_alpha)
                 else:
-                    color = (255, 40, 10, glow_alpha)
+                    # Outer - dim red
+                    color = (200, 20, 10, glow_alpha)
                 
                 pygame.draw.circle(lighting_overlay, color, (console_x, console_y), radius)
         
