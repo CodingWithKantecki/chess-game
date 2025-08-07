@@ -1516,7 +1516,7 @@ class ChopperGunnerMode:
         
         # Create a much smaller and smoother ambient glow
         # Focus the glow around the console area
-        glow_center_x = WIDTH // 2 + 75  # Match console position
+        glow_center_x = WIDTH // 2 + 85  # Match console position
         glow_width = 200  # Much narrower glow area
         glow_height = HEIGHT // 3  # Reduced height
         
@@ -1551,7 +1551,7 @@ class ChopperGunnerMode:
         lighting_overlay.blit(bottom_section, (0, HEIGHT // 2))
         
         # Add a strong console glow effect
-        console_x = WIDTH // 2 + 75  # Moved 75 pixels to the right total
+        console_x = WIDTH // 2 + 85  # Moved 85 pixels to the right total
         console_y = HEIGHT - 100
         
         # Create glow using radial gradient with more steps for smoothness
