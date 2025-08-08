@@ -63,7 +63,7 @@ class PowerupRenderer:
         
         # Title
         title_text = "POWERUPS"
-        title_surface = self.renderer.pixel_fonts['large'].render(title_text, True, (0, 255, 0))
+        title_surface = self.renderer.pixel_fonts['large'].render(title_text, True, (180, 200, 180))
         title_rect = title_surface.get_rect(centerx=menu_x + menu_width // 2, y=menu_y + 20)
         self.screen.blit(title_surface, title_rect)
         
@@ -71,7 +71,7 @@ class PowerupRenderer:
         player = board.current_turn
         points = self.powerup_system.points[player]
         points_text = f"POINTS: {points}"
-        points_surface = self.renderer.pixel_fonts['medium'].render(points_text, True, (255, 204, 0))
+        points_surface = self.renderer.pixel_fonts['medium'].render(points_text, True, (220, 190, 130))
         points_rect = points_surface.get_rect(centerx=menu_x + menu_width // 2, y=menu_y + 60)
         self.screen.blit(points_surface, points_rect)
         
@@ -208,14 +208,14 @@ class PowerupRenderer:
                 self.screen.blit(icon_surface, icon_rect)
             
             # Draw name
-            name_color = (0, 255, 0) if can_afford else (80, 80, 80)
+            name_color = (200, 220, 200) if can_afford else (80, 80, 80)
             name_surface = self.renderer.pixel_fonts['small'].render(powerup["name"], True, name_color)
             name_rect = name_surface.get_rect(centerx=button_rect.centerx, y=button_rect.y + 35)
             self.screen.blit(name_surface, name_rect)
             
             # Draw cost
             cost_text = f"Cost: {powerup['cost']}"
-            cost_color = (255, 204, 0) if can_afford else (80, 80, 80)
+            cost_color = (200, 180, 140) if can_afford else (80, 80, 80)
             cost_surface = self.renderer.pixel_fonts['tiny'].render(cost_text, True, cost_color)
             cost_rect = cost_surface.get_rect(centerx=button_rect.centerx, y=button_rect.y + 55)
             self.screen.blit(cost_surface, cost_rect)
@@ -225,7 +225,7 @@ class PowerupRenderer:
         # Draw instructions at bottom
         if self.powerup_system.active_powerup:
             instruction_text = self._get_instruction_text()
-            inst_surface = self.renderer.pixel_fonts['small'].render(instruction_text, True, (255, 255, 150))
+            inst_surface = self.renderer.pixel_fonts['small'].render(instruction_text, True, (220, 220, 180))
             inst_rect = inst_surface.get_rect(centerx=menu_x + menu_width // 2, 
                                              bottom=menu_y + menu_height - 20)
             self.screen.blit(inst_surface, inst_rect)

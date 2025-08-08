@@ -20,35 +20,35 @@ class PowerupSystem:
                 "name": "SHIELD",
                 "cost": 5,
                 "description": "Protect piece for 3 turns",
-                "color": (100, 200, 255),
+                "color": (120, 160, 200),
                 "icon": "🛡️"
             },
             "gun": {
                 "name": "GUN",
                 "cost": 7,
                 "description": "Shoot enemy in range",
-                "color": (255, 200, 100),
+                "color": (200, 160, 100),
                 "icon": "🔫"
             },
             "airstrike": {
                 "name": "AIRSTRIKE",
                 "cost": 10,
                 "description": "Bombard 3x3 area",
-                "color": (255, 100, 100),
+                "color": (200, 120, 120),
                 "icon": "💥"
             },
             "paratroopers": {
                 "name": "PARATROOPERS",
                 "cost": 10,
                 "description": "Drop 3 pawns",
-                "color": (100, 150, 100),
+                "color": (120, 160, 120),
                 "icon": "🪂"
             },
             "chopper": {
                 "name": "CHOPPER GUNNER",
                 "cost": 25,
                 "description": "Aerial minigun assault!",
-                "color": (255, 50, 50),
+                "color": (180, 100, 100),
                 "icon": "🚁"
             }
         }

@@ -390,13 +390,13 @@ class Renderer:
         # Overall progress
         total_progress = story_mode.get_total_progress()
         progress_text = f"Campaign Progress: {total_progress}%"
-        progress_surface = self.pixel_fonts['medium'].render(progress_text, True, (255, 215, 0))
+        progress_surface = self.pixel_fonts['medium'].render(progress_text, True, (220, 190, 130))
         progress_rect = progress_surface.get_rect(center=(config.WIDTH // 2, 100))
         self.screen.blit(progress_surface, progress_rect)
         
         # Display player money - use in-memory value
         money_text = f"Money: ${config.get_money()}"
-        money_surface = self.pixel_fonts['medium'].render(money_text, True, (0, 255, 0))
+        money_surface = self.pixel_fonts['medium'].render(money_text, True, (180, 220, 180))
         money_rect = money_surface.get_rect(center=(config.WIDTH // 2, 130))
         self.screen.blit(money_surface, money_rect)
         
@@ -430,7 +430,7 @@ class Renderer:
             # Button color
             if is_unlocked:
                 button_color = (50, 50, 70) if not is_hover else (70, 70, 90)
-                border_color = (255, 215, 0)
+                border_color = (200, 180, 120)
             else:
                 button_color = (30, 30, 30)
                 border_color = (80, 80, 80)
@@ -622,7 +622,7 @@ class Renderer:
             
             # Reward
             reward_text = f"Reward: ${battle.get('reward_money', 0)}"
-            reward_surface = self.pixel_fonts['small'].render(reward_text, True, (255, 215, 0))
+            reward_surface = self.pixel_fonts['small'].render(reward_text, True, (220, 190, 130))
             reward_rect = reward_surface.get_rect(midleft=(card_x + 100, card_rect.centery + 30))
             self.screen.blit(reward_surface, reward_rect)
             
@@ -868,7 +868,7 @@ class Renderer:
         """Draw UI elements specific to story battles."""
         # Battle name in top left
         battle_text = f"BATTLE: {battle_data['opponent']}"
-        battle_surface = self._get_cached_text(battle_text, 'medium', (255, 215, 0))
+        battle_surface = self._get_cached_text(battle_text, 'medium', (220, 190, 130))
         self.screen.blit(battle_surface, (20, 20))
         
         # Special rules indicator
@@ -940,14 +940,15 @@ class Renderer:
         # Blit the button surface to screen
         self.screen.blit(button_surface, rect)
         
-    def draw_parallax_background(self, brightness=1.0):
+    def draw_parallax_background(self, brightness=1.0, surface=None):
         """Draw scrolling background."""
-        self.screen.fill((20, 20, 30))
+        target = surface if surface else self.screen
+        target.fill((20, 20, 30))
         
         if not hasattr(self.assets, 'parallax_layers') or not self.assets.parallax_layers:
             for y in range(0, config.HEIGHT, 10):
                 color_val = int(30 + (y / config.HEIGHT) * 20)
-                pygame.draw.rect(self.screen, (color_val, color_val, color_val + 10), 
+                pygame.draw.rect(target, (color_val, color_val, color_val + 10), 
                                (0, y, config.WIDTH, 10))
             return
             
@@ -975,19 +976,19 @@ class Renderer:
             
             x = -(offset % layer_width)
             while x < config.WIDTH:
-                self.screen.blit(scaled_img, (x, 0))
+                target.blit(scaled_img, (x, 0))
                 x += layer_width
                 
         if brightness < 1.0:
             overlay = pygame.Surface((config.WIDTH, config.HEIGHT))
             overlay.fill(config.BLACK)
             overlay.set_alpha(int((1.0 - brightness) * 255))
-            self.screen.blit(overlay, (0, 0))
+            target.blit(overlay, (0, 0))
         elif brightness > 1.0:
             overlay = pygame.Surface((config.WIDTH, config.HEIGHT))
             overlay.fill(config.WHITE)
             overlay.set_alpha(int((brightness - 1.0) * 128))
-            self.screen.blit(overlay, (0, 0))
+            target.blit(overlay, (0, 0))
             
     def draw_parallax_background_with_fire(self, brightness=1.0):
         """Draw scrolling background with fire integrated at appropriate depth."""
@@ -1634,149 +1635,251 @@ class Renderer:
             
         return rects
         
+    def reset_game_over_fade(self):
+        """Reset the victory screen fade timer."""
+        if hasattr(self, 'victory_fade_start'):
+            delattr(self, 'victory_fade_start')
+    
     def draw_game_over(self, board):
-        """Draw game over screen with story mode support."""
+        """Draw game over screen styled exactly like story dialogue screen."""
         if not board.game_over:
+            # Reset fade if game is not over
+            if hasattr(self, 'victory_fade_start'):
+                delattr(self, 'victory_fade_start')
             return None, None
             
         current_time = pygame.time.get_ticks()
         
-        # Darker overlay for better contrast
-        overlay = pygame.Surface((config.WIDTH, config.HEIGHT))
-        overlay.set_alpha(200)
-        overlay.fill(config.BLACK)
+        # Initialize fade-in on first call
+        if not hasattr(self, 'victory_fade_start'):
+            self.victory_fade_start = current_time
+        
+        # Two-phase fade: first 0.8s fade to black, then 1.5s fade in victory screen
+        fade_to_black_duration = 800
+        fade_in_duration = 1500
+        total_duration = fade_to_black_duration + fade_in_duration
+        
+        time_elapsed = current_time - self.victory_fade_start
+        
+        if time_elapsed < fade_to_black_duration:
+            # Phase 1: Fade to black (keep showing the game board)
+            black_alpha = int((time_elapsed / fade_to_black_duration) * 255)
+            black_overlay = pygame.Surface((config.WIDTH, config.HEIGHT))
+            black_overlay.fill((0, 0, 0))
+            black_overlay.set_alpha(black_alpha)
+            # Don't clear screen - let game board show through
+            self.screen.blit(black_overlay, (0, 0))
+            return None, None  # Don't show buttons yet
+        
+        # Phase 2: Victory screen
+        fade_progress = min(1.0, (time_elapsed - fade_to_black_duration) / fade_in_duration)
+        # Smooth easing for the fade in
+        fade_eased = fade_progress * fade_progress * (3.0 - 2.0 * fade_progress)
+        
+        # Now fill with black and draw victory screen
+        self.screen.fill((0, 0, 0))
+        
+        # Draw background with fade brightness
+        self.draw_parallax_background(0.6 * fade_eased)
+    
+        # Dark overlay
+        overlay = self._get_cached_overlay(config.WIDTH, config.HEIGHT, (0, 0, 0), 180)
         self.screen.blit(overlay, (0, 0))
         
-        if board.winner == "white":
-            # Clean victory header with subtle animation
-            victory_text = "VICTORY"
-            victory_font_size = int(56 * self.scale)
+        # Draw effects only after partial fade
+        if fade_eased > 0.3:
+            # Draw tech grid background
+            self._draw_tech_grid()
             
-            # Use pixel font for cleaner look
-            if 'huge' in self.pixel_fonts:
-                victory_surface = self.pixel_fonts['huge'].render(victory_text, True, (255, 223, 0))
-            else:
-                victory_font = pygame.font.Font(None, victory_font_size)
-                victory_surface = victory_font.render(victory_text, True, (255, 223, 0))
-                
-            victory_rect = victory_surface.get_rect(center=(config.WIDTH // 2, config.HEIGHT // 2 - 140 * self.scale))
-            
-            # Subtle glow effect
-            glow_surf = pygame.Surface((victory_rect.width + 40, victory_rect.height + 40), pygame.SRCALPHA)
-            glow_alpha = int(50 + 30 * math.sin(current_time / 300))
-            pygame.draw.rect(glow_surf, (255, 223, 0, glow_alpha), glow_surf.get_rect(), border_radius=10)
-            glow_rect = glow_surf.get_rect(center=victory_rect.center)
-            self.screen.blit(glow_surf, glow_rect)
-            
-            self.screen.blit(victory_surface, victory_rect)
-            
-            # Clean reward display section
-            if hasattr(board, 'victory_reward') and board.victory_reward > 0:
-                reward_y = config.HEIGHT // 2 - 60 * self.scale
-                
-                # Background card for reward
-                card_width = 280 * self.scale
-                card_height = 50 * self.scale
-                card_rect = pygame.Rect(config.WIDTH // 2 - card_width // 2, reward_y - card_height // 2, 
-                                      card_width, card_height)
-                
-                # Card background with gradient effect
-                card_surface = pygame.Surface((card_width, card_height), pygame.SRCALPHA)
-                pygame.draw.rect(card_surface, (30, 30, 30, 240), card_surface.get_rect(), border_radius=25)
-                pygame.draw.rect(card_surface, (255, 223, 0, 180), card_surface.get_rect(), 2, border_radius=25)
-                self.screen.blit(card_surface, card_rect)
-                
-                # Reward text
-                reward_text = f"+ ${board.victory_reward}"
-                text_surface = self.pixel_fonts['large'].render(reward_text, True, (255, 255, 255))
-                text_rect = text_surface.get_rect(center=(config.WIDTH // 2, reward_y))
-                self.screen.blit(text_surface, text_rect)
-            
-            # Story mode dialogue (if applicable)
+            # Draw digital rain effect for victory screen
+            if fade_eased > 0.5:
+                self._draw_digital_rain(current_time, victory_screen=True)
+        
+        # Fade in content after background
+        content_fade = max(0, (fade_eased - 0.3) / 0.7)  # Start fading in content at 30%
+        
+        if board.winner == "white" and content_fade > 0:
+            # Get battle data
+            battle_data = None
             if hasattr(board, 'is_story_mode') and board.is_story_mode and hasattr(board, 'story_battle'):
-                battle = board.story_battle
-                if "victory" in battle:
-                    dialogue_y = config.HEIGHT // 2 + 10 * self.scale
-                    for line in battle["victory"]:
-                        if line:
-                            line_surface = self.pixel_fonts['small'].render(line, True, (220, 220, 220))
-                            line_rect = line_surface.get_rect(center=(config.WIDTH // 2, dialogue_y))
-                            self.screen.blit(line_surface, line_rect)
-                            dialogue_y += 25
+                battle_data = board.story_battle
+            else:
+                # For tutorial/classic mode, use Training Bot data
+                battle_data = {
+                    "opponent": "TRAINING BOT ALPHA",
+                    "portrait": "BOT",
+                    "affiliation": "HELIX ACADEMY",
+                    "rank": "TRAINING UNIT",
+                    "threat_level": "MINIMAL",
+                    "classification": "TUTORIAL",
+                    "victory": [
+                        "TRAINING BOT: ADEQUATE PERFORMANCE.",
+                        "TRAINING BOT: YOU MAY PROCEED TO ADVANCED TRAINING."
+                    ]
+                }
             
-            # Unlock notification (cleaner design)
-            if hasattr(board, 'selected_difficulty') and not hasattr(board, 'is_story_mode'):
-                progress = config.load_progress()
-                current_index = config.AI_DIFFICULTIES.index(board.selected_difficulty) if board.selected_difficulty in config.AI_DIFFICULTIES else -1
+            # Create a surface for all victory content with proper alpha
+            victory_surface = pygame.Surface((config.WIDTH, config.HEIGHT), pygame.SRCALPHA)
+            
+            # Character portrait (EXACTLY like story dialogue screen)
+            portrait_size = 200
+            portrait_x = config.WIDTH // 2 - portrait_size // 2
+            portrait_y = 100  # No slide effect, just fade
+            
+            # Draw scanner effect around portrait with fade
+            scanner_alpha = int(255 * content_fade)
+            scanner_surface = pygame.Surface((portrait_size + 40, portrait_size + 40), pygame.SRCALPHA)
+            # Draw scanner on temp surface then blit with alpha
+            self._draw_scanner_effect_on_surface(scanner_surface, 0, 0, portrait_size + 40, portrait_size + 40, current_time, scanner_alpha)
+            victory_surface.blit(scanner_surface, (portrait_x - 20, portrait_y - 20))
+            
+            # Portrait background with tech style - simplified for performance
+            # Draw glow with fade alpha
+            for i in range(2, -1, -1):  # Draw from back to front
+                glow_alpha = int((150 - i*40) * content_fade)
+                glow_color = (0, int((150 - i*40) * content_fade), int((150 - i*40) * content_fade))
+                pygame.draw.rect(victory_surface, (*glow_color, glow_alpha), 
+                               (portrait_x - 20 - i*5, portrait_y - 20 - i*5, 
+                                portrait_size + 40 + i*10, portrait_size + 40 + i*10), 
+                               3, border_radius=15)
+            
+            # Main portrait background with fade
+            bg_alpha = int(255 * content_fade)
+            pygame.draw.rect(victory_surface, (20, 30, 40, bg_alpha), 
+                           (portrait_x - 10, portrait_y - 10, portrait_size + 20, portrait_size + 20), 
+                           border_radius=10)
+            pygame.draw.rect(victory_surface, (0, 200, 255, bg_alpha), 
+                           (portrait_x - 10, portrait_y - 10, portrait_size + 20, portrait_size + 20), 
+                           3, border_radius=10)
+            
+            # Portrait - Use bot.png if available
+            if battle_data.get("portrait") == "BOT":
+                if self.assets.bot_image:
+                    bot_scaled = pygame.transform.smoothscale(self.assets.bot_image, 
+                                                             (portrait_size - 20, portrait_size - 20))
+                    bot_scaled.set_alpha(int(255 * content_fade))
+                    bot_rect = bot_scaled.get_rect(center=(portrait_x + portrait_size // 2, 
+                                                          portrait_y + portrait_size // 2))
+                    victory_surface.blit(bot_scaled, bot_rect)
+            
+            # VICTORY text - clean and simple like the character intro screen
+            victory_text_str = "VICTORY"
+            victory_y = portrait_y - 50
+            
+            # Just draw the text once, cleanly with fade
+            text_color = (int(220 * content_fade), int(190 * content_fade), int(130 * content_fade))
+            victory_text_surface = self.pixel_fonts['huge'].render(victory_text_str, True, text_color)
+            victory_text_rect = victory_text_surface.get_rect(center=(config.WIDTH // 2, victory_y))
+            victory_surface.blit(victory_text_surface, victory_text_rect)
+            
+            # Character name with tech styling (like story dialogue)
+            name_text = battle_data["opponent"]
+            name_y = portrait_y + portrait_size + 40
+            
+            # Name background panel
+            name_width = len(name_text) * 20 + 60
+            name_height = 40
+            name_x = config.WIDTH // 2 - name_width // 2
+            
+            # Draw tech panel for name with fade
+            panel_alpha = int(255 * content_fade)
+            pygame.draw.rect(victory_surface, (10, 20, 30, panel_alpha), 
+                           (name_x, name_y - 20, name_width, name_height), 
+                           border_radius=5)
+            pygame.draw.rect(victory_surface, (0, 255, 200, panel_alpha), 
+                           (name_x, name_y - 20, name_width, name_height), 
+                           2, border_radius=5)
+            
+            # Draw corner brackets with fade
+            bracket_size = 15
+            bracket_color = (int(0 * content_fade), int(255 * content_fade), int(255 * content_fade))
+            # Top left
+            pygame.draw.lines(victory_surface, bracket_color, False, 
+                             [(name_x, name_y - 20 + bracket_size), (name_x, name_y - 20), (name_x + bracket_size, name_y - 20)], 2)
+            # Top right
+            pygame.draw.lines(victory_surface, bracket_color, False, 
+                             [(name_x + name_width - bracket_size, name_y - 20), (name_x + name_width, name_y - 20), (name_x + name_width, name_y - 20 + bracket_size)], 2)
+            # Bottom left
+            pygame.draw.lines(victory_surface, bracket_color, False, 
+                             [(name_x, name_y + 20 - bracket_size), (name_x, name_y + 20), (name_x + bracket_size, name_y + 20)], 2)
+            # Bottom right
+            pygame.draw.lines(victory_surface, bracket_color, False, 
+                             [(name_x + name_width - bracket_size, name_y + 20), (name_x + name_width, name_y + 20), (name_x + name_width, name_y + 20 - bracket_size)], 2)
+            
+            # Name text with glow and fade
+            name_glow_color = (int(0 * content_fade), int(255 * content_fade), int(255 * content_fade))
+            name_glow = self.pixel_fonts['huge'].render(name_text, True, name_glow_color)
+            name_glow.set_alpha(int(50 * content_fade))
+            name_glow_rect = name_glow.get_rect(center=(config.WIDTH // 2, name_y))
+            victory_surface.blit(name_glow, name_glow_rect)
+            
+            name_surface_text = self.pixel_fonts['huge'].render(name_text, True, name_glow_color)
+            name_rect = name_surface_text.get_rect(center=(config.WIDTH // 2, name_y))
+            victory_surface.blit(name_surface_text, name_rect)
+            
+            # Status text with fade
+            status_text = "STATUS: DEFEATED"
+            status_color = (int(255 * content_fade), int(100 * content_fade), int(100 * content_fade))
+            status_surface = self.pixel_fonts['medium'].render(status_text, True, status_color)
+            status_rect = status_surface.get_rect(center=(config.WIDTH // 2, name_y + 50))
+            victory_surface.blit(status_surface, status_rect)
+            
+            # Info section with tech styling
+            info_y = name_y + 100
+            
+            # Reward display with fade
+            if hasattr(board, 'victory_reward') and board.victory_reward > 0:
+                reward_text = f"REWARD: + ${board.victory_reward}"
+                reward_color = (int(220 * content_fade), int(190 * content_fade), int(130 * content_fade))
+                reward_surface = self.pixel_fonts['large'].render(reward_text, True, reward_color)
+                reward_rect = reward_surface.get_rect(center=(config.WIDTH // 2, info_y))
+                victory_surface.blit(reward_surface, reward_rect)
+                info_y += 40
+            
+            # Skip battle stats for cleaner look
+            
+            # Victory dialogue with fade
+            if battle_data.get("victory"):
+                for i, line in enumerate(battle_data["victory"][:2]):
+                    dialogue_color = (int(0 * content_fade), int(200 * content_fade), int(255 * content_fade))
+                    line_surface = self.pixel_fonts['small'].render(line, True, dialogue_color)
+                    line_rect = line_surface.get_rect(center=(config.WIDTH // 2, info_y))
+                    victory_surface.blit(line_surface, line_rect)
+                    info_y += 25
+            
+            # Blit the entire victory surface with content fade
+            self.screen.blit(victory_surface, (0, 0))
                 
-                if current_index >= 0 and current_index < len(config.AI_DIFFICULTIES) - 1:
-                    next_diff = config.AI_DIFFICULTIES[current_index + 1]
-                    if next_diff not in progress.get("unlocked_difficulties", []):
-                        unlock_y = config.HEIGHT // 2 + 20 * self.scale
-                        
-                        # Unlock notification card
-                        unlock_card_width = 400 * self.scale
-                        unlock_card_height = 40 * self.scale
-                        unlock_rect = pygame.Rect(config.WIDTH // 2 - unlock_card_width // 2, 
-                                                unlock_y - unlock_card_height // 2,
-                                                unlock_card_width, unlock_card_height)
-                        
-                        pygame.draw.rect(self.screen, (20, 40, 20), unlock_rect, border_radius=20)
-                        pygame.draw.rect(self.screen, (100, 255, 100), unlock_rect, 2, border_radius=20)
-                        
-                        unlock_text = f"NEW: {config.AI_DIFFICULTY_NAMES[next_diff]} Mode"
-                        text = self.pixel_fonts['medium'].render(unlock_text, True, (100, 255, 100))
-                        rect = text.get_rect(center=(config.WIDTH // 2, unlock_y))
-                        self.screen.blit(text, rect)
-            
-            # Clean stats display
-            stats_y = config.HEIGHT // 2 + 80 * self.scale
-            
-            # Stats container
-            stats_container_width = 320 * self.scale
-            stats_container_height = 100 * self.scale
-            stats_rect = pygame.Rect(config.WIDTH // 2 - stats_container_width // 2,
-                                   stats_y,
-                                   stats_container_width,
-                                   stats_container_height)
-            
-            # Glass-like effect for stats
-            stats_surface = pygame.Surface((stats_container_width, stats_container_height), pygame.SRCALPHA)
-            pygame.draw.rect(stats_surface, (40, 40, 40, 200), stats_surface.get_rect(), border_radius=15)
-            pygame.draw.rect(stats_surface, (100, 100, 100, 100), stats_surface.get_rect(), 1, border_radius=15)
-            self.screen.blit(stats_surface, stats_rect)
-            
-            # Stats content
-            pieces_captured = len(board.captured_pieces["black"])
-            pieces_lost = len(board.captured_pieces["white"])
-            
-            # Title
-            title_text = self.pixel_fonts['small'].render("BATTLE STATS", True, (180, 180, 180))
-            title_rect = title_text.get_rect(center=(config.WIDTH // 2, stats_y + 20 * self.scale))
-            self.screen.blit(title_text, title_rect)
-            
-            # Stats in two columns
-            stat_y = stats_y + 50 * self.scale
-            
-            # Captured pieces
-            captured_icon = "⚔"
-            captured_text = f"{captured_icon} {pieces_captured} captured"
-            text = self.pixel_fonts['small'].render(captured_text, True, (120, 255, 120))
-            rect = text.get_rect(center=(config.WIDTH // 2 - 80 * self.scale, stat_y))
-            self.screen.blit(text, rect)
-            
-            # Lost pieces
-            lost_icon = "☠"
-            lost_text = f"{lost_icon} {pieces_lost} lost"
-            text = self.pixel_fonts['small'].render(lost_text, True, (255, 120, 120))
-            rect = text.get_rect(center=(config.WIDTH // 2 + 80 * self.scale, stat_y))
-            self.screen.blit(text, rect)
-                
-        else:
+        elif content_fade > 0:
+            # DEFEAT screen with similar design
             defeat_text = "DEFEAT"
-            text = self.pixel_fonts['huge'].render(defeat_text, True, (200, 50, 50))
-            rect = text.get_rect(center=(config.WIDTH // 2, config.HEIGHT // 2 - 80 * self.scale))
-            self.screen.blit(text, rect)
+            
+            # Create defeat surface for fading
+            defeat_content = pygame.Surface((config.WIDTH, config.HEIGHT), pygame.SRCALPHA)
+            
+            # Create glowing defeat text with fade
+            if 'huge' in self.pixel_fonts:
+                # Glow layers with fade
+                for i in range(3):
+                    glow_alpha = int((100 - i * 30) * content_fade)
+                    glow_color = (int(200 * content_fade), int(50 * content_fade), int(50 * content_fade))
+                    glow_surface = self.pixel_fonts['huge'].render(defeat_text, True, glow_color)
+                    glow_surface.set_alpha(glow_alpha)
+                    glow_rect = glow_surface.get_rect(center=(config.WIDTH // 2, 
+                                                             config.HEIGHT // 2 - 200 * self.scale))
+                    glow_rect.inflate_ip(i * 4, i * 4)
+                    defeat_content.blit(glow_surface, glow_rect)
+                
+                # Main text with fade
+                defeat_color = (int(200 * content_fade), int(50 * content_fade), int(50 * content_fade))
+                defeat_surface = self.pixel_fonts['huge'].render(defeat_text, True, defeat_color)
+            else:
+                defeat_font = pygame.font.Font(None, int(72 * self.scale))
+                defeat_color = (int(200 * content_fade), int(50 * content_fade), int(50 * content_fade))
+                defeat_surface = defeat_font.render(defeat_text, True, defeat_color)
+            
+            rect = defeat_surface.get_rect(center=(config.WIDTH // 2, config.HEIGHT // 2 - 200 * self.scale))
+            defeat_content.blit(defeat_surface, rect)
             
             if hasattr(board, 'is_story_mode') and board.is_story_mode and hasattr(board, 'story_battle'):
                 battle = board.story_battle
@@ -1784,21 +1887,26 @@ class Renderer:
                     defeat_dialogue_y = config.HEIGHT // 2 - 20 * self.scale
                     for line in battle["defeat"]:
                         if line:
-                            line_surface = self.pixel_fonts['small'].render(line, True, (200, 200, 200))
+                            line_color = (int(200 * content_fade), int(200 * content_fade), int(200 * content_fade))
+                            line_surface = self.pixel_fonts['small'].render(line, True, line_color)
                             line_rect = line_surface.get_rect(center=(config.WIDTH // 2, defeat_dialogue_y))
-                            self.screen.blit(line_surface, line_rect)
+                            defeat_content.blit(line_surface, line_rect)
                             defeat_dialogue_y += 25
                 else:
                     encourage_text = "Better luck next time!"
-                    text = self.pixel_fonts['medium'].render(encourage_text, True, (150, 150, 150))
+                    text_color = (int(150 * content_fade), int(150 * content_fade), int(150 * content_fade))
+                    text = self.pixel_fonts['medium'].render(encourage_text, True, text_color)
                     rect = text.get_rect(center=(config.WIDTH // 2, config.HEIGHT // 2 - 20 * self.scale))
-                    self.screen.blit(text, rect)
+                    defeat_content.blit(text, rect)
+            
+            # Blit defeat content to screen
+            self.screen.blit(defeat_content, (0, 0))
         
-        # Clean button design
-        button_y = config.HEIGHT // 2 + 200 * self.scale
-        button_width = 160 * self.scale
-        button_height = 45 * self.scale
-        button_spacing = 30 * self.scale
+        # Clean button design positioned lower
+        button_y = config.HEIGHT // 2 + 180 * self.scale
+        button_width = 180 * self.scale
+        button_height = 50 * self.scale
+        button_spacing = 40 * self.scale
         
         # Restart button
         restart_x = config.WIDTH // 2 - button_width - button_spacing // 2
@@ -1808,18 +1916,32 @@ class Renderer:
         mouse_pos = pygame.mouse.get_pos()
         restart_hover = restart_rect.collidepoint(mouse_pos)
         
-        # Button background
+        # Button background with fade
+        button_alpha = int(255 * content_fade) if content_fade > 0 else 255
         restart_surface = pygame.Surface((button_width, button_height), pygame.SRCALPHA)
         if restart_hover:
-            pygame.draw.rect(restart_surface, (60, 120, 60, 220), restart_surface.get_rect(), border_radius=22)
-            pygame.draw.rect(restart_surface, (100, 200, 100, 255), restart_surface.get_rect(), 2, border_radius=22)
+            bg_alpha = min(220, int(220 * content_fade)) if content_fade > 0 else 220
+            border_alpha = min(255, int(255 * content_fade)) if content_fade > 0 else 255
+            pygame.draw.rect(restart_surface, (60, 120, 60, bg_alpha), restart_surface.get_rect(), border_radius=22)
+            pygame.draw.rect(restart_surface, (100, 200, 100, border_alpha), restart_surface.get_rect(), 2, border_radius=22)
         else:
-            pygame.draw.rect(restart_surface, (40, 80, 40, 200), restart_surface.get_rect(), border_radius=22)
-            pygame.draw.rect(restart_surface, (80, 160, 80, 200), restart_surface.get_rect(), 2, border_radius=22)
+            bg_alpha = min(200, int(200 * content_fade)) if content_fade > 0 else 200
+            border_alpha = min(200, int(200 * content_fade)) if content_fade > 0 else 200
+            pygame.draw.rect(restart_surface, (40, 80, 40, bg_alpha), restart_surface.get_rect(), border_radius=22)
+            pygame.draw.rect(restart_surface, (80, 160, 80, border_alpha), restart_surface.get_rect(), 2, border_radius=22)
         self.screen.blit(restart_surface, restart_rect)
         
-        # Restart text
-        restart_text = self.pixel_fonts['medium'].render("PLAY AGAIN", True, (255, 255, 255))
+        # Button text - "NEXT ENEMY" for story mode with more battles, otherwise "PLAY AGAIN"
+        button_label = "PLAY AGAIN"
+        if hasattr(board, 'is_story_mode') and board.is_story_mode:
+            # Check if there are more battles in the chapter
+            if hasattr(board, 'has_next_battle') and board.has_next_battle:
+                button_label = "NEXT ENEMY"
+        
+        # Button text with fade
+        text_alpha = int(255 * content_fade) if content_fade > 0 else 255
+        text_color = (text_alpha, text_alpha, text_alpha)
+        restart_text = self.pixel_fonts['medium'].render(button_label, True, text_color)
         restart_text_rect = restart_text.get_rect(center=restart_rect.center)
         self.screen.blit(restart_text, restart_text_rect)
         
@@ -1828,24 +1950,30 @@ class Renderer:
         menu_rect = pygame.Rect(menu_x, button_y, button_width, button_height)
         menu_hover = menu_rect.collidepoint(mouse_pos)
         
-        # Button background
+        # Button background with fade
         menu_surface = pygame.Surface((button_width, button_height), pygame.SRCALPHA)
         if menu_hover:
-            pygame.draw.rect(menu_surface, (80, 80, 80, 220), menu_surface.get_rect(), border_radius=22)
-            pygame.draw.rect(menu_surface, (160, 160, 160, 255), menu_surface.get_rect(), 2, border_radius=22)
+            bg_alpha = min(220, int(220 * content_fade)) if content_fade > 0 else 220
+            border_alpha = min(255, int(255 * content_fade)) if content_fade > 0 else 255
+            pygame.draw.rect(menu_surface, (80, 80, 80, bg_alpha), menu_surface.get_rect(), border_radius=22)
+            pygame.draw.rect(menu_surface, (160, 160, 160, border_alpha), menu_surface.get_rect(), 2, border_radius=22)
         else:
-            pygame.draw.rect(menu_surface, (50, 50, 50, 200), menu_surface.get_rect(), border_radius=22)
-            pygame.draw.rect(menu_surface, (120, 120, 120, 200), menu_surface.get_rect(), 2, border_radius=22)
+            bg_alpha = min(200, int(200 * content_fade)) if content_fade > 0 else 200
+            border_alpha = min(200, int(200 * content_fade)) if content_fade > 0 else 200
+            pygame.draw.rect(menu_surface, (50, 50, 50, bg_alpha), menu_surface.get_rect(), border_radius=22)
+            pygame.draw.rect(menu_surface, (120, 120, 120, border_alpha), menu_surface.get_rect(), 2, border_radius=22)
         self.screen.blit(menu_surface, menu_rect)
         
-        # Menu text
-        menu_text = self.pixel_fonts['medium'].render("MAIN MENU", True, (255, 255, 255))
+        # Menu text with fade
+        menu_text = self.pixel_fonts['medium'].render("MAIN MENU", True, text_color)
         menu_text_rect = menu_text.get_rect(center=menu_rect.center)
         self.screen.blit(menu_text, menu_text_rect)
         
-        # Keyboard shortcuts hint
+        # Keyboard shortcuts hint with fade
         hint_y = button_y + button_height + 20 * self.scale
-        hint_text = self.pixel_fonts['tiny'].render("Press R to restart • ESC for menu", True, (150, 150, 150))
+        hint_alpha = int(150 * content_fade) if content_fade > 0 else 150
+        hint_color = (hint_alpha, hint_alpha, hint_alpha)
+        hint_text = self.pixel_fonts['tiny'].render("Press R to restart • ESC for menu", True, hint_color)
         hint_rect = hint_text.get_rect(center=(config.WIDTH // 2, hint_y))
         self.screen.blit(hint_text, hint_rect)
         
@@ -2200,7 +2328,7 @@ class Renderer:
             for line in beta_text:
                 if line:
                     if line.startswith("Welcome") or line.startswith("Thank you"):
-                        text_surface = self.pixel_fonts['medium'].render(line, True, (255, 215, 0))
+                        text_surface = self.pixel_fonts['medium'].render(line, True, (220, 190, 130))
                     elif line.startswith("•"):
                         text_surface = self.pixel_fonts['small'].render(line, True, (150, 200, 150))
                     else:
@@ -2241,7 +2369,7 @@ class Renderer:
         y = game_center_y - 150 * config.SCALE
         
         if "title" in tutorial_page:
-            title_surface = self.pixel_fonts['large'].render(tutorial_page["title"], True, (255, 215, 0))
+            title_surface = self.pixel_fonts['large'].render(tutorial_page["title"], True, (220, 190, 130))
             title_rect = title_surface.get_rect(center=(game_center_x, y))
             self.screen.blit(title_surface, title_rect)
             y += 50 * config.SCALE
@@ -2252,7 +2380,7 @@ class Renderer:
                     if line.startswith("•"):
                         color = (200, 200, 200)
                     elif "=" in line:
-                        color = (255, 215, 0)
+                        color = (220, 190, 130)
                     else:
                         color = (200, 200, 200)
                     
@@ -2286,22 +2414,28 @@ class Renderer:
             center_x = x + square_size_scaled // 2
             center_y = y + square_size_scaled // 2
             
-            # Create pulsing highlight
-            pulse = (pygame.time.get_ticks() // 100) % 10  # Faster pulsing (was 200)
-            alpha = 50 + (pulse * 10)  # More transparent (was 100 + pulse * 15)
-            radius = int(square_size_scaled * 0.3)  # Smaller circle radius (was 0.4)
+            # Create pulsing highlight with cleaner pixel-art style
+            pulse = (pygame.time.get_ticks() // 150) % 20  # Smoother pulsing
+            pulse_factor = abs(10 - pulse) / 10.0  # Creates smooth in-out pulse
             
-            # Draw glowing circles
-            for i in range(3):
-                glow_surf = pygame.Surface((square_size_scaled * 2, square_size_scaled * 2), pygame.SRCALPHA)
-                glow_alpha = alpha // (i + 1)
-                glow_radius = radius + (i * 4)
-                pygame.draw.circle(glow_surf, (255, 215, 0, glow_alpha), 
-                                 (square_size_scaled, square_size_scaled), glow_radius)
-                self.screen.blit(glow_surf, (center_x - square_size_scaled, center_y - square_size_scaled))
+            # Draw a cleaner double-ring highlight
+            outer_radius = int(square_size_scaled * 0.42)
+            inner_radius = int(square_size_scaled * 0.35)
             
-            # Draw main circle border
-            pygame.draw.circle(self.screen, (255, 215, 0), (center_x, center_y), radius, 3)
+            # Outer ring with subtle glow (just one clean layer)
+            glow_alpha = int(80 + pulse_factor * 40)
+            glow_surf = pygame.Surface((square_size_scaled * 2, square_size_scaled * 2), pygame.SRCALPHA)
+            pygame.draw.circle(glow_surf, (200, 180, 100, glow_alpha), 
+                             (square_size_scaled, square_size_scaled), outer_radius, 2)
+            self.screen.blit(glow_surf, (center_x - square_size_scaled, center_y - square_size_scaled))
+            
+            # Main highlight ring (solid, clean edges)
+            ring_alpha = int(180 + pulse_factor * 75)
+            pygame.draw.circle(self.screen, (220, 190, 130, ring_alpha), (center_x, center_y), inner_radius, 3)
+            
+            # Inner dot for emphasis
+            dot_radius = int(3 * self.scale)
+            pygame.draw.circle(self.screen, (230, 210, 160), (center_x, center_y), dot_radius)
         
         # Draw highlight for powerup buttons
         highlighted_powerup = story_tutorial.get_highlight_powerup()
@@ -2354,14 +2488,14 @@ class Renderer:
         instruction = story_tutorial.get_current_instruction()
         if instruction:
             panel_width = 700
-            panel_height = 100
+            panel_height = 60
             panel_x = (config.WIDTH - panel_width) // 2
             panel_y = config.HEIGHT - panel_height - 10
             
             # Panel background
             panel_surf = pygame.Surface((panel_width, panel_height), pygame.SRCALPHA)
             panel_surf.fill((0, 0, 0, 220))
-            pygame.draw.rect(panel_surf, (255, 215, 0), panel_surf.get_rect(), 3)
+            pygame.draw.rect(panel_surf, (200, 180, 120), panel_surf.get_rect(), 3)
             self.screen.blit(panel_surf, (panel_x, panel_y))
             
             # Tutorial text
@@ -2397,7 +2531,7 @@ class Renderer:
             
         return lines
         
-    def draw_arms_dealer(self, powerup_system, shop_buttons, back_button, mouse_pos, dialogue_index=0, dialogues=None, story_tutorial=None):
+    def draw_arms_dealer(self, powerup_system, shop_buttons, back_button, mouse_pos, dialogue_index=0, dialogues=None, story_tutorial=None, fade_progress=1.0):
         """Draw the arms dealer shop with simple design."""
         current_time = pygame.time.get_ticks()
         
@@ -2416,7 +2550,7 @@ class Renderer:
             game_center_x = config.WIDTH // 2
             game_center_y = config.HEIGHT // 2
         
-        # Simple Tariq character
+        # Simple Tariq character with fade-in effect
         if hasattr(self.assets, 'tariq_image') and self.assets.tariq_image:
             tariq_height = int(400 * config.SCALE)
             aspect_ratio = self.assets.tariq_image.get_width() / self.assets.tariq_image.get_height()
@@ -2424,20 +2558,36 @@ class Renderer:
             
             scaled_tariq = pygame.transform.smoothscale(self.assets.tariq_image, (tariq_width, tariq_height))
             
-            tariq_x = int(50 * config.SCALE)
+            # Apply fade effect to Tariq
+            if fade_progress < 1.0:
+                # Create a copy with alpha
+                tariq_copy = scaled_tariq.copy()
+                tariq_copy.set_alpha(int(255 * fade_progress))
+                scaled_tariq = tariq_copy
+            
+            # Slide in from left during fade
+            base_x = int(50 * config.SCALE)
+            slide_offset = int((1 - fade_progress) * -100 * config.SCALE)
+            tariq_x = base_x + slide_offset
             tariq_y = config.HEIGHT - tariq_height
             
             self.screen.blit(scaled_tariq, (tariq_x, tariq_y))
             
             self.tariq_rect = pygame.Rect(tariq_x, tariq_y, tariq_width, tariq_height)
             
-            # Simple speech bubble
-            if dialogues and 0 <= dialogue_index < len(dialogues):
+            # Simple speech bubble with fade and delay
+            if dialogues and 0 <= dialogue_index < len(dialogues) and fade_progress > 0.3:
                 dialogue = dialogues[dialogue_index]
                 bubble_width = int(320 * config.SCALE)
                 tariq_center_x = tariq_x + tariq_width // 2
                 bubble_x = tariq_center_x - bubble_width // 2 - 3
                 bubble_y = tariq_y - int(100 * config.SCALE)
+                
+                # Calculate bubble fade (starts after Tariq is 30% visible)
+                bubble_fade = min(1.0, (fade_progress - 0.3) / 0.7)
+                
+                # Draw bubble with fade by adjusting colors
+                original_alpha = int(255 * bubble_fade)
                 self._draw_speech_bubble(bubble_x, bubble_y, 
                                        dialogue, bubble_width, point_down=True, 
                                        use_typewriter=True, text_id=f"tariq_dialogue_{dialogue_index}")
@@ -2454,7 +2604,7 @@ class Renderer:
         money = config.get_money()
         
         money_text = f"Money: ${money:,}"
-        money_surface = self.pixel_fonts['large'].render(money_text, True, (255, 215, 0))
+        money_surface = self.pixel_fonts['large'].render(money_text, True, (220, 190, 130))
         money_rect = money_surface.get_rect(center=(game_center_x, title_y + 60))
         self.screen.blit(money_surface, money_rect)
         
@@ -2505,7 +2655,7 @@ class Renderer:
                 # Affordable - warm gold gradient
                 card_base_color = (80, 60, 30)
                 card_highlight_color = (120, 90, 40)
-                border_color = (255, 215, 0)
+                border_color = (200, 180, 120)
                 glow_color = (255, 200, 0, 20)
             else:
                 # Too expensive - clean gray
@@ -2565,7 +2715,7 @@ class Renderer:
                 pygame.draw.rect(self.screen, (255, 215, 0), card_rect, thickness, border_radius=5)
                 
                 # Add "CLICK ME!" text
-                click_text = self.pixel_fonts['small'].render("CLICK TO UNLOCK!", True, (255, 215, 0))
+                click_text = self.pixel_fonts['small'].render("CLICK TO UNLOCK!", True, (220, 190, 130))
                 click_rect = click_text.get_rect(center=(card_rect.centerx, card_rect.top - 20))
                 self.screen.blit(click_text, click_rect)
             
@@ -3003,6 +3153,47 @@ class Renderer:
             line_surf.fill(grid_color)
             self.screen.blit(line_surf, (0, y + offset))
     
+    def _draw_scanner_effect_on_surface(self, surface, x, y, width, height, current_time, alpha=255):
+        """Draw scanner effect on a given surface with alpha."""
+        scanner_color = (0, 255, 255, alpha)
+        
+        # Rotating scanner line
+        angle = (current_time * 0.1) % 360
+        center_x = x + width // 2
+        center_y = y + height // 2
+        
+        # Calculate scanner line endpoints
+        radius = max(width, height) // 2
+        end_x = center_x + int(math.cos(math.radians(angle)) * radius)
+        end_y = center_y + int(math.sin(math.radians(angle)) * radius)
+        
+        # Draw scanner line with alpha
+        for i in range(2, -1, -1):  # Draw from thick to thin
+            line_alpha = int(alpha * (1.0 - i*0.2))  # Fade alpha
+            line_color = (0, 255 - i*50, 255 - i*50, line_alpha)
+            pygame.draw.line(surface, line_color, 
+                           (center_x, center_y), (end_x, end_y), 3 - i)
+        
+        # Corner brackets that pulse
+        pulse = abs(math.sin(current_time * 0.003)) * 0.5 + 0.5
+        bracket_size = int(30 * pulse + 20)
+        bracket_alpha = int(alpha * pulse)
+        bracket_color = (0, 255, 255, bracket_alpha)
+        thickness = 3
+        
+        # Top-left
+        pygame.draw.lines(surface, bracket_color, False,
+                         [(x, y + bracket_size), (x, y), (x + bracket_size, y)], thickness)
+        # Top-right
+        pygame.draw.lines(surface, bracket_color, False,
+                         [(x + width - bracket_size, y), (x + width, y), (x + width, y + bracket_size)], thickness)
+        # Bottom-left
+        pygame.draw.lines(surface, bracket_color, False,
+                         [(x, y + height - bracket_size), (x, y + height), (x + bracket_size, y + height)], thickness)
+        # Bottom-right
+        pygame.draw.lines(surface, bracket_color, False,
+                         [(x + width - bracket_size, y + height), (x + width, y + height), (x + width, y + height - bracket_size)], thickness)
+    
     def _draw_scanner_effect(self, x, y, width, height, current_time):
         """Draw scanner effect around an area."""
         scanner_color = (0, 255, 255)
@@ -3017,13 +3208,11 @@ class Renderer:
         end_x = center_x + int(math.cos(math.radians(angle)) * radius)
         end_y = center_y + int(math.sin(math.radians(angle)) * radius)
         
-        # Draw scanner line with fade
-        for i in range(5):
-            alpha = 150 - i * 30
-            scanner_surf = pygame.Surface((config.WIDTH, config.HEIGHT), pygame.SRCALPHA)
-            pygame.draw.line(scanner_surf, (*scanner_color, alpha), 
+        # Draw scanner line directly (no surfaces for performance)
+        for i in range(2, -1, -1):  # Draw from thick to thin
+            line_color = (0, 255 - i*50, 255 - i*50)  # Fade color instead of alpha
+            pygame.draw.line(self.screen, line_color, 
                            (center_x, center_y), (end_x, end_y), 3 - i)
-            self.screen.blit(scanner_surf, (0, 0))
         
         # Corner brackets that pulse
         pulse = abs(math.sin(current_time * 0.003)) * 0.5 + 0.5
@@ -3044,25 +3233,37 @@ class Renderer:
         pygame.draw.lines(self.screen, bracket_color, False,
                          [(x + width - bracket_size, y + height), (x + width, y + height), (x + width, y + height - bracket_size)], thickness)
     
-    def _draw_digital_rain(self, current_time):
+    def _draw_digital_rain(self, current_time, victory_screen=False):
         """Draw Matrix-style digital rain effect."""
+        # Use different rain columns for victory screen to avoid conflicts
+        column_attr = 'victory_rain_columns' if victory_screen else 'rain_columns'
+        
         # Initialize rain columns if not exists
-        if not hasattr(self, 'rain_columns'):
-            self.rain_columns = []
-            # Create columns across the screen
-            for x in range(0, config.WIDTH, 20):
-                self.rain_columns.append({
+        if not hasattr(self, column_attr):
+            columns = []
+            # Fewer columns for victory screen
+            spacing = 40 if victory_screen else 20
+            for x in range(0, config.WIDTH, spacing):
+                columns.append({
                     'x': x,
                     'y': random.randint(-config.HEIGHT, 0),
                     'speed': random.uniform(2, 6),
                     'chars': [chr(random.randint(33, 126)) for _ in range(20)],
                     'length': random.randint(10, 20)
                 })
+            setattr(self, column_attr, columns)
         
-        rain_surf = pygame.Surface((config.WIDTH, config.HEIGHT), pygame.SRCALPHA)
+        columns = getattr(self, column_attr)
+        
+        # Cache rain surface for victory screen to avoid recreating
+        if victory_screen and not hasattr(self, 'victory_rain_surf'):
+            self.victory_rain_surf = pygame.Surface((config.WIDTH, config.HEIGHT), pygame.SRCALPHA)
+        
+        rain_surf = self.victory_rain_surf if victory_screen else pygame.Surface((config.WIDTH, config.HEIGHT), pygame.SRCALPHA)
+        rain_surf.fill((0, 0, 0, 0))  # Clear it
         
         # Update and draw rain columns
-        for col in self.rain_columns:
+        for col in columns:
             # Update position
             col['y'] += col['speed']
             
@@ -3091,8 +3292,9 @@ class Renderer:
                         col['chars'][i % len(col['chars'])] = chr(random.randint(33, 126))
                     
                     # Draw character
-                    char_surf = self.pixel_fonts['tiny'].render(col['chars'][i % len(col['chars'])], True, (*color, alpha))
-                    rain_surf.blit(char_surf, (col['x'], char_y))
+                    if 'tiny' in self.pixel_fonts:
+                        char_surf = self.pixel_fonts['tiny'].render(col['chars'][i % len(col['chars'])], True, (*color, alpha))
+                        rain_surf.blit(char_surf, (col['x'], char_y))
         
         self.screen.blit(rain_surf, (0, 0))
     

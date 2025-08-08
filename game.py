@@ -89,6 +89,8 @@ class ChessGame:
         # Arms dealer
         self.shop_buttons = {}
         self.arms_dealer_game_button = None
+        self.arms_dealer_shake_start = 0  # For shake effect when locked
+        self.arms_dealer_shake_duration = 300  # Shake for 300ms
         
         # Arms dealer dialogue state
         self.tariq_dialogue_index = 0
@@ -99,6 +101,8 @@ class ChessGame:
             "Shield your pieces, rain fire from above, or unleash total destruction!",
             "What will it be today?"
         ]
+        self.arms_dealer_fade_start = 0  # For Tariq fade-in animation
+        self.returned_from_arms_dealer_time = 0  # Track when we return from arms dealer
         
         # Tutorial page state
         self.tutorial_page = 0
@@ -692,11 +696,17 @@ class ChessGame:
         if 'bomb' in self.assets.sounds:
             self.assets.sounds['bomb'].set_volume(self.sfx_volume * 0.8)  # Bomb sound at 80% of SFX volume
         if 'minigun' in self.assets.sounds:
-            self.assets.sounds['minigun'].set_volume(self.sfx_volume * 0.6)  # Minigun at 60% of SFX volume
+            self.assets.sounds['minigun'].set_volume(self.sfx_volume * 0.3)  # Minigun at 30% of SFX volume (reduced)
+        if 'minigun_revup' in self.assets.sounds:
+            self.assets.sounds['minigun_revup'].set_volume(self.sfx_volume * 0.4)  # Minigun revup at 40% of SFX volume
+        if 'minigun_fire' in self.assets.sounds:
+            self.assets.sounds['minigun_fire'].set_volume(self.sfx_volume * 0.3)  # Minigun fire at 30% of SFX volume
+        if 'minigun_spindown' in self.assets.sounds:
+            self.assets.sounds['minigun_spindown'].set_volume(self.sfx_volume * 0.4)  # Minigun spindown at 40% of SFX volume
         if 'helicopter' in self.assets.sounds:
-            self.assets.sounds['helicopter'].set_volume(self.sfx_volume * 0.5)  # Helicopter at 50% of SFX volume
+            self.assets.sounds['helicopter'].set_volume(self.sfx_volume * 0.4)  # Helicopter at 40% of SFX volume (reduced)
         if 'helicopter_blade' in self.assets.sounds:
-            self.assets.sounds['helicopter_blade'].set_volume(self.sfx_volume * 0.8)  # Helicopter blade at 80% of SFX volume
+            self.assets.sounds['helicopter_blade'].set_volume(self.sfx_volume * 0.5)  # Helicopter blade at 50% of SFX volume (reduced)
         if 'click' in self.assets.sounds:
             self.assets.sounds['click'].set_volume(self.sfx_volume * 0.5)  # Click at 50% of SFX volume
     
@@ -1059,16 +1069,68 @@ class ChessGame:
                 restart_rect, menu_rect = self.game_over_buttons
                 if restart_rect and restart_rect.collidepoint(pos):
                     play_click_sound()
-                    # Restart game
-                    self.board.reset()
-                    self.powerup_system = PowerupSystem()  # Reset powerup system
-                    self.powerup_system.assets = self.assets  # Pass assets reference
-                    self.board.set_powerup_system(self.powerup_system)
-                    self.powerup_renderer.powerup_system = self.powerup_system
-                    self.victory_processed = False  # Reset victory flag
-                    self.victory_reward = 0  # Reset reward display
-                    # Clear chopper mode
-                    self.chopper_mode = None
+                    
+                    # Check if we should go to next battle in story mode
+                    if (self.current_mode == "story" and 
+                        hasattr(self.board, 'has_next_battle') and 
+                        self.board.has_next_battle and
+                        self.board.winner == "white"):
+                        
+                        # Move to next battle in the chapter
+                        chapter = self.story_mode.get_current_chapter()
+                        if chapter and self.current_story_battle:
+                            # Find current battle index
+                            for idx, battle in enumerate(chapter["battles"]):
+                                if battle["id"] == self.current_story_battle["id"]:
+                                    # Move to next battle
+                                    if idx + 1 < len(chapter["battles"]):
+                                        next_battle = chapter["battles"][idx + 1]
+                                        self.story_mode.current_battle = idx + 1
+                                        self.current_story_battle = next_battle
+                                        
+                                        # Reset board for new battle
+                                        self.board.reset()
+                                        self.powerup_system = PowerupSystem()
+                                        self.powerup_system.assets = self.assets
+                                        self.board.set_powerup_system(self.powerup_system)
+                                        self.powerup_renderer.powerup_system = self.powerup_system
+                                        
+                                        # Apply battle rules
+                                        rules = self.story_mode.apply_battle_rules(
+                                            next_battle,
+                                            self.board,
+                                            self.powerup_system,
+                                            self.ai
+                                        )
+                                        
+                                        # Set up board for story mode
+                                        self.board.is_story_mode = True
+                                        self.board.story_battle = next_battle
+                                        
+                                        # Check for next battle after this one
+                                        self.board.has_next_battle = idx + 1 < len(chapter["battles"]) - 1
+                                        
+                                        # Reset flags
+                                        self.victory_processed = False
+                                        self.victory_reward = 0
+                                        self.chopper_mode = None
+                                        
+                                        # Start dialogue for new battle
+                                        self.story_dialogue_index = 0
+                                        self.story_dialogue_complete = False
+                                        self.start_fade(config.SCREEN_GAME, config.SCREEN_STORY_DIALOGUE)
+                                    break
+                    else:
+                        # Regular restart (same battle or non-story mode)
+                        self.board.reset()
+                        self.powerup_system = PowerupSystem()  # Reset powerup system
+                        self.powerup_system.assets = self.assets  # Pass assets reference
+                        self.board.set_powerup_system(self.powerup_system)
+                        self.powerup_renderer.powerup_system = self.powerup_system
+                        self.victory_processed = False  # Reset victory flag
+                        self.victory_reward = 0  # Reset reward display
+                        # Clear chopper mode
+                        self.chopper_mode = None
                     return
                 elif menu_rect and menu_rect.collidepoint(pos):
                     play_click_sound()
@@ -1087,11 +1149,36 @@ class ChessGame:
             
             # Check Arms Dealer button
             if self.arms_dealer_game_button and self.arms_dealer_game_button.collidepoint(pos):
+                # Check if we're waiting for arms dealer visit in tutorial
+                waiting_for_arms_dealer = False
+                if self.in_tutorial_battle and self.tutorial and self.tutorial.active:
+                    if self.tutorial.current_step < len(self.tutorial.steps):
+                        current_step = self.tutorial.steps[self.tutorial.current_step]
+                        if current_step.get("wait_for") == "arms_dealer_visit":
+                            waiting_for_arms_dealer = True
+                
+                # Check if button is locked during tutorial (but not when we need to click it)
+                if self.in_tutorial_battle and self.tutorial and self.tutorial.active and not waiting_for_arms_dealer:
+                    # Button is locked - trigger shake effect
+                    self.arms_dealer_shake_start = pygame.time.get_ticks()
+                    # Play a "denied" sound effect if available
+                    play_click_sound()
+                    return
+                
                 play_click_sound()
                 
                 # Handle tutorial arms dealer visit
-                if self.in_tutorial_battle:
+                if self.in_tutorial_battle and self.tutorial:
                     self.tutorial.handle_arms_dealer_visit()
+                    # Set special tutorial dialogue for Tariq
+                    self.tariq_dialogue_index = 0
+                    self.tariq_dialogues = [
+                        "Welcome to the tutorial, warrior! I am Tariq, your arms supplier.",
+                        "For this training session, ALL weapons are unlocked and FREE!",
+                        "Try them all - shields, guns, airstrikes, paratroopers, even the chopper!",
+                        "No need to purchase anything - it's all yours for learning!",
+                        "Master these tools, and you'll dominate the battlefield!"
+                    ]
                 
                 # Store current game state before going to shop
                 self.store_game_state()
@@ -1267,7 +1354,7 @@ class ChessGame:
                 
                 # Visual feedback - flash the screen green
                 flash_surface = pygame.Surface((config.WIDTH, config.HEIGHT))
-                flash_surface.fill((0, 255, 0))
+                flash_surface.fill((100, 200, 100))
                 flash_surface.set_alpha(100)
                 self.screen.blit(flash_surface, (0, 0))
                 pygame.display.flip()
@@ -1333,6 +1420,14 @@ class ChessGame:
         if from_screen == "story_dialogue":
             # Reset dialogue state when leaving story dialogue
             self.renderer.reset_dialogue_state()
+            
+        # Start Tariq fade-in animation when entering arms dealer
+        if to_screen == config.SCREEN_ARMS_DEALER:
+            self.arms_dealer_fade_start = pygame.time.get_ticks()
+            
+        # Track when returning from arms dealer
+        if from_screen == config.SCREEN_ARMS_DEALER and to_screen == config.SCREEN_GAME:
+            self.returned_from_arms_dealer_time = pygame.time.get_ticks()
         
         # Handle music transitions
         if to_screen == config.SCREEN_ARMS_DEALER and self.current_music == "main":
@@ -1467,7 +1562,7 @@ class ChessGame:
         if self.powerup_system.chopper_gunner_requested:
             self.powerup_system.chopper_gunner_requested = False
             # Create and start chopper mode
-            self.chopper_mode = ChopperGunnerMode(self.screen, self.assets, self.board)
+            self.chopper_mode = ChopperGunnerMode(self.screen, self.assets, self.board, self)
             self.chopper_mode.start()
             
             
@@ -1735,7 +1830,32 @@ class ChessGame:
         if self.chopper_mode and self.chopper_mode.active:
             self.chopper_mode.draw()
             pygame.display.flip()
-            return
+            
+            # Check if chopper mode is ending
+            if self.chopper_mode.phase == "complete":
+                current_time = pygame.time.get_ticks()
+                # Match the timing from chopper_gunner.py
+                exit_delay = 5000 if (self.board.game_over and self.board.winner == "white") else 2000
+                
+                # Check if we should transition out
+                if current_time - self.chopper_mode.phase_timer > exit_delay:
+                    # If game is over, transition directly to victory screen
+                    if self.board.game_over:
+                        # Stop sounds and clear chopper mode
+                        self.chopper_mode.stop()
+                        self.chopper_mode = None
+                        # Skip only the fade-to-black phase, but keep the fade-in for nice transition
+                        self.renderer.victory_fade_start = current_time - 800  # Skip fade-to-black, keep fade-in
+                        # Don't return - let it draw the victory screen
+                    else:
+                        # Stop and clear for non-victory exits
+                        self.chopper_mode.stop()
+                        self.chopper_mode = None
+                        return
+                else:
+                    return  # Still in chopper mode
+            else:
+                return  # Still in chopper mode
             
         # Get screen shake offset - only apply during actual gameplay, not during fades or menus
         shake_x, shake_y = 0, 0
@@ -1868,14 +1988,29 @@ class ChessGame:
             self.draw_volume_sliders()
             
         elif screen_type == config.SCREEN_ARMS_DEALER:
+            # Calculate fade-in progress for Tariq
+            fade_progress = 1.0
+            if self.arms_dealer_fade_start > 0:
+                current_time = pygame.time.get_ticks()
+                fade_duration = 1000  # 1 second fade-in
+                elapsed = current_time - self.arms_dealer_fade_start
+                fade_progress = min(1.0, elapsed / fade_duration)
+            
             self.renderer.draw_arms_dealer(self.powerup_system, self.shop_buttons, 
                                           self.back_button, self.mouse_pos, 
                                           self.tariq_dialogue_index, self.tariq_dialogues,
-                                          self.tutorial if self.in_tutorial_battle else None)
+                                          self.tutorial if self.in_tutorial_battle else None,
+                                          fade_progress)
             
-            # Draw tutorial hints if in tutorial battle
+            # Draw tutorial hints if in tutorial battle (but delay after returning from arms dealer)
             if self.in_tutorial_battle and self.tutorial.active:
-                self.renderer.draw_tutorial_hints(self.tutorial)
+                # Check if we recently returned from arms dealer
+                current_time = pygame.time.get_ticks()
+                delay_after_arms_dealer = 1200  # 1.2 seconds delay (fade + extra time)
+                
+                # Only draw hints if enough time has passed since returning from arms dealer
+                if self.returned_from_arms_dealer_time == 0 or (current_time - self.returned_from_arms_dealer_time) > delay_after_arms_dealer:
+                    self.renderer.draw_tutorial_hints(self.tutorial)
                 
             self.draw_volume_sliders()
             
@@ -1928,9 +2063,15 @@ class ChessGame:
             if self.current_mode == "story" and self.current_story_battle:
                 self.renderer.draw_story_battle_ui(self.current_story_battle)
                 
-            # Draw tutorial hints if in tutorial battle
+            # Draw tutorial hints if in tutorial battle (but delay after returning from arms dealer)
             if self.in_tutorial_battle and self.tutorial.active:
-                self.renderer.draw_tutorial_hints(self.tutorial)
+                # Check if we recently returned from arms dealer
+                current_time = pygame.time.get_ticks()
+                delay_after_arms_dealer = 1200  # 1.2 seconds delay (fade + extra time)
+                
+                # Only draw hints if enough time has passed since returning from arms dealer
+                if self.returned_from_arms_dealer_time == 0 or (current_time - self.returned_from_arms_dealer_time) > delay_after_arms_dealer:
+                    self.renderer.draw_tutorial_hints(self.tutorial)
             
             
             # Overlays
@@ -1949,6 +2090,18 @@ class ChessGame:
                 if self.current_mode == "story":
                     self.board.is_story_mode = True
                     self.board.story_battle = self.current_story_battle
+                    
+                    # Check if there's a next battle in the chapter
+                    if self.story_mode and self.current_story_battle:
+                        chapter = self.story_mode.get_current_chapter()
+                        if chapter:
+                            current_battle_idx = -1
+                            for idx, battle in enumerate(chapter["battles"]):
+                                if battle["id"] == self.current_story_battle["id"]:
+                                    current_battle_idx = idx
+                                    break
+                            # Check if there's another battle after this one
+                            self.board.has_next_battle = current_battle_idx >= 0 and current_battle_idx < len(chapter["battles"]) - 1
             self.game_over_buttons = self.renderer.draw_game_over(self.board)
             
     def draw_killstreak_ui(self):
@@ -2043,18 +2196,35 @@ class ChessGame:
         button_x = 20
         button_y = config.HEIGHT // 2 - button_height // 2  # Center vertically
         
-        self.arms_dealer_game_button = pygame.Rect(button_x, button_y, button_width, button_height)
+        # Apply shake effect if active
+        shake_offset_x = 0
+        shake_offset_y = 0
+        current_time = pygame.time.get_ticks()
+        if self.arms_dealer_shake_start > 0 and (current_time - self.arms_dealer_shake_start) < self.arms_dealer_shake_duration:
+            # Create shake effect
+            shake_progress = (current_time - self.arms_dealer_shake_start) / self.arms_dealer_shake_duration
+            shake_intensity = (1 - shake_progress) * 5  # Decrease intensity over time
+            shake_offset_x = int(pygame.math.Vector2(1, 0).rotate(current_time * 0.5).x * shake_intensity)
+            shake_offset_y = int(pygame.math.Vector2(0, 1).rotate(current_time * 0.7).y * shake_intensity * 0.5)
         
-        # Check if tutorial is highlighting this button
-        should_highlight = False
+        self.arms_dealer_game_button = pygame.Rect(button_x + shake_offset_x, button_y + shake_offset_y, button_width, button_height)
+        
+        # Check if we're waiting for arms dealer visit in tutorial
+        waiting_for_arms_dealer = False
         if self.in_tutorial_battle and self.tutorial and self.tutorial.active:
             if self.tutorial.current_step < len(self.tutorial.steps):
                 current_step = self.tutorial.steps[self.tutorial.current_step]
                 if current_step.get("wait_for") == "arms_dealer_visit":
-                    should_highlight = True
+                    waiting_for_arms_dealer = True
         
-        # Check if hovering
-        is_hover = self.arms_dealer_game_button.collidepoint(self.mouse_pos)
+        # Button is locked during tutorial UNLESS we're at the arms dealer step
+        is_locked = self.in_tutorial_battle and self.tutorial and self.tutorial.active and not waiting_for_arms_dealer
+        
+        # Check if tutorial is highlighting this button
+        should_highlight = waiting_for_arms_dealer
+        
+        # Check if hovering (disabled when locked)
+        is_hover = self.arms_dealer_game_button.collidepoint(self.mouse_pos) and not is_locked
         
         # Draw highlighting effect if needed
         if should_highlight:
@@ -2066,23 +2236,32 @@ class ChessGame:
             for i in range(3):
                 glow_rect = self.arms_dealer_game_button.inflate(glow_size * 2 - i * 6, glow_size * 2 - i * 6)
                 glow_surf = pygame.Surface((glow_rect.width, glow_rect.height), pygame.SRCALPHA)
-                pygame.draw.rect(glow_surf, (255, 215, 0, 100 - i * 30), glow_surf.get_rect(), border_radius=15)
+                pygame.draw.rect(glow_surf, (200, 180, 120, 100 - i * 30), glow_surf.get_rect(), border_radius=15)
                 self.screen.blit(glow_surf, glow_rect)
             
         
-        # Draw button
-        button_color = (150, 100, 50) if is_hover else (120, 80, 40)
-        if should_highlight:
-            button_color = (200, 150, 100)  # Brighter when highlighted
+        # Draw button with locked state
+        if is_locked:
+            # Greyed out appearance for locked state
+            button_color = (60, 60, 60)  # Dark grey
+            border_color = (80, 80, 80)  # Slightly lighter grey border
+            text_color = (120, 120, 120)  # Grey text
+        else:
+            button_color = (150, 100, 50) if is_hover else (120, 80, 40)
+            if should_highlight:
+                button_color = (200, 150, 100)  # Brighter when highlighted
+            border_color = (200, 180, 120) if should_highlight else (180, 150, 100)
+            text_color = config.WHITE
+        
+        # Draw button background
         pygame.draw.rect(self.screen, button_color, self.arms_dealer_game_button, border_radius=10)
         
         # Draw border (thicker and brighter if highlighted)
-        border_color = (255, 215, 0) if should_highlight else (200, 150, 100)
         border_width = 5 if should_highlight else 3
         pygame.draw.rect(self.screen, border_color, self.arms_dealer_game_button, border_width, border_radius=10)
         
-        # Draw text
-        text = self.renderer.pixel_fonts['small'].render("VISIT ARMS DEALER", True, config.WHITE)
+        # Draw text (no lock icon)
+        text = self.renderer.pixel_fonts['small'].render("VISIT ARMS DEALER", True, text_color)
         text_rect = text.get_rect(center=self.arms_dealer_game_button.center)
         self.screen.blit(text, text_rect)
             

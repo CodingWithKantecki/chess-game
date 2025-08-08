@@ -9,10 +9,11 @@ import random
 from config import *
 
 class ChopperGunnerMode:
-    def __init__(self, screen, assets, board):
+    def __init__(self, screen, assets, board, game=None):
         self.screen = screen
         self.assets = assets
         self.board = board
+        self.game = game  # Reference to game for volume control
         self.active = False
         self.phase = "approach"  # approach, descent, active, complete
         self.phase_timer = 0
@@ -174,6 +175,20 @@ class ChopperGunnerMode:
         
         # Starting chopper gunner mode
         
+        # Apply SFX volume to sounds before playing
+        if self.game and hasattr(self.game, 'sfx_volume'):
+            sfx_vol = self.game.sfx_volume
+            if self.helicopter_sound:
+                self.helicopter_sound.set_volume(sfx_vol * 0.4)
+            if self.helicopter_blade_sound:
+                self.helicopter_blade_sound.set_volume(sfx_vol * 0.5)
+            if self.minigun_revup_sound:
+                self.minigun_revup_sound.set_volume(sfx_vol * 0.4)
+            if self.minigun_fire_sound:
+                self.minigun_fire_sound.set_volume(sfx_vol * 0.3)
+            if self.minigun_spindown_sound:
+                self.minigun_spindown_sound.set_volume(sfx_vol * 0.4)
+        
         # Start helicopter sounds
         if self.helicopter_sound:
             self.helicopter_sound.play(-1)  # Loop
@@ -189,11 +204,11 @@ class ChopperGunnerMode:
         """End chopper gunner mode."""
         self.active = False
         
-        # Stop sounds
+        # Fade out sounds gradually if they exist
         if self.helicopter_sound:
-            self.helicopter_sound.stop()
+            self.helicopter_sound.fadeout(500)  # 0.5 second fadeout
         if self.helicopter_blade_sound:
-            self.helicopter_blade_sound.stop()
+            self.helicopter_blade_sound.fadeout(500)
             
         # Stop any minigun sounds
         if self.minigun_fire_channel:
@@ -341,8 +356,22 @@ class ChopperGunnerMode:
                 self.phase_timer = current_time
                 
         elif self.phase == "complete":
-            if current_time - self.phase_timer > 2000:  # 2 second exit
-                self.stop()
+            # Keep hovering and rotating during the complete phase
+            # Continue the orbital rotation during victory
+            self.prev_camera_angle = self.camera_angle
+            self.camera_angle = math.sin(self.hover_time * 0.3) * 30  # Keep rotating
+            
+            # Calculate banking based on movement direction
+            angle_change = self.camera_angle - self.prev_camera_angle
+            target_bank = angle_change * 5
+            bank_smoothing = 0.1
+            self.camera_bank += (target_bank - self.camera_bank) * bank_smoothing
+            
+            # Let it run longer if game is won
+            exit_delay = 5000 if self.board.game_over and self.board.winner == "white" else 2000
+            if current_time - self.phase_timer > exit_delay:
+                # Don't stop here - let the game.py handle it after fade is complete
+                pass  # Will be stopped by game.py
                 
         # Update movement calculations - always apply some movement
         # Add realistic helicopter movement - MODERATE SHAKE
@@ -1057,7 +1086,28 @@ class ChopperGunnerMode:
         # Draw HUD
         self.draw_hud()
         
-        # Removed phase debug info
+        # Add fade to black when in complete phase
+        if self.phase == "complete":
+            current_time = pygame.time.get_ticks()
+            time_in_phase = current_time - self.phase_timer
+            
+            # Start fade later if victory (2.5 seconds of victory airtime before fade)
+            fade_start_delay = 2500 if (self.board.game_over and self.board.winner == "white") else 500
+            fade_duration = 2000  # 2 seconds fade for smoother transition
+            
+            if time_in_phase > fade_start_delay:
+                fade_time = time_in_phase - fade_start_delay
+                
+                if fade_time < fade_duration:
+                    # Fade to black
+                    fade_alpha = int((fade_time / fade_duration) * 255)
+                    fade_surface = pygame.Surface((WIDTH, HEIGHT))
+                    fade_surface.fill((0, 0, 0))
+                    fade_surface.set_alpha(fade_alpha)
+                    self.screen.blit(fade_surface, (0, 0))
+                else:
+                    # Full black
+                    self.screen.fill((0, 0, 0))
         
     def draw_rotating_parallax_background(self):
         """Draw parallax background that rotates with the helicopter."""

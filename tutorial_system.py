@@ -94,7 +94,7 @@ class TutorialSystem:
         self.story_steps = [
             # PHASE 1: Opening Development
             {
-                "instruction": "Welcome to Chess Protocol! Control the center with your e2 pawn.",
+                "instruction": "Welcome to Checkmate Protocol! Control the center with your e2 pawn.",
                 "highlight_squares": [(4, 6)],
                 "wait_for": "piece_select",
                 "target_piece": (4, 6),
@@ -481,6 +481,14 @@ class TutorialSystem:
                 # Ensure player has points for tutorial
                 self.powerup_system.points["white"] = 999
             self._advance_step()
+            
+            # Automatically advance through the gift step since all powerups are unlocked
+            if self.current_step < len(self.steps):
+                next_step = self.steps[self.current_step]
+                if next_step.get("wait_for") == "tutorial_gift_complete":
+                    # Unlock all powerups for tutorial
+                    config.unlock_all_powerups_for_tutorial()
+                    self._advance_step()
             
     def handle_powerup_purchase(self, powerup_key):
         """Handle powerup purchase."""
