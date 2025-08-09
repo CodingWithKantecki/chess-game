@@ -249,49 +249,436 @@ class Renderer:
                 self.typewriter_added_texts.add(text_id)
         
     def draw_mode_select(self, mode_buttons, back_button, mouse_pos):
-        """Draw game mode selection screen."""
+        """Draw game mode selection screen with dramatic futuristic design."""
         self.draw_parallax_background(1.0)
         
-        # Overlay - use cached version
-        overlay = self._get_cached_overlay(config.WIDTH, config.HEIGHT, (0, 0, 0), 120)
+        # Dark overlay for contrast
+        overlay = self._get_cached_overlay(config.WIDTH, config.HEIGHT, (0, 0, 0), 140)
         self.screen.blit(overlay, (0, 0))
         
-        # Title with typewriter effect
-        self.draw_text_typewriter("SELECT GAME MODE", (config.WIDTH // 2, 100), 'huge', config.WHITE, center=True, text_id="mode_select_title")
+        current_time = pygame.time.get_ticks()
         
-        # Mode cards - removed blitz and puzzle
+        # Removed binary rain for cleaner look
+        
+        # Flying jets in background using actual jet assets - reduced spawn
+        if not hasattr(self, '_jets'):
+            self._jets = []
+            # Start with just 1 jet, spawn the other later
+            self._jets.append({
+                'x': -200,
+                'y': random.randint(150, 250),
+                'speed': random.uniform(6, 8),
+                'shooting': False,
+                'shoot_timer': 0,
+                'team': 0,
+                'frame': 0,
+                'frame_timer': 0,
+                'tilt': 0,
+                'target_y': random.randint(150, 250),
+                'vy': 0,
+                'evasion_timer': 0,
+                'pursuit_mode': False,
+                'spawn_timer': 120  # Wait before spawning opponent
+            })
+            self._projectiles = []
+            self._explosions = []  # Store explosion effects
+            self._jet_spawn_timer = 600  # Very long delay (10 seconds) before spawning second jet
+        
+        # Spawn second jet after delay
+        if hasattr(self, '_jet_spawn_timer') and self._jet_spawn_timer > 0:
+            self._jet_spawn_timer -= 1
+            if self._jet_spawn_timer == 0 and len(self._jets) < 2:
+                # Spawn opponent jet
+                self._jets.append({
+                    'x': config.WIDTH + 200,
+                    'y': random.randint(150, 250),
+                    'speed': random.uniform(-8, -6),
+                    'shooting': False,
+                    'shoot_timer': 0,
+                    'team': 1,
+                    'frame': 0,
+                    'frame_timer': 0,
+                    'tilt': 0,
+                    'target_y': random.randint(150, 250),
+                    'vy': 0,
+                    'evasion_timer': 0,
+                    'pursuit_mode': False,
+                    'spawn_timer': 0
+                })
+        
+        # Update jets with AI dogfighting
+        for i, jet in enumerate(self._jets):
+            # Handle respawn delay
+            if 'respawn_delay' in jet and jet['respawn_delay'] > 0:
+                jet['respawn_delay'] -= 1
+                if jet['respawn_delay'] == 0:
+                    # Move jet back to normal spawn position
+                    if jet['speed'] > 0:
+                        jet['x'] = -200
+                    else:
+                        jet['x'] = config.WIDTH + 200
+                continue  # Skip updating this jet until respawn
+            
+            jet['x'] += jet['speed']
+            jet['shoot_timer'] += 1
+            jet['frame_timer'] += 1
+            jet['evasion_timer'] -= 1
+            
+            # Find enemy jet
+            enemy_jet = None
+            for other_jet in self._jets:
+                if other_jet['team'] != jet['team']:
+                    enemy_jet = other_jet
+                    break
+            
+            # AI dogfighting behavior
+            if enemy_jet:
+                # Calculate distance to enemy
+                dx = enemy_jet['x'] - jet['x']
+                dy = enemy_jet['y'] - jet['y']
+                distance = math.sqrt(dx*dx + dy*dy)
+                
+                # If enemy is in front and close, pursue
+                if (jet['speed'] > 0 and dx > 0) or (jet['speed'] < 0 and dx < 0):
+                    if distance < 400:
+                        jet['pursuit_mode'] = True
+                        # Track enemy altitude
+                        jet['target_y'] = enemy_jet['y'] + random.uniform(-20, 20)
+                        
+                        # Shoot if aligned (reduced frequency)
+                        if abs(dy) < 40 and jet['shoot_timer'] > 60 and random.random() < 0.7:  # 70% chance even when aligned
+                            # Fire burst at enemy
+                            for _ in range(2):  # Reduced from 3 to 2 bullets
+                                self._projectiles.append({
+                                    'x': jet['x'],
+                                    'y': jet['y'],
+                                    'vx': jet['speed'] * 3,
+                                    'vy': dy * 0.1 + random.uniform(-1, 1),
+                                    'team': jet['team']
+                                })
+                            jet['shoot_timer'] = 0
+                else:
+                    jet['pursuit_mode'] = False
+                
+                # Evasive maneuvers if being pursued
+                if jet['evasion_timer'] <= 0 and random.random() < 0.02:
+                    jet['target_y'] = random.randint(100, 300)
+                    jet['evasion_timer'] = 60
+            
+            # Default movement if not pursuing
+            if not jet['pursuit_mode'] and random.random() < 0.01:
+                jet['target_y'] = random.randint(100, 300)
+            
+            # Calculate vertical velocity towards target with smoother acceleration
+            y_diff = jet['target_y'] - jet['y']
+            target_vy = y_diff * 0.02  # Slower, smoother approach
+            jet['vy'] += (target_vy - jet['vy']) * 0.1  # Smooth acceleration
+            jet['y'] += jet['vy']
+            
+            # Calculate tilt based on vertical movement
+            # When jet goes UP (vy negative), nose should point UP (positive rotation = CCW)
+            # When jet goes DOWN (vy positive), nose should point DOWN (negative rotation = CW)
+            # In pygame: positive angle = counterclockwise, negative angle = clockwise
+            # So: vy positive -> need negative rotation, vy negative -> need positive rotation
+            target_tilt = min(25, max(-25, -jet['vy'] * 10))  # NEGATIVE multiplier
+            jet['tilt'] += (target_tilt - jet['tilt']) * 0.15  # Smoother tilt transition
+            
+            # Animate jet frames
+            if jet['frame_timer'] > 5:  # Change frame every 5 ticks
+                jet['frame'] = (jet['frame'] + 1) % 4  # Cycle through 4 frames
+                jet['frame_timer'] = 0
+            
+            # Wrap around screen
+            if jet['speed'] > 0 and jet['x'] > config.WIDTH + 200:
+                jet['x'] = -200
+                jet['y'] = random.randint(150, 250)
+                jet['target_y'] = jet['y']
+            elif jet['speed'] < 0 and jet['x'] < -200:
+                jet['x'] = config.WIDTH + 200
+                jet['y'] = random.randint(150, 250)
+                jet['target_y'] = jet['y']
+            
+            # Randomly shoot
+            if jet['shoot_timer'] > 40 and random.random() < 0.03:
+                # Create multiple bullets for machine gun effect
+                for _ in range(2):
+                    self._projectiles.append({
+                        'x': jet['x'],
+                        'y': jet['y'],
+                        'vx': jet['speed'] * 3 + random.uniform(-1, 1),
+                        'vy': random.uniform(-0.5, 0.5),
+                        'team': jet['team']
+                    })
+                jet['shoot_timer'] = 0
+            
+            # Draw jet using actual jet frames if available
+            if hasattr(self, 'assets') and hasattr(self.assets, 'jet_frames') and self.assets.jet_frames:
+                # Use actual jet image
+                frame_index = min(jet['frame'], len(self.assets.jet_frames) - 1)
+                jet_image = self.assets.jet_frames[frame_index]
+                
+                # Scale jet to be much smaller
+                jet_scale = 0.15  # Much smaller jets
+                scaled_width = int(jet_image.get_width() * jet_scale)
+                scaled_height = int(jet_image.get_height() * jet_scale)
+                scaled_jet = pygame.transform.scale(jet_image, (scaled_width, scaled_height))
+                
+                # Flip image based on direction (jets face LEFT by default in the image)
+                if jet['speed'] > 0:
+                    # Going right - need to flip
+                    scaled_jet = pygame.transform.flip(scaled_jet, True, False)
+                    # Apply rotation for right-facing jets
+                    scaled_jet = pygame.transform.rotate(scaled_jet, jet['tilt'])
+                else:
+                    # Going left - no flip needed
+                    # Apply rotation for left-facing jets
+                    scaled_jet = pygame.transform.rotate(scaled_jet, jet['tilt'])
+                
+                # Don't apply color tint - just use original jet colors
+                # Set slight transparency
+                scaled_jet.set_alpha(200)
+                
+                # Draw the jet
+                jet_rect = scaled_jet.get_rect(center=(int(jet['x']), int(jet['y'])))
+                self.screen.blit(scaled_jet, jet_rect)
+                
+                # Engine trail effect
+                direction = 1 if jet['speed'] > 0 else -1
+                for i in range(5):
+                    trail_x = jet['x'] - direction * (30 + i * 15)
+                    trail_alpha = 100 - i * 20
+                    trail_size = 5 - i
+                    # Orange/yellow engine glow
+                    glow_surf = pygame.Surface((trail_size*4, trail_size*4), pygame.SRCALPHA)
+                    pygame.draw.circle(glow_surf, (255, 200, 0, trail_alpha), 
+                                     (trail_size*2, trail_size*2), trail_size)
+                    self.screen.blit(glow_surf, (trail_x - trail_size*2, jet['y'] - trail_size*2))
+            else:
+                # Fallback to simple triangle if no assets
+                jet_color = (100, 150, 200, 180) if jet['team'] == 0 else (200, 100, 100, 180)
+                direction = 1 if jet['speed'] > 0 else -1
+                points = [
+                    (jet['x'] + direction * 20, jet['y']),
+                    (jet['x'] - direction * 15, jet['y'] - 8),
+                    (jet['x'] - direction * 15, jet['y'] + 8)
+                ]
+                pygame.draw.polygon(self.screen, jet_color, points)
+        
+        # Check for bullet-jet collisions
+        jets_to_remove = []
+        projectiles_to_remove = []
+        
+        for proj_idx, proj in enumerate(self._projectiles):
+            for jet_idx, jet in enumerate(self._jets):
+                # Check if bullet hits enemy jet
+                if proj['team'] != jet['team']:
+                    # Simple collision detection
+                    if abs(proj['x'] - jet['x']) < 30 and abs(proj['y'] - jet['y']) < 20:
+                        # Create realistic explosion with particles
+                        self._explosions.append({
+                            'x': jet['x'],
+                            'y': jet['y'],
+                            'frame': 0,
+                            'particles': []  # Individual debris particles
+                        })
+                        
+                        # Create debris particles
+                        for _ in range(15):
+                            self._explosions[-1]['particles'].append({
+                                'x': jet['x'],
+                                'y': jet['y'],
+                                'vx': random.uniform(-8, 8),
+                                'vy': random.uniform(-8, 8),
+                                'size': random.uniform(2, 5),
+                                'life': random.randint(20, 40),
+                                'color_index': random.randint(0, 2)  # Different colors for variety
+                            })
+                        # Mark jet for respawn
+                        if jet_idx not in jets_to_remove:
+                            jets_to_remove.append(jet_idx)
+                        if proj_idx not in projectiles_to_remove:
+                            projectiles_to_remove.append(proj_idx)
+        
+        # Respawn destroyed jets with delay
+        for jet_idx in sorted(jets_to_remove, reverse=True):
+            jet = self._jets[jet_idx]
+            # Move jet far off screen and add respawn delay
+            if jet['speed'] > 0:
+                jet['x'] = -800  # Far off screen
+            else:
+                jet['x'] = config.WIDTH + 800  # Far off screen
+            jet['y'] = random.randint(150, 250)
+            jet['target_y'] = jet['y']
+            jet['respawn_delay'] = 480  # 8 second respawn delay after destruction
+        
+        # Remove hit projectiles
+        for idx in sorted(projectiles_to_remove, reverse=True):
+            if idx < len(self._projectiles):
+                del self._projectiles[idx]
+        
+        # Update and draw realistic explosions
+        explosions_to_remove = []
+        for i, explosion in enumerate(self._explosions):
+            explosion['frame'] += 1
+            
+            # Draw explosion with particle system
+            if explosion['frame'] < 45:
+                # Update and draw particles
+                particles_to_remove = []
+                for p_idx, particle in enumerate(explosion['particles']):
+                    # Update particle physics
+                    particle['x'] += particle['vx']
+                    particle['y'] += particle['vy']
+                    particle['vy'] += 0.3  # Gravity
+                    particle['vx'] *= 0.98  # Air resistance
+                    particle['life'] -= 1
+                    
+                    if particle['life'] > 0:
+                        # Particle colors: yellow -> orange -> red -> dark red -> smoke
+                        color_progression = [
+                            (255, 255, 200),  # White-yellow (hot)
+                            (255, 220, 0),    # Yellow
+                            (255, 150, 0),    # Orange
+                            (255, 50, 0),     # Red
+                            (100, 30, 30)     # Dark red/smoke
+                        ]
+                        
+                        # Calculate color based on life
+                        life_ratio = particle['life'] / 40
+                        color_idx = min(4, int((1 - life_ratio) * 5))
+                        color = color_progression[color_idx]
+                        
+                        # Calculate alpha fade
+                        alpha = int(255 * life_ratio)
+                        
+                        # Draw particle with glow
+                        particle_size = particle['size'] * (0.5 + life_ratio * 0.5)
+                        
+                        # Glow effect
+                        glow_size = particle_size * 2
+                        glow_surf = pygame.Surface((int(glow_size * 4), int(glow_size * 4)), pygame.SRCALPHA)
+                        pygame.draw.circle(glow_surf, (*color, min(alpha // 3, 50)), 
+                                         (int(glow_size * 2), int(glow_size * 2)), int(glow_size))
+                        self.screen.blit(glow_surf, (particle['x'] - glow_size * 2, particle['y'] - glow_size * 2))
+                        
+                        # Main particle
+                        pygame.draw.circle(self.screen, (*color, alpha), 
+                                         (int(particle['x']), int(particle['y'])), int(particle_size))
+                    else:
+                        particles_to_remove.append(p_idx)
+                
+                # Remove dead particles
+                for idx in sorted(particles_to_remove, reverse=True):
+                    del explosion['particles'][idx]
+                
+                # Central flash for first few frames
+                if explosion['frame'] < 5:
+                    flash_size = 30 - explosion['frame'] * 5
+                    flash_alpha = 255 - explosion['frame'] * 50
+                    flash_surf = pygame.Surface((flash_size * 4, flash_size * 4), pygame.SRCALPHA)
+                    pygame.draw.circle(flash_surf, (255, 255, 255, flash_alpha), 
+                                     (flash_size * 2, flash_size * 2), flash_size)
+                    self.screen.blit(flash_surf, (explosion['x'] - flash_size * 2, explosion['y'] - flash_size * 2))
+                
+                # Smoke trail effect for later frames
+                if explosion['frame'] > 10:
+                    smoke_alpha = max(0, 100 - (explosion['frame'] - 10) * 3)
+                    smoke_size = 20 + (explosion['frame'] - 10)
+                    smoke_surf = pygame.Surface((smoke_size * 2, smoke_size * 2), pygame.SRCALPHA)
+                    pygame.draw.circle(smoke_surf, (80, 80, 80, smoke_alpha), 
+                                     (smoke_size, smoke_size), smoke_size)
+                    self.screen.blit(smoke_surf, (explosion['x'] - smoke_size, explosion['y'] - smoke_size))
+            else:
+                explosions_to_remove.append(i)
+        
+        # Remove finished explosions
+        for idx in sorted(explosions_to_remove, reverse=True):
+            del self._explosions[idx]
+        
+        # Update and draw remaining projectiles
+        self._projectiles = [p for p in self._projectiles 
+                            if -50 < p['x'] < config.WIDTH + 50 and -50 < p['y'] < config.HEIGHT + 50]
+        
+        for proj in self._projectiles:
+            proj['x'] += proj['vx']
+            proj['y'] += proj['vy']
+            
+            # Draw tracer bullets (yellow/orange like real gunfire)
+            tracer_color = (255, 220, 100)  # Yellow tracer color
+            tracer_glow = (255, 150, 0)  # Orange glow
+            
+            # Draw tracer trail
+            pygame.draw.line(self.screen, tracer_color, 
+                           (proj['x'], proj['y']), 
+                           (proj['x'] - proj['vx'], proj['y'] - proj['vy']), 1)
+            
+            # Draw bullet point with glow
+            pygame.draw.circle(self.screen, tracer_glow, (int(proj['x']), int(proj['y'])), 2)
+            pygame.draw.circle(self.screen, tracer_color, (int(proj['x']), int(proj['y'])), 1)
+        
+        # Clean title
+        title_text = "SELECT GAME MODE"
+        title_y = 80
+        
+        # Background glow for title
+        for i in range(4, 0, -1):
+            glow_alpha = 20 - i * 4
+            glow_color = (100, 150, 255)
+            glow_surf = pygame.Surface((800, 100), pygame.SRCALPHA)
+            glow_text = self.pixel_fonts['huge'].render(title_text, True, (*glow_color, glow_alpha))
+            glow_rect = glow_text.get_rect(center=(400, 50))
+            glow_surf.blit(glow_text, glow_rect.move(0, i))
+            title_surf_rect = glow_surf.get_rect(center=(config.WIDTH // 2, title_y))
+            self.screen.blit(glow_surf, title_surf_rect)
+        
+        # Main title with gradient effect
+        title_surface = self.pixel_fonts['huge'].render(title_text, True, (255, 255, 255))
+        title_rect = title_surface.get_rect(center=(config.WIDTH // 2, title_y))
+        self.screen.blit(title_surface, title_rect)
+        
+        # Futuristic mode cards with unique designs
         modes = [
             {
                 "key": "classic",
                 "name": "CLASSIC",
-                "desc": "Traditional chess with powerups",
-                "icon": "C",
-                "color": (70, 150, 70)
+                "subtitle": "MASTER THE FUNDAMENTALS",
+                "desc": ["• Strategic warfare", "• Earn powerups", "• Traditional rules"],
+                "icon": "♔",
+                "color": (0, 255, 136),
+                "bg_gradient": [(0, 40, 30), (0, 80, 50)],
+                "glow_color": (0, 255, 100)
             },
             {
                 "key": "story",
-                "name": "STORY MODE",
-                "desc": "Epic campaign with special battles",
-                "icon": "S",
-                "color": (150, 100, 50)
+                "name": "CAMPAIGN",
+                "subtitle": "EPIC STORYLINE",
+                "desc": ["• 25+ unique battles", "• Boss encounters", "• Unlock rewards"],
+                "icon": "⚔",
+                "color": (255, 140, 0),
+                "bg_gradient": [(60, 30, 0), (120, 60, 0)],
+                "glow_color": (255, 180, 0),
+                "recommended": True
             },
             {
                 "key": "freeplay",
-                "name": "FREE ROAM",
-                "desc": "Unlimited powerups for testing",
-                "icon": "F",
-                "color": (100, 100, 200)
+                "name": "SANDBOX",
+                "subtitle": "UNLIMITED CHAOS",
+                "desc": ["• Infinite resources", "• Test strategies", "• No restrictions"],
+                "icon": "∞",
+                "color": (147, 0, 255),
+                "bg_gradient": [(30, 0, 60), (60, 0, 120)],
+                "glow_color": (200, 100, 255)
             }
         ]
         
-        # Draw mode buttons as cards
-        card_width = 200
-        card_height = 250
+        # Larger, more dramatic cards
+        card_width = 280
+        card_height = 380
         cards_per_row = 3
-        spacing = 30
+        spacing = 50
         
         start_x = (config.WIDTH - (cards_per_row * card_width + (cards_per_row - 1) * spacing)) // 2
-        start_y = 200
+        start_y = 160
         
         mode_buttons.clear()
         
@@ -305,68 +692,131 @@ class Renderer:
             rect = pygame.Rect(x, y, card_width, card_height)
             mode_buttons[mode["key"]] = rect
             
-            # Check hover
+            # Check hover with animation
             is_hover = rect.collidepoint(mouse_pos)
+            hover_offset = -15 if is_hover else 0
+            animated_rect = rect.move(0, hover_offset)
             
-            # Draw card
-            card_color = mode["color"] if not is_hover else tuple(min(255, c + 30) for c in mode["color"])
-            pygame.draw.rect(self.screen, card_color, rect, border_radius=15)
-            pygame.draw.rect(self.screen, config.WHITE, rect, 3, border_radius=15)
+            # Create dramatic card surface
+            card_surface = pygame.Surface((card_width, card_height), pygame.SRCALPHA)
             
-            # Icon (using text instead of emoji)
-            icon_text = self.pixel_fonts['huge'].render(mode["icon"], True, config.WHITE)
-            icon_rect = icon_text.get_rect(center=(rect.centerx, rect.y + 60))
+            # Gradient background
+            gradient_colors = mode['bg_gradient']
+            for y_offset in range(card_height):
+                factor = y_offset / card_height
+                r = int(gradient_colors[0][0] + (gradient_colors[1][0] - gradient_colors[0][0]) * factor)
+                g = int(gradient_colors[0][1] + (gradient_colors[1][1] - gradient_colors[0][1]) * factor)
+                b = int(gradient_colors[0][2] + (gradient_colors[1][2] - gradient_colors[0][2]) * factor)
+                alpha = 230 if is_hover else 200
+                pygame.draw.line(card_surface, (r, g, b, alpha), (0, y_offset), (card_width, y_offset))
+            
+            # Neon border effect
+            if is_hover:
+                # Animated outer glow
+                pulse = abs(math.sin(current_time * 0.003 + i)) * 0.5 + 0.5
+                for glow_size in range(4, 0, -1):
+                    glow_alpha = int((30 - glow_size * 6) * pulse)
+                    glow_surf = pygame.Surface((card_width + glow_size*4, card_height + glow_size*4), pygame.SRCALPHA)
+                    pygame.draw.rect(glow_surf, (*mode['glow_color'], glow_alpha), 
+                                   glow_surf.get_rect(), 3, border_radius=30)
+                    glow_rect = glow_surf.get_rect(center=(card_width//2, card_height//2))
+                    card_surface.blit(glow_surf, (glow_rect.x, glow_rect.y))
+            
+            # Smoother rounded corners with larger radius
+            border_color = mode['glow_color'] if is_hover else mode['color']
+            pygame.draw.rect(card_surface, (*border_color, 255), 
+                           card_surface.get_rect(), 3, border_radius=25)
+            
+            # Inner accent line with smooth corners
+            inner_rect = card_surface.get_rect().inflate(-8, -8)
+            pygame.draw.rect(card_surface, (*border_color, 80), inner_rect, 1, border_radius=25)
+            
+            self.screen.blit(card_surface, animated_rect)
+            
+            # Large dramatic icon with glow
+            icon_y = animated_rect.y + 70
+            icon_font_size = 72 if is_hover else 64
+            try:
+                icon_font = pygame.font.Font(None, icon_font_size)
+            except:
+                icon_font = self.pixel_fonts['huge']
+            
+            # Icon glow layers
+            if is_hover:
+                for layer in range(3, 0, -1):
+                    glow_alpha = 40 - layer * 10
+                    icon_glow = icon_font.render(mode['icon'], True, mode['glow_color'])
+                    icon_glow.set_alpha(glow_alpha)
+                    for dx, dy in [(0, layer), (0, -layer), (layer, 0), (-layer, 0)]:
+                        glow_rect = icon_glow.get_rect(center=(animated_rect.centerx + dx, icon_y + dy))
+                        self.screen.blit(icon_glow, glow_rect)
+            
+            # Main icon
+            icon_text = icon_font.render(mode['icon'], True, (255, 255, 255))
+            icon_rect = icon_text.get_rect(center=(animated_rect.centerx, icon_y))
             self.screen.blit(icon_text, icon_rect)
             
-            # Name
-            name_text = self.pixel_fonts['medium'].render(mode["name"], True, config.WHITE)
-            name_rect = name_text.get_rect(center=(rect.centerx, rect.y + 120))
+            # Mode name with glow
+            name_y = animated_rect.y + 140
+            name_color = mode['glow_color'] if is_hover else (255, 255, 255)
+            name_text = self.pixel_fonts['large'].render(mode['name'], True, name_color)
+            name_rect = name_text.get_rect(center=(animated_rect.centerx, name_y))
             self.screen.blit(name_text, name_rect)
             
-            # Description (word wrap)
-            desc_lines = self._wrap_text(mode["desc"], self.pixel_fonts['small'], card_width - 20)
-            y_offset = rect.y + 160
-            for line in desc_lines:
-                line_surface = self.pixel_fonts['small'].render(line, True, (200, 200, 200))
-                line_rect = line_surface.get_rect(center=(rect.centerx, y_offset))
-                self.screen.blit(line_surface, line_rect)
-                y_offset += 25
+            # Subtitle
+            subtitle_y = name_y + 30
+            subtitle_text = self.pixel_fonts['small'].render(mode['subtitle'], True, (180, 180, 180))
+            subtitle_rect = subtitle_text.get_rect(center=(animated_rect.centerx, subtitle_y))
+            self.screen.blit(subtitle_text, subtitle_rect)
+            
+            # Glowing divider line
+            divider_y = subtitle_y + 25
+            divider_color = (*mode['color'], 120)
+            pygame.draw.line(self.screen, divider_color,
+                           (animated_rect.x + 50, divider_y),
+                           (animated_rect.x + card_width - 50, divider_y), 2)
+            
+            # Feature list
+            feature_y = divider_y + 35
+            for feature in mode['desc']:
+                feature_color = (220, 220, 220) if is_hover else (200, 200, 200)
+                feature_text = self.pixel_fonts['small'].render(feature, True, feature_color)
+                feature_rect = feature_text.get_rect(center=(animated_rect.centerx, feature_y))
+                self.screen.blit(feature_text, feature_rect)
+                feature_y += 30
                 
-            # Add glowing "RECOMMENDED" text under Story Mode
-            if mode["key"] == "story":
-                current_time = pygame.time.get_ticks()
-                # Create pulsing glow effect
-                pulse = (math.sin(current_time / 300) + 1) / 2  # Value between 0 and 1
-                glow_intensity = 0.3 + pulse * 0.4  # Gentler pulsing between 0.3 and 0.7
+            # Special animated badge for recommended mode
+            if mode.get("recommended"):
+                badge_y = animated_rect.y + card_height + 20
+                pulse = abs(math.sin(current_time * 0.004)) * 0.6 + 0.4
                 
-                # Draw glowing background
-                rec_text = "⭐ RECOMMENDED ⭐"
-                rec_font = self.pixel_fonts['small']
+                # Glowing badge
+                badge_width = 160
+                badge_height = 35
                 
-                # Draw darker background box first
-                text_width = rec_font.size(rec_text)[0]
-                text_height = rec_font.size(rec_text)[1]
-                bg_rect = pygame.Rect(rect.centerx - text_width//2 - 15, rect.bottom + 10, 
-                                    text_width + 30, text_height + 10)
-                pygame.draw.rect(self.screen, (20, 20, 30), bg_rect, border_radius=5)
-                
-                # Draw subtle glow effect
-                for i in range(2):
-                    glow_surf = pygame.Surface((bg_rect.width + 10 + i*8, bg_rect.height + 10 + i*8), pygame.SRCALPHA)
-                    glow_alpha = int(60 * glow_intensity / (i + 1))
-                    glow_color = (100, 200, 255, glow_alpha)  # Soft blue glow instead of yellow
-                    pygame.draw.rect(glow_surf, glow_color, glow_surf.get_rect(), border_radius=8)
-                    glow_rect = glow_surf.get_rect(center=bg_rect.center)
+                # Multiple glow layers
+                for i in range(3, 0, -1):
+                    glow_surf = pygame.Surface((badge_width + i*12, badge_height + i*12), pygame.SRCALPHA)
+                    glow_alpha = int((25 - i*7) * pulse)
+                    pygame.draw.rect(glow_surf, (255, 200, 0, glow_alpha), 
+                                   glow_surf.get_rect(), border_radius=20)
+                    glow_rect = glow_surf.get_rect(center=(animated_rect.centerx, badge_y))
                     self.screen.blit(glow_surf, glow_rect)
                 
-                # Draw border
-                border_alpha = int(180 + 75 * pulse)
-                pygame.draw.rect(self.screen, (100, 200, 255, border_alpha), bg_rect, 2, border_radius=5)
+                # Main badge background
+                badge_surf = pygame.Surface((badge_width, badge_height), pygame.SRCALPHA)
+                pygame.draw.rect(badge_surf, (255, 200, 0, 220), badge_surf.get_rect(), 
+                               border_radius=17)
+                pygame.draw.rect(badge_surf, (255, 255, 200, 255), badge_surf.get_rect(), 
+                               2, border_radius=17)
+                badge_rect = badge_surf.get_rect(center=(animated_rect.centerx, badge_y))
+                self.screen.blit(badge_surf, badge_rect)
                 
-                # Draw the text itself in white for better contrast
-                rec_surface = rec_font.render(rec_text, True, (255, 255, 255))
-                rec_rect = rec_surface.get_rect(center=(rect.centerx, rect.bottom + 20))
-                self.screen.blit(rec_surface, rec_rect)
+                # Badge text with stars
+                badge_text = "★ RECOMMENDED ★"
+                text_surf = self.pixel_fonts['small'].render(badge_text, True, (50, 50, 50))
+                text_rect = text_surf.get_rect(center=(animated_rect.centerx, badge_y))
+                self.screen.blit(text_surf, text_rect)
                 
         # Back button
         self._draw_button(back_button, "BACK", (150, 70, 70), (200, 100, 100), mouse_pos)
@@ -901,14 +1351,35 @@ class Renderer:
         return lines
         
     def _draw_button(self, rect, text, base_color, hover_color, mouse_pos):
-        """Helper method to draw a button."""
+        """Helper method to draw a modern minimal button."""
         is_hover = rect.collidepoint(mouse_pos)
-        color = hover_color if is_hover else base_color
         
-        pygame.draw.rect(self.screen, color, rect, border_radius=10)
-        pygame.draw.rect(self.screen, config.WHITE, rect, 3, border_radius=10)
+        # Create button surface with alpha
+        button_surface = pygame.Surface((rect.width, rect.height), pygame.SRCALPHA)
         
-        text_surface = self.pixel_fonts['medium'].render(text, True, config.WHITE)
+        if is_hover:
+            # Hover state - filled with subtle glow
+            pygame.draw.rect(button_surface, (*hover_color, 220), button_surface.get_rect(), 
+                           border_radius=25)
+            # Subtle outer glow
+            for i in range(1, 3):
+                glow_alpha = 30 - i * 10
+                glow_rect = button_surface.get_rect().inflate(i*4, i*4)
+                pygame.draw.rect(button_surface, (*hover_color, glow_alpha), glow_rect, 
+                               2, border_radius=25)
+        else:
+            # Normal state - transparent with border
+            pygame.draw.rect(button_surface, (*base_color, 40), button_surface.get_rect(), 
+                           border_radius=25)
+            pygame.draw.rect(button_surface, (*base_color, 180), button_surface.get_rect(), 
+                           2, border_radius=25)
+        
+        # Blit button to screen
+        self.screen.blit(button_surface, rect)
+        
+        # Text with better contrast
+        text_color = (255, 255, 255) if is_hover else (230, 230, 230)
+        text_surface = self.pixel_fonts['medium'].render(text, True, text_color)
         text_rect = text_surface.get_rect(center=rect.center)
         self.screen.blit(text_surface, text_rect)
         
@@ -2301,43 +2772,255 @@ class Renderer:
             self._draw_button(buttons['back'], "BACK", (150, 70, 70), (200, 100, 100), mouse_pos)
             
         elif screen_type == config.SCREEN_BETA:
-            text = self.pixel_fonts['huge'].render("BETA TEST", True, config.WHITE)
-            rect = text.get_rect(center=(game_center_x, config.GAME_OFFSET_Y + 80 * config.SCALE))
+            # Animated background particles
+            current_time = pygame.time.get_ticks()
+            
+            # Draw floating particles in background
+            if not hasattr(self, '_mode_particles'):
+                self._mode_particles = []
+                for _ in range(30):
+                    self._mode_particles.append({
+                        'x': random.randint(0, config.WIDTH),
+                        'y': random.randint(0, config.HEIGHT),
+                        'size': random.randint(2, 5),
+                        'speed': random.uniform(0.5, 2),
+                        'opacity': random.randint(30, 100)
+                    })
+            
+            # Update and draw particles
+            for particle in self._mode_particles:
+                particle['y'] -= particle['speed']
+                if particle['y'] < -10:
+                    particle['y'] = config.HEIGHT + 10
+                    particle['x'] = random.randint(0, config.WIDTH)
+                
+                # Glow effect
+                glow_surf = pygame.Surface((particle['size']*4, particle['size']*4), pygame.SRCALPHA)
+                pygame.draw.circle(glow_surf, (100, 200, 255, particle['opacity']//3), 
+                                 (particle['size']*2, particle['size']*2), particle['size']*2)
+                self.screen.blit(glow_surf, (particle['x'] - particle['size']*2, particle['y'] - particle['size']*2))
+                pygame.draw.circle(self.screen, (200, 230, 255, particle['opacity']), 
+                                 (int(particle['x']), int(particle['y'])), particle['size'])
+            
+            # Animated title with glow effect
+            title_text = "CHOOSE YOUR PATH"
+            title_y = config.GAME_OFFSET_Y + 80 * config.SCALE
+            
+            # Create glowing title effect
+            for i in range(3, 0, -1):
+                glow_alpha = 40 - i * 10
+                glow_color = (100 + i*20, 150 + i*20, 255)
+                glow_text = self.pixel_fonts['huge'].render(title_text, True, glow_color)
+                glow_text.set_alpha(glow_alpha)
+                glow_rect = glow_text.get_rect(center=(game_center_x, title_y))
+                self.screen.blit(glow_text, glow_rect.move(0, i))
+            
+            # Main title
+            text = self.pixel_fonts['huge'].render(title_text, True, (255, 255, 255))
+            rect = text.get_rect(center=(game_center_x, title_y))
             self.screen.blit(text, rect)
             
-            y = config.GAME_OFFSET_Y + 160 * config.SCALE
-            beta_text = [
-                "Welcome to the Checkmate Protocol Beta!",
-                "",
-                "This is an early test version of the game.",
-                "The full game will include a complete story mode",
-                "after the beta testing phase is completed.",
-                "",
-                "Please help us improve by:",
-                "• Playing through all difficulty levels",
-                "• Testing different powerups and strategies",
-                "• Trying to find bugs or exploits",
-                "• Providing feedback on game mechanics",
-                "",
-                "Your feedback is invaluable for making",
-                "Checkmate Protocol the best it can be!",
-                "",
-                "Thank you for being a beta tester!"
+            # Futuristic card layout with icons
+            modes = [
+                {
+                    "key": "classic",
+                    "name": "CLASSIC",
+                    "subtitle": "TRADITIONAL WARFARE",
+                    "desc": ["Strategic chess battles", "Earn powerup points", "Master the basics"],
+                    "icon": "♔",  # Chess king
+                    "color": (0, 255, 136),  # Neon green
+                    "hover_color": (50, 255, 156),
+                    "bg_gradient": [(0, 80, 50), (0, 120, 70)]
+                },
+                {
+                    "key": "story",
+                    "name": "CAMPAIGN",
+                    "subtitle": "EPIC STORYLINE",
+                    "desc": ["25+ unique battles", "Boss encounters", "Unlock rewards"],
+                    "icon": "⚔",  # Crossed swords
+                    "color": (255, 140, 0),  # Neon orange
+                    "hover_color": (255, 170, 30),
+                    "bg_gradient": [(120, 60, 0), (180, 90, 0)],
+                    "recommended": True
+                },
+                {
+                    "key": "freeplay",
+                    "name": "SANDBOX",
+                    "subtitle": "UNLIMITED POWER",
+                    "desc": ["Infinite resources", "Test strategies", "Pure chaos"],
+                    "icon": "∞",  # Infinity
+                    "color": (147, 0, 255),  # Neon purple
+                    "hover_color": (177, 50, 255),
+                    "bg_gradient": [(60, 0, 100), (90, 0, 150)]
+                }
             ]
             
-            for line in beta_text:
-                if line:
-                    if line.startswith("Welcome") or line.startswith("Thank you"):
-                        text_surface = self.pixel_fonts['medium'].render(line, True, (220, 190, 130))
-                    elif line.startswith("•"):
-                        text_surface = self.pixel_fonts['small'].render(line, True, (150, 200, 150))
-                    else:
-                        text_surface = self.pixel_fonts['small'].render(line, True, (200, 200, 200))
-                    rect = text_surface.get_rect(center=(game_center_x, y))
-                    self.screen.blit(text_surface, rect)
-                y += 30 * config.SCALE
+            # Larger, more dramatic cards
+            card_width = int(280 * config.SCALE)
+            card_height = int(380 * config.SCALE)
+            card_spacing = int(50 * config.SCALE)
+            total_width = len(modes) * card_width + (len(modes) - 1) * card_spacing
+            start_x = game_center_x - total_width // 2
+            card_y = config.GAME_OFFSET_Y + 180 * config.SCALE
             
-            self._draw_button(buttons['back'], "BACK", (150, 70, 70), (200, 100, 100), mouse_pos)
+            for i, mode in enumerate(modes):
+                card_x = start_x + i * (card_width + card_spacing)
+                card_rect = pygame.Rect(card_x, card_y, card_width, card_height)
+                
+                # Check hover with animation
+                is_hover = card_rect.collidepoint(mouse_pos)
+                hover_offset = -10 if is_hover else 0
+                animated_rect = card_rect.move(0, hover_offset)
+                
+                # Create dramatic card with depth
+                card_surface = pygame.Surface((card_width, card_height), pygame.SRCALPHA)
+                
+                # Dark gradient background
+                gradient_colors = mode['bg_gradient']
+                for y_offset in range(card_height):
+                    factor = y_offset / card_height
+                    r = int(gradient_colors[0][0] + (gradient_colors[1][0] - gradient_colors[0][0]) * factor)
+                    g = int(gradient_colors[0][1] + (gradient_colors[1][1] - gradient_colors[0][1]) * factor)
+                    b = int(gradient_colors[0][2] + (gradient_colors[1][2] - gradient_colors[0][2]) * factor)
+                    alpha = 220 if is_hover else 180
+                    pygame.draw.line(card_surface, (r, g, b, alpha), (0, y_offset), (card_width, y_offset))
+                
+                # Neon border effect
+                if is_hover:
+                    # Outer glow
+                    for glow_size in range(5, 0, -1):
+                        glow_alpha = 30 - glow_size * 5
+                        glow_rect = card_surface.get_rect().inflate(glow_size*2, glow_size*2)
+                        pygame.draw.rect(card_surface, (*mode['hover_color'], glow_alpha), 
+                                       glow_rect, 3, border_radius=20)
+                
+                # Main border
+                border_color = mode['hover_color'] if is_hover else mode['color']
+                pygame.draw.rect(card_surface, (*border_color, 255), 
+                               card_surface.get_rect(), 3, border_radius=15)
+                
+                # Inner glow line
+                inner_rect = card_surface.get_rect().inflate(-6, -6)
+                pygame.draw.rect(card_surface, (*border_color, 100), inner_rect, 1, border_radius=15)
+                
+                self.screen.blit(card_surface, animated_rect)
+                
+                # Large dramatic icon
+                icon_y = animated_rect.y + int(60 * config.SCALE)
+                
+                # Icon with glow effect
+                icon_color = mode['hover_color'] if is_hover else mode['color']
+                
+                # Create icon glow
+                if 'huge' in self.pixel_fonts:
+                    icon_font = self.pixel_fonts['huge']
+                else:
+                    icon_font = pygame.font.Font(None, int(80 * config.SCALE))
+                
+                # Multiple layers for glow effect
+                for glow_layer in range(3, 0, -1):
+                    glow_alpha = 60 - glow_layer * 15
+                    glow_size = glow_layer * 2
+                    icon_glow = icon_font.render(mode['icon'], True, icon_color)
+                    icon_glow.set_alpha(glow_alpha)
+                    for dx in range(-glow_size, glow_size+1):
+                        for dy in range(-glow_size, glow_size+1):
+                            if abs(dx) == glow_size or abs(dy) == glow_size:
+                                glow_rect = icon_glow.get_rect(center=(card_x + card_width // 2 + dx, icon_y + dy))
+                                self.screen.blit(icon_glow, glow_rect)
+                
+                # Main icon
+                icon_text = icon_font.render(mode['icon'], True, (255, 255, 255))
+                icon_rect = icon_text.get_rect(center=(card_x + card_width // 2, icon_y))
+                self.screen.blit(icon_text, icon_rect)
+                
+                # Mode name with futuristic style
+                name_y = animated_rect.y + int(140 * config.SCALE)
+                name_color = mode['hover_color'] if is_hover else mode['color']
+                name_text = self.pixel_fonts['large'].render(mode['name'], True, name_color)
+                name_rect = name_text.get_rect(center=(card_x + card_width // 2, name_y))
+                self.screen.blit(name_text, name_rect)
+                
+                # Subtitle
+                subtitle_y = name_y + int(30 * config.SCALE)
+                subtitle_text = self.pixel_fonts['small'].render(mode['subtitle'], True, (180, 180, 180))
+                subtitle_rect = subtitle_text.get_rect(center=(card_x + card_width // 2, subtitle_y))
+                self.screen.blit(subtitle_text, subtitle_rect)
+                
+                # Divider line
+                divider_y = subtitle_y + int(25 * config.SCALE)
+                divider_color = (*mode['color'], 100)
+                pygame.draw.line(self.screen, divider_color,
+                               (card_x + card_width // 4, divider_y),
+                               (card_x + 3 * card_width // 4, divider_y), 2)
+                
+                # Feature list with bullets
+                feature_y = divider_y + int(30 * config.SCALE)
+                for feature in mode['desc']:
+                    # Bullet point
+                    bullet_color = mode['color'] if is_hover else (150, 150, 150)
+                    pygame.draw.circle(self.screen, bullet_color,
+                                     (card_x + int(40 * config.SCALE), feature_y),
+                                     int(3 * config.SCALE))
+                    
+                    # Feature text
+                    feature_text = self.pixel_fonts['small'].render(feature, True, (220, 220, 220))
+                    feature_rect = feature_text.get_rect(left=card_x + int(55 * config.SCALE), 
+                                                        centery=feature_y)
+                    self.screen.blit(feature_text, feature_rect)
+                    feature_y += int(35 * config.SCALE)
+                
+                # Special badges and effects
+                if mode.get('recommended'):
+                    # Animated recommended badge
+                    badge_y = animated_rect.y + card_height - int(45 * config.SCALE)
+                    pulse = abs(math.sin(current_time * 0.003)) * 0.5 + 0.5
+                    
+                    # Glowing badge background
+                    badge_width = int(140 * config.SCALE)
+                    badge_height = int(35 * config.SCALE)
+                    
+                    # Outer glow
+                    for i in range(3, 0, -1):
+                        glow_surf = pygame.Surface((badge_width + i*10, badge_height + i*10), pygame.SRCALPHA)
+                        glow_alpha = int((20 - i*5) * pulse)
+                        pygame.draw.rect(glow_surf, (255, 200, 0, glow_alpha), 
+                                       glow_surf.get_rect(), border_radius=20)
+                        glow_rect = glow_surf.get_rect(center=(card_x + card_width // 2, badge_y))
+                        self.screen.blit(glow_surf, glow_rect)
+                    
+                    # Main badge
+                    badge_surf = pygame.Surface((badge_width, badge_height), pygame.SRCALPHA)
+                    pygame.draw.rect(badge_surf, (255, 200, 0, 200), badge_surf.get_rect(), 
+                                   border_radius=17)
+                    pygame.draw.rect(badge_surf, (255, 255, 200, 255), badge_surf.get_rect(), 
+                                   2, border_radius=17)
+                    badge_rect = badge_surf.get_rect(center=(card_x + card_width // 2, badge_y))
+                    self.screen.blit(badge_surf, badge_rect)
+                    
+                    # Badge text with star icons
+                    star = "★"
+                    badge_text = f"{star} RECOMMENDED {star}"
+                    text_surf = self.pixel_fonts['tiny'].render(badge_text, True, (50, 50, 50))
+                    text_rect = text_surf.get_rect(center=(card_x + card_width // 2, badge_y))
+                    self.screen.blit(text_surf, text_rect)
+            
+            # Instruction text at bottom
+            instruction_y = config.HEIGHT - int(80 * config.SCALE)
+            instruction_text = "CLICK TO SELECT YOUR DESTINY"
+            inst_alpha = int(abs(math.sin(current_time * 0.002)) * 150 + 105)
+            inst_color = (150, 200, 255, inst_alpha)
+            
+            # Create instruction surface for alpha
+            inst_surf = pygame.Surface((config.WIDTH, 30), pygame.SRCALPHA)
+            inst_text_render = self.pixel_fonts['medium'].render(instruction_text, True, (150, 200, 255))
+            inst_text_render.set_alpha(inst_alpha)
+            inst_rect = inst_text_render.get_rect(center=(config.WIDTH // 2, 15))
+            inst_surf.blit(inst_text_render, inst_rect)
+            self.screen.blit(inst_surf, (0, instruction_y))
+            
+            # Clean back button
+            self._draw_button(buttons['back'], "BACK", (80, 80, 80), (120, 120, 120), mouse_pos)
             
     def draw_tutorial(self, tutorial_page_data, tutorial_buttons, mouse_pos):
         """Draw tutorial screen with navigation."""
