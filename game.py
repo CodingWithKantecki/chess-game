@@ -57,6 +57,8 @@ class ChessGame:
         
         # Pass assets reference to powerup system
         self.powerup_system.assets = self.assets
+        # Pass game reference for tutorial checks
+        self.powerup_system.game = self
         
         # Pass assets reference to renderer
         self.renderer.assets = self.assets
@@ -832,6 +834,7 @@ class ChessGame:
                         self.board.reset()
                         self.powerup_system = PowerupSystem()
                         self.powerup_system.assets = self.assets
+                        self.powerup_system.game = self
                         # Give unlimited points for free roam mode
                         self.powerup_system.points = {"white": 99999, "black": 99999}
                         # Mark as free roam mode for powerup system
@@ -1105,6 +1108,7 @@ class ChessGame:
                                         self.board.reset()
                                         self.powerup_system = PowerupSystem()
                                         self.powerup_system.assets = self.assets
+                                        self.powerup_system.game = self
                                         self.board.set_powerup_system(self.powerup_system)
                                         self.powerup_renderer.powerup_system = self.powerup_system
                                         
@@ -1137,7 +1141,8 @@ class ChessGame:
                         # Regular restart (same battle or non-story mode)
                         self.board.reset()
                         self.powerup_system = PowerupSystem()  # Reset powerup system
-                        self.powerup_system.assets = self.assets  # Pass assets reference
+                        self.powerup_system.assets = self.assets
+                        self.powerup_system.game = self  # Pass assets reference
                         self.board.set_powerup_system(self.powerup_system)
                         self.powerup_renderer.powerup_system = self.powerup_system
                         self.victory_processed = False  # Reset victory flag
@@ -1392,7 +1397,8 @@ class ChessGame:
             elif key == pygame.K_r and self.board.game_over:
                 self.board.reset()
                 self.powerup_system = PowerupSystem()  # Reset powerup system
-                self.powerup_system.assets = self.assets  # Pass assets reference
+                self.powerup_system.assets = self.assets
+                self.powerup_system.game = self  # Pass assets reference
                 self.board.set_powerup_system(self.powerup_system)
                 self.powerup_renderer.powerup_system = self.powerup_system
                 self.victory_processed = False  # Reset victory flag
@@ -1509,7 +1515,8 @@ class ChessGame:
                         was_freeplay = (self.current_mode == "freeplay")
                         
                         self.powerup_system = PowerupSystem()  # Reset powerup system
-                        self.powerup_system.assets = self.assets  # Pass assets reference
+                        self.powerup_system.assets = self.assets
+                        self.powerup_system.game = self  # Pass assets reference
                         
                         # Restore freeplay mode settings if needed
                         if was_freeplay:
@@ -1683,11 +1690,16 @@ class ChessGame:
                                 tutorial_move = ((4, 1), (4, 3))  # e7 to e5
                                 # Increment AI move index
                                 self.tutorial.ai_move_index += 1
-                                # Handle tutorial AI move
-                                if hasattr(self.tutorial, 'handle_ai_move'):
-                                    self.tutorial.handle_ai_move()
-                                # Execute the move
-                                self.board.start_move(1, 4, 3, 4)  # row, col format
+                                # Validate that e7-e5 is legal
+                                legal_moves = self.board.get_legal_moves(1, 4)  # e7 = row 1, col 4
+                                if (3, 4) in legal_moves:  # e5 = row 3, col 4
+                                    # Handle tutorial AI move
+                                    if hasattr(self.tutorial, 'handle_ai_move'):
+                                        self.tutorial.handle_ai_move()
+                                    # Execute the move
+                                    self.board.start_move(1, 4, 3, 4)  # row, col format
+                                else:
+                                    print("Tutorial hardcoded move e7-e5 is not legal")
                                 self.ai.start_thinking = None
                                 return
                         
@@ -1712,6 +1724,19 @@ class ChessGame:
                                         pass  # Found black pawn at e7
                                         from_pos = (4, 1)
                                         to_pos = (4, 3)
+                                
+                                # IMPORTANT: Validate the tutorial move is legal before executing
+                                # This prevents bishops/queens from making illegal captures of the knight
+                                legal_moves = self.board.get_legal_moves(from_pos[1], from_pos[0])
+                                if (to_pos[1], to_pos[0]) not in legal_moves:
+                                    # The scripted move is illegal, fallback to regular AI
+                                    print(f"Tutorial move {from_pos} to {to_pos} is illegal, using regular AI")
+                                    ai_move = self.ai.get_move(self.board)
+                                    if ai_move:
+                                        from_pos, to_pos = ai_move
+                                        self.board.start_move(from_pos[0][0], from_pos[0][1], to_pos[0], to_pos[1])
+                                    self.ai.start_thinking = None
+                                    return
                                 
                                 # Handle tutorial AI move (do this before the move)
                                 self.tutorial.handle_ai_move()
@@ -1756,6 +1781,15 @@ class ChessGame:
                             
                             if ai_move:
                                 from_pos, to_pos = ai_move
+                                
+                                # CRITICAL: Validate AI move is legal before executing
+                                # This prevents any illegal captures including bishops/queens taking knights incorrectly
+                                legal_moves = self.board.get_legal_moves(from_pos[0], from_pos[1])
+                                if (to_pos[0], to_pos[1]) not in legal_moves:
+                                    print(f"AI attempted illegal move from {from_pos} to {to_pos}")
+                                    # Skip this AI turn rather than making an illegal move
+                                    self.ai.start_thinking = None
+                                    return
                                 
                                 # Handle tutorial AI move (do this before the move)
                                 if self.in_tutorial_battle:

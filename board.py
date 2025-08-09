@@ -388,6 +388,28 @@ class ChessBoard:
         
     def start_move(self, from_row, from_col, to_row, to_col):
         """Start animated move."""
+        # SAFETY CHECK: Validate move is legal before starting animation
+        piece = self.get_piece(from_row, from_col)
+        target = self.get_piece(to_row, to_col)
+        
+        if piece:
+            legal_moves = self.get_legal_moves(from_row, from_col)
+            if (to_row, to_col) not in legal_moves:
+                print(f"ILLEGAL MOVE BLOCKED: {piece} from ({from_row},{from_col}) to ({to_row},{to_col})")
+                if target:
+                    print(f"  Attempted to capture: {target}")
+                print(f"  Legal moves for {piece}: {legal_moves}")
+                
+                # Special check for knight moves
+                if piece[1] == 'N':
+                    row_diff = abs(to_row - from_row)
+                    col_diff = abs(to_col - from_col)
+                    print(f"  Knight move check: row_diff={row_diff}, col_diff={col_diff}")
+                    print(f"  Valid knight move pattern: {(row_diff == 2 and col_diff == 1) or (row_diff == 1 and col_diff == 2)}")
+                
+                # Don't execute illegal moves
+                return
+        
         self.animating = True
         self.animation_start = pygame.time.get_ticks()
         self.animation_from = (from_row, from_col)

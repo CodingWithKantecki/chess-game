@@ -751,24 +751,70 @@ class ChessAI:
     def _get_all_legal_moves(self, board):
         """Get all legal moves for black (AI)."""
         moves = []
+        
+        # TUTORIAL FIX: Check if we're in tutorial mode
+        in_tutorial = False
+        tutorial_move_index = 0
+        if hasattr(board, 'powerup_system') and hasattr(board.powerup_system, 'game'):
+            game = board.powerup_system.game
+            if (hasattr(game, 'in_tutorial_battle') and game.in_tutorial_battle and
+                hasattr(game, 'tutorial') and game.tutorial):
+                in_tutorial = True
+                tutorial_move_index = game.tutorial.ai_move_index
+        
         for row in range(8):
             for col in range(8):
                 piece = board.get_piece(row, col)
                 if piece and piece[0] == 'b':
+                    # TUTORIAL FIX: Prevent queen, bishop, and knight from moving in first 3 moves of tutorial
+                    if in_tutorial and tutorial_move_index < 3 and piece[1] in ['Q', 'B', 'N']:
+                        # Skip queen, bishop, and knight moves in first 3 AI moves of tutorial
+                        continue
+                    
                     piece_moves = board.get_legal_moves(row, col)  # Use legal moves to prevent illegal moves
                     for to_row, to_col in piece_moves:
+                        # TUTORIAL FIX: Prevent ANY captures during first 5 moves of tutorial
+                        if in_tutorial and tutorial_move_index < 5:
+                            target = board.get_piece(to_row, to_col)
+                            if target and target[0] == 'w':
+                                # Skip any move that would capture a white piece
+                                continue
+                        
                         moves.append(((row, col), (to_row, to_col)))
         return moves
         
     def _get_all_moves_for_color(self, board, color):
         """Get all legal moves for a specific color."""
         moves = []
+        
+        # TUTORIAL FIX: Check if we're in tutorial mode
+        in_tutorial = False
+        tutorial_move_index = 0
+        if color == 'b' and hasattr(board, 'powerup_system') and hasattr(board.powerup_system, 'game'):
+            game = board.powerup_system.game
+            if (hasattr(game, 'in_tutorial_battle') and game.in_tutorial_battle and
+                hasattr(game, 'tutorial') and game.tutorial):
+                in_tutorial = True
+                tutorial_move_index = game.tutorial.ai_move_index
+        
         for row in range(8):
             for col in range(8):
                 piece = board.get_piece(row, col)
                 if piece and piece[0] == color:
+                    # TUTORIAL FIX: Prevent queen, bishop, and knight from moving in first 3 moves of tutorial
+                    if in_tutorial and tutorial_move_index < 3 and piece[1] in ['Q', 'B', 'N']:
+                        # Skip queen, bishop, and knight moves in first 3 AI moves of tutorial
+                        continue
+                    
                     piece_moves = board.get_legal_moves(row, col)  # Use legal moves to prevent illegal moves
                     for to_row, to_col in piece_moves:
+                        # TUTORIAL FIX: Prevent ANY captures during first 5 moves of tutorial
+                        if in_tutorial and tutorial_move_index < 5:
+                            target = board.get_piece(to_row, to_col)
+                            if target and target[0] == 'w':
+                                # Skip any move that would capture a white piece
+                                continue
+                        
                         moves.append(((row, col), (to_row, to_col)))
         return moves
         

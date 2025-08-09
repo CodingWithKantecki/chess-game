@@ -208,13 +208,16 @@ class TutorialSystem:
             }
         ]
         
-        # STRATEGIC AI SEQUENCE - Simple tutorial moves
+        # STRATEGIC AI SEQUENCE - Simple tutorial moves that NEVER capture
         # Note: These are stored as ((from_col, from_row), (to_col, to_row))
+        # These moves are safe pawn advances that won't threaten your pieces
         self.story_ai_moves = [
             ((4, 1), (4, 3)),      # 1. e7-e5 (black plays e5 in response to e4)
-            ((3, 1), (3, 2)),      # 2. d7-d6 (black develops, e5 pawn stays there)
-            ((0, 1), (0, 2)),      # 3. a7-a6 (safe move after knight captures on e5)
-            ((7, 1), (7, 2)),      # 4. h7-h6 (another safe move during shield demo)
+            ((3, 1), (3, 2)),      # 2. d7-d6 (black develops pawn safely)
+            ((0, 1), (0, 2)),      # 3. a7-a6 (safe edge pawn move)
+            ((7, 1), (7, 2)),      # 4. h7-h6 (safe edge pawn move)
+            ((2, 1), (2, 2)),      # 5. c7-c6 (safe pawn move)
+            ((5, 1), (5, 2)),      # 6. f7-f6 (safe pawn move)
         ]
         
     def _init_scripted_mode(self):
@@ -593,6 +596,17 @@ class TutorialSystem:
                 return move
             elif self.ai_move_index < len(self.ai_move_sequence):
                 move = self.ai_move_sequence[self.ai_move_index]
+                # Check if the piece still exists at the source position
+                # Note: move is stored as ((from_col, from_row), (to_col, to_row))
+                from_col, from_row = move[0]
+                piece = self.board.get_piece(from_row, from_col) if self.board else None
+                
+                # If the piece doesn't exist or is not black, return None to use regular AI
+                if not piece or piece[0] != 'b':
+                    pass  # Scripted piece not found, will use regular AI
+                    self.ai_move_index += 1
+                    return None
+                    
                 pass  # Tutorial AI move
                 self.ai_move_index += 1
                 return move
