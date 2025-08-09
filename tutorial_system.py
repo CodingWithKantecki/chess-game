@@ -49,18 +49,18 @@ class TutorialSystem:
                 "to": (4, 4)
             },
             {
-                "text": "Good! Now click the VISIT ARMS DEALER button.",
+                "text": "Good! Now click the VISIT ARMS DEALER button to get your free Shield powerup!",
                 "action": "visit_arms_dealer",
                 "wait_for": "arms_dealer_visit"
             },
             {
-                "text": "Click on the SHIELD powerup to buy it (1 point).",
+                "text": "Tariq has given you the Shield for free! Click on it to select it.",
                 "action": "buy_shield",
                 "wait_for": "powerup_purchase",
                 "target_powerup": "shield"
             },
             {
-                "text": "Great! You bought your first powerup! All powerups are now unlocked for the tutorial. Click BACK TO GAME to continue.",
+                "text": "Perfect! The Shield is yours! Click BACK TO GAME to use it.",
                 "action": "return_to_game",
                 "wait_for": "return_to_game"
             },
@@ -83,7 +83,7 @@ class TutorialSystem:
                 "wait_for": "none"
             },
             {
-                "text": "Tutorial complete! All powerups unlocked!",
+                "text": "Tutorial complete! You've mastered the Shield powerup!",
                 "action": "complete",
                 "wait_for": "none"
             }
@@ -168,9 +168,9 @@ class TutorialSystem:
                 "completion_text": "Time to meet Tariq!"
             },
             {
-                "instruction": "🎁 TUTORIAL GIFT: Full arsenal unlocked! All weapons free for learning!",
+                "instruction": "🎁 TUTORIAL GIFT: Tariq is giving you the Shield powerup for free! Beat enemies to earn cash for more weapons!",
                 "wait_for": "tutorial_gift_complete",
-                "completion_text": "Arsenal loaded! Ready for tactical warfare!"
+                "completion_text": "Shield unlocked! Win battles to unlock more powerups!"
             },
             {
                 "instruction": "Return to dominate the battlefield! Click 'BACK TO GAME'!",
@@ -250,12 +250,15 @@ class TutorialSystem:
         self.waiting_for_action = False
         self.ai_move_index = 0
         
+        # Reset tutorial powerups at start
+        config.reset_tutorial_powerups()
+        
         # Load appropriate steps based on mode
         if mode == "simple":
             self.steps = self.simple_steps
             self.ai_move_sequence = []
-            # Give player points for tutorial
-            self.powerup_system.points["white"] = 999
+            # Don't give points at start - wait for arms dealer
+            self.powerup_system.points["white"] = 0
             pass
         elif mode == "story":
             self.steps = self.story_steps
@@ -264,8 +267,8 @@ class TutorialSystem:
             powerup_ref = self.board.powerup_system  # Save reference
             self.board.reset()
             self.board.set_powerup_system(powerup_ref)  # Restore reference
-            # Give lots of powerup points for tutorial
-            self.powerup_system.points["white"] = 9999
+            # Don't give points at start - wait for arms dealer
+            self.powerup_system.points["white"] = 0
             self.powerup_system.points["black"] = 0
         elif mode == "scripted":
             self.steps = self.scripted_steps
@@ -477,18 +480,17 @@ class TutorialSystem:
         step = self.steps[self.current_step]
         
         if step.get("wait_for") == "arms_dealer_visit":
+            # Give player points and unlock shield when visiting arms dealer
             if self.current_mode == "simple":
-                # Ensure player has points for tutorial
                 self.powerup_system.points["white"] = 999
+            elif self.current_mode == "story":
+                self.powerup_system.points["white"] = 100
+            
+            # Now unlock shield powerup when visiting arms dealer
+            config.unlock_all_powerups_for_tutorial()  # This now only unlocks shield
             self._advance_step()
             
-            # Automatically advance through the gift step since all powerups are unlocked
-            if self.current_step < len(self.steps):
-                next_step = self.steps[self.current_step]
-                if next_step.get("wait_for") == "tutorial_gift_complete":
-                    # Unlock all powerups for tutorial
-                    config.unlock_all_powerups_for_tutorial()
-                    self._advance_step()
+            # Don't automatically advance through the gift step - let the player see the message!
             
     def handle_powerup_purchase(self, powerup_key):
         """Handle powerup purchase."""
@@ -499,8 +501,7 @@ class TutorialSystem:
         
         if step.get("wait_for") == "powerup_purchase":
             if powerup_key == step.get("target_powerup"):
-                # Unlock all powerups for tutorial
-                config.unlock_all_powerups_for_tutorial()
+                # Shield already unlocked when visiting arms dealer
                 self._advance_step()
                 
     def handle_back_to_game(self):
@@ -509,6 +510,13 @@ class TutorialSystem:
             return
             
         step = self.steps[self.current_step]
+        
+        # First handle the gift complete step if we're on it
+        if step.get("wait_for") == "tutorial_gift_complete":
+            self._advance_step()
+            # Now check the next step
+            if self.current_step < len(self.steps):
+                step = self.steps[self.current_step]
         
         if step.get("wait_for") == "return_to_game":
             self._advance_step()
@@ -674,9 +682,9 @@ class TutorialSystem:
         # Keep powerups unlocked after tutorial
         if self.current_mode in ["simple", "story"]:
             # Don't reset powerups - keep them all unlocked
-            # Also maintain the high point count
+            # Don't give points after completion
             if self.current_mode == "story":
-                self.powerup_system.points["white"] = 9999
+                pass  # Points already given during tutorial
             return
             
         # Only reset for other modes (if any)
@@ -770,8 +778,7 @@ class TutorialSystem:
             if self.current_step < len(self.steps):
                 step = self.steps[self.current_step]
                 if step.get("type") == "tutorial_gift":
-                    # Unlock all powerups
-                    config.unlock_all_powerups_for_tutorial()
+                    # Don't unlock powerups here - wait for arms dealer visit
                     # Give free points for tutorial
                     self.powerup_system.points["white"] = 100
     
@@ -783,13 +790,9 @@ class TutorialSystem:
         step = self.steps[self.current_step] if self.current_step < len(self.steps) else {}
         
         if step.get("wait_for") == "tutorial_gift_complete":
-            # Give massive points for story mode
+            # Give points for story mode
             if self.current_mode == "story":
-                self.powerup_system.points["white"] = 9999
-                
-            # Unlock ALL powerups using the config function
-            import config
-            config.unlock_all_powerups_for_tutorial()
+                self.powerup_system.points["white"] = 100  # Give points but don't unlock shield yet
             
             self._advance_step()
         elif self.current_mode == "simple":

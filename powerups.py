@@ -123,9 +123,12 @@ class PowerupSystem:
         
     def can_use_powerup(self, powerup_key):
         """Check if a powerup is unlocked."""
+        # Check if we're in freeplay mode - all powerups unlocked
+        if hasattr(self, 'freeplay_mode') and self.freeplay_mode:
+            return True  # All powerups available in freeplay
         # Check if we're in tutorial mode
         if hasattr(self, 'in_tutorial') and self.in_tutorial:
-            return True  # All powerups available in tutorial
+            return powerup_key == "shield"  # Only shield available in tutorial
         progress = load_progress()
         unlocked = progress.get("unlocked_powerups", ["shield"])
         return powerup_key in unlocked

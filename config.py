@@ -571,9 +571,9 @@ def reset_after_tutorial():
         print(f"Error saving tutorial completion: {e}")
 
 def unlock_all_powerups_for_tutorial():
-    """Unlock all powerups for tutorial."""
+    """Unlock shield powerup for tutorial."""
     global tutorial_unlocked_powerups
-    tutorial_unlocked_powerups = ["shield", "gun", "airstrike", "paratroopers", "chopper"]
+    tutorial_unlocked_powerups = ["shield"]  # Only shield available in tutorial
     pass
     return True
 

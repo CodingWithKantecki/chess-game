@@ -755,7 +755,7 @@ class ChessAI:
             for col in range(8):
                 piece = board.get_piece(row, col)
                 if piece and piece[0] == 'b':
-                    piece_moves = board.get_valid_moves(row, col)
+                    piece_moves = board.get_legal_moves(row, col)  # Use legal moves to prevent illegal moves
                     for to_row, to_col in piece_moves:
                         moves.append(((row, col), (to_row, to_col)))
         return moves
@@ -767,7 +767,7 @@ class ChessAI:
             for col in range(8):
                 piece = board.get_piece(row, col)
                 if piece and piece[0] == color:
-                    piece_moves = board.get_valid_moves(row, col)
+                    piece_moves = board.get_legal_moves(row, col)  # Use legal moves to prevent illegal moves
                     for to_row, to_col in piece_moves:
                         moves.append(((row, col), (to_row, to_col)))
         return moves
@@ -830,7 +830,7 @@ class ChessAI:
                 piece = board.get_piece(r, c)
                 if piece and piece[0] == by_color:
                     # Get all possible moves for this piece
-                    moves = board.get_valid_moves(r, c)
+                    moves = board.get_legal_moves(r, c)  # Use legal moves
                     if (row, col) in moves:
                         return True
         return False
@@ -883,7 +883,7 @@ class ChessAI:
             for col in range(8):
                 p = board.get_piece(row, col)
                 if p and p[0] == 'w':
-                    piece_moves = board.get_valid_moves(row, col)
+                    piece_moves = board.get_legal_moves(row, col)  # Use legal moves to prevent illegal moves
                     for move_row, move_col in piece_moves:
                         # Test this move
                         test_piece = board.get_piece(row, col)

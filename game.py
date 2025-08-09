@@ -460,11 +460,9 @@ class ChessGame:
             self.powerup_system.points = dict(self.stored_game_state["powerup_points"])
             self.powerup_system.shielded_pieces = dict(self.stored_game_state["shielded_pieces"])
             
-            # Special case: ensure tutorial has points
+            # Don't give points here - wait for arms dealer visit
             if self.in_tutorial_battle and self.tutorial.active:
-                if self.powerup_system.points["white"] < 100:
-                    self.powerup_system.points["white"] = 999
-                    pass
+                pass  # Points will be given when visiting arms dealer
             
             # Restore AI and mode
             self.ai = self.stored_game_state["ai"]
@@ -826,6 +824,21 @@ class ChessGame:
                         self.start_fade("mode_select", config.SCREEN_DIFFICULTY)
                     elif mode_key == "story":
                         self.start_fade("mode_select", "story_select")
+                    elif mode_key == "freeplay":
+                        # Start free roam mode with unlimited powerups
+                        self.selected_difficulty = "medium"  # Default difficulty for AI
+                        self.ai = ChessAI("medium")
+                        self.current_mode = "freeplay"
+                        self.board.reset()
+                        self.powerup_system = PowerupSystem()
+                        self.powerup_system.assets = self.assets
+                        # Give unlimited points for free roam mode
+                        self.powerup_system.points = {"white": 99999, "black": 99999}
+                        # Mark as free roam mode for powerup system
+                        self.powerup_system.freeplay_mode = True
+                        self.board.set_powerup_system(self.powerup_system)
+                        self.powerup_renderer.powerup_system = self.powerup_system
+                        self.start_fade("mode_select", config.SCREEN_GAME)
                     else:
                         # Other modes not implemented yet
                         pass
@@ -960,9 +973,9 @@ class ChessGame:
                             config.unlock_powerup(powerup_key)
                             pass
                             
-                            # After purchasing shield, unlock all powerups for tutorial
+                            # After purchasing shield in tutorial, keep it shield-only
                             if target_powerup == "shield":
-                                config.tutorial_unlocked_powerups = ["shield", "gun", "airstrike", "paratroopers", "chopper"]
+                                config.tutorial_unlocked_powerups = ["shield"]
                                 pass
                             
                             # Advance tutorial step
@@ -1147,8 +1160,8 @@ class ChessGame:
                         self.start_fade(config.SCREEN_GAME, config.SCREEN_START)
                     return
             
-            # Check Arms Dealer button
-            if self.arms_dealer_game_button and self.arms_dealer_game_button.collidepoint(pos):
+            # Check Arms Dealer button (not in freeplay mode)
+            if self.arms_dealer_game_button and self.arms_dealer_game_button.collidepoint(pos) and self.current_mode != "freeplay":
                 # Check if we're waiting for arms dealer visit in tutorial
                 waiting_for_arms_dealer = False
                 if self.in_tutorial_battle and self.tutorial and self.tutorial.active:
@@ -1173,11 +1186,11 @@ class ChessGame:
                     # Set special tutorial dialogue for Tariq
                     self.tariq_dialogue_index = 0
                     self.tariq_dialogues = [
-                        "Welcome to the tutorial, warrior! I am Tariq, your arms supplier.",
-                        "For this training session, ALL weapons are unlocked and FREE!",
-                        "Try them all - shields, guns, airstrikes, paratroopers, even the chopper!",
-                        "No need to purchase anything - it's all yours for learning!",
-                        "Master these tools, and you'll dominate the battlefield!"
+                        "Welcome, young warrior! I am Tariq, the kingdom's finest arms dealer.",
+                        "For your training, I'll give you the SHIELD powerup for FREE!",
+                        "This defensive tool will protect your pieces from enemy attacks.",
+                        "To unlock MORE powerful weapons, you must earn CASH by defeating enemies!",
+                        "Win battles to unlock guns, airstrikes, paratroopers, and the mighty chopper!"
                     ]
                 
                 # Store current game state before going to shop
@@ -1254,7 +1267,7 @@ class ChessGame:
                     
                     self.board.selected_piece = (row, col)
                     # Always show valid moves
-                    self.board.valid_moves = self.board.get_valid_moves(row, col)
+                    self.board.valid_moves = self.board.get_legal_moves(row, col)
                     self.board.dragging = True
                     self.board.drag_piece = self.board.get_piece(row, col)
                     self.board.drag_start = (row, col)
@@ -1312,7 +1325,7 @@ class ChessGame:
             if row >= 0 and col >= 0 and self.board.is_valid_selection(row, col):
                 self.board.selected_piece = (row, col)
                 # Always show valid moves
-                self.board.valid_moves = self.board.get_valid_moves(row, col)
+                self.board.valid_moves = self.board.get_legal_moves(row, col)
             else:
                 self.board.selected_piece = None
                 self.board.valid_moves = []
@@ -1485,16 +1498,24 @@ class ChessGame:
                     # Auto-advance tutorial when reaching arms dealer
                     if self.in_tutorial_battle and self.tutorial.active:
                         self.tutorial.handle_at_arms_dealer()
-                        # Ensure tutorial has points
-                        if self.powerup_system.points["white"] < 100:
-                            self.powerup_system.points["white"] = 999
-                            pass
+                        # Don't give points here - they'll be given at arms dealer
+                        pass
                 if self.fade_to == config.SCREEN_GAME:
                     if not self.returning_from_shop:
                         # Only reset if we're not returning from shop
                         self.board.reset()
+                        
+                        # Check if we need to preserve freeplay mode
+                        was_freeplay = (self.current_mode == "freeplay")
+                        
                         self.powerup_system = PowerupSystem()  # Reset powerup system
                         self.powerup_system.assets = self.assets  # Pass assets reference
+                        
+                        # Restore freeplay mode settings if needed
+                        if was_freeplay:
+                            self.powerup_system.freeplay_mode = True
+                            self.powerup_system.points = {"white": 99999, "black": 99999}
+                        
                         self.board.set_powerup_system(self.powerup_system)
                         self.powerup_renderer.powerup_system = self.powerup_system
                         
@@ -1621,11 +1642,15 @@ class ChessGame:
                             self.tutorial.handle_points_gained()
                         
                         
+            # Keep points unlimited in freeplay mode
+            if self.current_mode == "freeplay":
+                self.powerup_system.points = {"white": 99999, "black": 99999}
+            
             # AI turn
             if (self.board.current_turn == "black" and 
                 not self.board.game_over and 
                 not self.board.animating and
-                self.current_mode in ["vs_ai", "story"]):
+                self.current_mode in ["vs_ai", "story", "freeplay"]):
                 if self.ai:
                     # Start thinking if not already
                     if not self.ai.is_thinking() and self.ai.start_thinking is None:
@@ -1723,8 +1748,8 @@ class ChessGame:
                                             pass  # Redirecting AI to safe move
                                             break
                                     
-                                    # If no safe pawn moves, just skip the AI turn
-                                    if ai_move == old_ai_move:
+                                    # If no safe pawn moves found, just skip the AI turn
+                                    if not ai_move:
                                         pass  # No safe moves found
                                         self.ai.start_thinking = None
                                         return
@@ -1801,6 +1826,11 @@ class ChessGame:
                                     pass  # Story mode reward applied
                             else:
                                 pass  # No reward_money found
+                    elif self.current_mode == "freeplay":
+                        # Free roam mode - no rewards, just for testing
+                        self.victory_reward = 0
+                        self.board.victory_reward = 0
+                        pass  # No rewards in free roam mode
                     else:
                         # Classic mode - award difficulty-based money and unlock next difficulty
                         if self.selected_difficulty:
@@ -2190,6 +2220,11 @@ class ChessGame:
             
     def draw_arms_dealer_button(self):
         """Draw the Arms Dealer button in the game screen."""
+        # Don't show arms dealer button in free roam mode (everything already unlocked)
+        if self.current_mode == "freeplay":
+            self.arms_dealer_game_button = None
+            return
+            
         # Position it in the middle left side of the screen
         button_width = 150
         button_height = 40

@@ -88,9 +88,17 @@ class PowerupRenderer:
         # Check if we're in tutorial mode
         in_tutorial = hasattr(self.powerup_system, 'in_tutorial') and self.powerup_system.in_tutorial
         
-        # Filter powerups to only show unlocked ones (or all in tutorial)
-        if in_tutorial:
+        # Check if in freeplay mode
+        in_freeplay = hasattr(self.powerup_system, 'freeplay_mode') and self.powerup_system.freeplay_mode
+        
+        # Filter powerups to only show unlocked ones (or all in freeplay)
+        if in_freeplay:
+            # Show all powerups in freeplay mode
             available_powerups = self.powerup_system.powerups
+        elif in_tutorial:
+            # Only show shield in tutorial
+            available_powerups = {k: v for k, v in self.powerup_system.powerups.items() 
+                                 if k == "shield"}
         else:
             available_powerups = {k: v for k, v in self.powerup_system.powerups.items() 
                                  if k in unlocked_powerups}

@@ -10,8 +10,8 @@
     "shield"
   ],
   "settings": {
-    "music_volume": 0.1,
-    "sfx_volume": 0.32857142857142857
+    "music_volume": 0.4,
+    "sfx_volume": 0.75
   },
   "story": {
     "current_chapter": 0,

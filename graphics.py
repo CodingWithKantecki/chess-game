@@ -276,11 +276,11 @@ class Renderer:
                 "color": (150, 100, 50)
             },
             {
-                "key": "survival",
-                "name": "SURVIVAL",
-                "desc": "Endless waves of enemies",
-                "icon": "X",
-                "color": (150, 70, 70)
+                "key": "freeplay",
+                "name": "FREE ROAM",
+                "desc": "Unlimited powerups for testing",
+                "icon": "F",
+                "color": (100, 100, 200)
             }
         ]
         
@@ -2610,8 +2610,8 @@ class Renderer:
         
         # Check if in tutorial mode and use tutorial unlocked powerups
         if story_tutorial and story_tutorial.active:
-            # In tutorial, show all powerups as unlocked
-            unlocked = ["shield", "gun", "airstrike", "paratroopers", "chopper"]
+            # In tutorial, use whatever is currently unlocked (initially nothing, then shield after visit)
+            unlocked = config.tutorial_unlocked_powerups
         else:
             unlocked = config.get_unlocked_powerups()
         
@@ -2781,11 +2781,36 @@ class Renderer:
                 price_rect = price_surface.get_rect(center=(card_rect.centerx, card_rect.bottom - 30))
                 self.screen.blit(price_surface, price_rect)
         
-        # Simple instruction text
-        inst_text = "Click on items to purchase. Click Tariq for more info!"
-        inst_surface = self.pixel_fonts['small'].render(inst_text, True, (255, 255, 255))
-        inst_rect = inst_surface.get_rect(center=(game_center_x, game_center_y + 180 * self.scale))
-        self.screen.blit(inst_surface, inst_rect)
+        # Tutorial instruction text at the bottom
+        if story_tutorial and story_tutorial.active:
+            # Show tutorial instruction in a panel at the bottom
+            instruction = story_tutorial.get_current_instruction()
+            if instruction:
+                panel_width = 700
+                panel_height = 60
+                panel_x = (config.WIDTH - panel_width) // 2
+                panel_y = config.HEIGHT - panel_height - 70  # Leave room for back button
+                
+                # Panel background
+                panel_surf = pygame.Surface((panel_width, panel_height), pygame.SRCALPHA)
+                panel_surf.fill((0, 0, 0, 220))
+                pygame.draw.rect(panel_surf, (200, 180, 120), panel_surf.get_rect(), 3)
+                self.screen.blit(panel_surf, (panel_x, panel_y))
+                
+                # Tutorial text
+                lines = self._wrap_text(instruction, self.pixel_fonts['medium'], panel_width - 20)
+                y_offset = 15
+                for line in lines:
+                    text_surf = self.pixel_fonts['medium'].render(line, True, (255, 255, 255))
+                    text_rect = text_surf.get_rect(centerx=config.WIDTH // 2, y=panel_y + y_offset)
+                    self.screen.blit(text_surf, text_rect)
+                    y_offset += 25
+        else:
+            # Normal instruction text when not in tutorial
+            inst_text = "Click on items to purchase. Click Tariq for more info!"
+            inst_surface = self.pixel_fonts['small'].render(inst_text, True, (255, 255, 255))
+            inst_rect = inst_surface.get_rect(center=(game_center_x, game_center_y + 180 * self.scale))
+            self.screen.blit(inst_surface, inst_rect)
         
         # Simple back button
         self._draw_button(back_button, "BACK TO GAME", (150, 70, 70), (200, 100, 100), mouse_pos)
