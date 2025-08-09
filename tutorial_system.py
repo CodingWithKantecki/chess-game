@@ -693,6 +693,17 @@ class TutorialSystem:
         self.active = False
         config.tutorial_active = False
         
+        # IMPORTANT: Reset game's tutorial battle flag to prevent spillover
+        if hasattr(self.game, 'in_tutorial_battle'):
+            self.game.in_tutorial_battle = False
+        
+        # Reset tutorial mode in config
+        config.set_tutorial_mode(False)
+        
+        # Reset powerup system tutorial state
+        if hasattr(self.powerup_system, 'in_tutorial'):
+            self.powerup_system.in_tutorial = False
+        
         # Keep powerups unlocked after tutorial
         if self.current_mode in ["simple", "story"]:
             # Don't reset powerups - keep them all unlocked

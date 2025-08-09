@@ -2789,7 +2789,7 @@ class Renderer:
                 panel_width = 700
                 panel_height = 60
                 panel_x = (config.WIDTH - panel_width) // 2
-                panel_y = config.HEIGHT - panel_height - 70  # Leave room for back button
+                panel_y = config.HEIGHT - panel_height - 90  # More room for back button to avoid overlap
                 
                 # Panel background
                 panel_surf = pygame.Surface((panel_width, panel_height), pygame.SRCALPHA)

@@ -2066,16 +2066,8 @@ class ChessGame:
                                           self.tutorial if self.in_tutorial_battle else None,
                                           fade_progress)
             
-            # Draw tutorial hints if in tutorial battle (but delay after returning from arms dealer)
-            if self.in_tutorial_battle and self.tutorial.active:
-                # Check if we recently returned from arms dealer
-                current_time = pygame.time.get_ticks()
-                delay_after_arms_dealer = 1200  # 1.2 seconds delay (fade + extra time)
-                
-                # Only draw hints if enough time has passed since returning from arms dealer
-                if self.returned_from_arms_dealer_time == 0 or (current_time - self.returned_from_arms_dealer_time) > delay_after_arms_dealer:
-                    self.renderer.draw_tutorial_hints(self.tutorial)
-                
+            # Don't draw tutorial hints on arms dealer screen - they're already shown by draw_arms_dealer
+            
             self.draw_volume_sliders()
             
         elif screen_type == config.SCREEN_DIFFICULTY:
